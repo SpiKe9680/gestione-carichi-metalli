@@ -1,0 +1,98 @@
+/* GestioneScarichi.css */
+
+/* Contenitore principale */
+.gestione-scarichi-dettaglio {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #f7f7f7;
+}
+
+/* Titoli */
+.gestione-scarichi-dettaglio h2,
+.gestione-scarichi-dettaglio h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+/* Tabella */
+.tabella-scarichi {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.tabella-scarichi th,
+.tabella-scarichi td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.tabella-scarichi th {
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+}
+
+.tabella-scarichi tr:hover {
+  background-color: #f1f1f1;
+  cursor: pointer;
+}
+
+/* Riga selezionata */
+.tabella-scarichi tr.selected {
+  background-color: #d1ecf1;
+}
+
+/* Form di modifica riga */
+.modifica-riga {
+  padding: 15px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}
+
+.modifica-riga label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.modifica-riga input,
+.modifica-riga select {
+  padding: 5px;
+  margin-left: 10px;
+  width: 150px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modifica-riga button {
+  margin-top: 10px;
+  padding: 8px 15px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modifica-riga button:hover {
+  background-color: #218838;
+}
+
+/* Pulsante aggiungi nuovo listino */
+.nuovo-listino {
+  padding: 10px 20px;
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.nuovo-listino:hover {
+  background-color: #e0a800;
+}

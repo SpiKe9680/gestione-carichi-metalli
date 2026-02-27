@@ -1,0 +1,64 @@
+[debug] [2026-02-16T15:46:00.919Z] ----------------------------------------------------------------------
+[debug] [2026-02-16T15:46:00.923Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\raffa\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js functions:shell
+[debug] [2026-02-16T15:46:00.923Z] CLI Version:   15.6.0
+[debug] [2026-02-16T15:46:00.923Z] Platform:      win32
+[debug] [2026-02-16T15:46:00.923Z] Node Version:  v24.13.0
+[debug] [2026-02-16T15:46:00.923Z] Time:          Mon Feb 16 2026 16:46:00 GMT+0100 (Ora standard dell’Europa centrale)
+[debug] [2026-02-16T15:46:00.923Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-16T15:46:02.192Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-16T15:46:02.193Z] > authorizing via signed-in user (jennar.spike@gmail.com)
+[debug] [2026-02-16T15:46:02.193Z] [iam] checking project gestione-carichi-metalli-231fc for permissions ["firebase.projects.get"]
+[debug] [2026-02-16T15:46:02.194Z] Checked if tokens are valid: true, expires at: 1771258683558
+[debug] [2026-02-16T15:46:02.194Z] Checked if tokens are valid: true, expires at: 1771258683558
+[debug] [2026-02-16T15:46:02.195Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/gestione-carichi-metalli-231fc:testIamPermissions [none]
+[debug] [2026-02-16T15:46:02.195Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/gestione-carichi-metalli-231fc:testIamPermissions  x-goog-user-project=gestione-carichi-metalli-231fc
+[debug] [2026-02-16T15:46:02.195Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/gestione-carichi-metalli-231fc:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-02-16T15:46:03.052Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/gestione-carichi-metalli-231fc:testIamPermissions 200
+[debug] [2026-02-16T15:46:03.052Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/gestione-carichi-metalli-231fc:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-02-16T15:46:03.056Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-02-16T15:46:03.095Z] defaultcredentials: writing to file C:\Users\raffa\AppData\Roaming\firebase\jennar_spike_gmail.com_application_default_credentials.json
+[debug] [2026-02-16T15:46:03.097Z] DEBUG: Setting GAC to C:\Users\raffa\AppData\Roaming\firebase\jennar_spike_gmail.com_application_default_credentials.json
+[debug] [2026-02-16T15:46:03.098Z] Checked if tokens are valid: true, expires at: 1771258683558
+[debug] [2026-02-16T15:46:03.098Z] Checked if tokens are valid: true, expires at: 1771258683558
+[debug] [2026-02-16T15:46:03.098Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/gestione-carichi-metalli-231fc/adminSdkConfig [none]
+[debug] [2026-02-16T15:46:03.534Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/gestione-carichi-metalli-231fc/adminSdkConfig 200
+[debug] [2026-02-16T15:46:03.534Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/gestione-carichi-metalli-231fc/adminSdkConfig {"projectId":"gestione-carichi-metalli-231fc","storageBucket":"gestione-carichi-metalli-231fc.firebasestorage.app"}
+[debug] [2026-02-16T15:46:03.544Z] [functions] Watching "C:\GestioneCarichiMetalli\gestione-carichi-metalli\functions" for Cloud Functions...
+[debug] [2026-02-16T15:46:03.548Z] Validating nodejs source
+[debug] [2026-02-16T15:46:04.365Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.4.1"
+  },
+  "private": true
+}
+[debug] [2026-02-16T15:46:04.366Z] Building nodejs source
+[debug] [2026-02-16T15:46:04.366Z] Failed to find version of module node: reached end of search path C:\GestioneCarichiMetalli\gestione-carichi-metalli\functions\node_modules
+[info] +  functions: Using node@24 from host. 
+[debug] [2026-02-16T15:46:04.368Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-02-16T15:46:04.378Z] Found firebase-functions binary at 'C:\GestioneCarichiMetalli\gestione-carichi-metalli\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8136
+
+[debug] [2026-02-16T15:46:05.013Z] Got response from /__/functions.yaml {"endpoints":{"deleteUserAdmin":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"httpsTrigger":{},"entryPoint":"deleteUserAdmin"},"updateUserAdmin":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"httpsTrigger":{},"entryPoint":"updateUserAdmin"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{}}
+[debug] [2026-02-16T15:46:09.058Z] [functions] Loaded functions definitions from source: deleteUserAdmin, updateUserAdmin.
+[debug] [2026-02-16T15:46:09.058Z] [functions[us-central1-deleteUserAdmin]] http function initialized (http://127.0.0.1:5000/gestione-carichi-metalli-231fc/us-central1/deleteUserAdmin).
+[debug] [2026-02-16T15:46:09.058Z] [functions[us-central1-updateUserAdmin]] http function initialized (http://127.0.0.1:5000/gestione-carichi-metalli-231fc/us-central1/updateUserAdmin).
+[info] i  functions: Loaded functions: deleteUserAdmin, updateUserAdmin 
+[warn] !  functions: The following emulators are not running, calls to these services will affect production: firestore, database, pubsub, storage, eventarc, tasks 
