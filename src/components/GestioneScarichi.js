@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 
 const GestioneScarichi = () => {
@@ -13,26 +13,47 @@ const GestioneScarichi = () => {
   const [tutti, setTutti] = useState(false);
   const [filtroFornitore, setFiltroFornitore] = useState("tutti");
   const [filtroListino, setFiltroListino] = useState("tutti");
+  const [filtroUtente, setFiltroUtente] = useState("tutti");
   const [giornoSelezionato, setGiornoSelezionato] = useState(null);
 
   const [fornitoriDisponibili, setFornitoriDisponibili] = useState([]);
   const [listiniDisponibili, setListiniDisponibili] = useState([]);
+  const [utentiDisponibili, setUtentiDisponibili] = useState([]);
+  const [listini, setListini] = useState({});
+
+  const [minDataDB, setMinDataDB] = useState(null);
+  const [maxDataDB, setMaxDataDB] = useState(null);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // NAV
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
   const goHome = () => navigate("/admin");
 
-  // DATE DEFAULT DD/MM/YYYY
+  const formatDataIT = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+
+  const parseItalianDate = (value, endOfDay=false) => {
+    if (!value) return null;
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3], 10);
+    const date = new Date(year, month, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return null;
+    if (endOfDay) date.setHours(23,59,59,999);
+    return date;
+  };
+
+  // --- INIT DAL/AL ---
   useEffect(() => {
     const today = new Date();
     const primo = new Date(today.getFullYear(), today.getMonth(), 1);
-    setDal(`${String(primo.getDate()).padStart(2,"0")}/${String(primo.getMonth()+1).padStart(2,"0")}/${primo.getFullYear()}`);
-    setAl(`${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`);
+    setDal(formatDataIT(primo));
+    setAl(formatDataIT(today));
   }, []);
 
-  // FETCH SCARICHI
+  // --- FETCH SCARICHI ---
   const fetchScarichi = async () => {
     try {
       const snap = await getDocs(collection(db, "scarichi"));
@@ -40,50 +61,115 @@ const GestioneScarichi = () => {
       dati.sort((a,b) => (b.data?.seconds || 0) - (a.data?.seconds || 0));
       setScarichi(dati);
 
-      // Lista dinamica fornitori/listini
+      if (dati.length) {
+        const ordinati = [...dati].sort((a,b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
+        setMinDataDB(ordinati[0].data.toDate());
+        setMaxDataDB(ordinati[ordinati.length-1].data.toDate());
+      }
+
       setFornitoriDisponibili([...new Set(dati.map(s => s.fornitore || "sconosciuto"))]);
       setListiniDisponibili([...new Set(dati.map(s => s.listino || "sconosciuto"))]);
+      setUtentiDisponibili([...new Set(dati.map(s => s.utente || "sconosciuto"))]);
     } catch (err) {
       console.error("Errore caricamento scarichi:", err);
     }
   };
   useEffect(() => { fetchScarichi(); }, []);
 
-  // PARSE DATE DD/MM/YYYY -> Date
-  const parseData = (val, endOfDay = false) => {
-    if(!val) return null;
-    const [gg, mm, yyyy] = val.split("/").map(Number);
-    if (!gg || !mm || !yyyy) return null;
-    const d = new Date(yyyy, mm-1, gg);
-    if (endOfDay) d.setHours(23,59,59,999);
-    return d;
+  const loadListini = async () => {
+    try {
+      const snap = await getDocs(collection(db, "listini"));
+      const mapListini = {};
+      snap.docs.forEach(d => {
+        mapListini[d.data().nome] = d.data().prezzi || {};
+      });
+      setListini(mapListini);
+    } catch (e) { console.error("Errore load listini:", e); }
   };
+  useEffect(() => { loadListini(); }, []);
 
-  // FILTRI
+  // --- QUERY STRING: selezione listino/fornitore/utente e disabilita date quando presente ---
   useEffect(() => {
-    let dati = [...scarichi];
-    if (!tutti) {
-      const start = parseData(dal);
-      const end = parseData(al, true);
-      if (start && end) dati = dati.filter(s => s.data?.toDate && s.data.toDate() >= start && s.data.toDate() <= end);
+    // aspetta che dati e dropdown siano popolati
+    if (scarichi.length === 0) return;
+    // Notare: listiniDisponibili/fornitoriDisponibili/utentiDisponibili possono essere vuoti per alcuni dataset,
+    // quindi non blocchiamo brutalmente; però preferiamo applicare filtri solo se esistono (per evitare valori fantasma)
+    const params = new URLSearchParams(location.search);
+    const f = params.get("fornitore");
+    const l = params.get("listino");
+    const u = params.get("utente");
+
+    let hasQueryFilter = false;
+
+    if (f) {
+      // se il fornitore esiste tra quelli disponibili lo selezioniamo, altrimenti comunque lo impostiamo (se vuoi forzare solo esistenti, usare includes)
+      if (fornitoriDisponibili.length === 0 || fornitoriDisponibili.includes(f)) {
+        setFiltroFornitore(f);
+        hasQueryFilter = true;
+      }
     }
+    if (l) {
+      if (listiniDisponibili.length === 0 || listiniDisponibili.includes(l)) {
+        setFiltroListino(l);
+        hasQueryFilter = true;
+      }
+    }
+    if (u) {
+      if (utentiDisponibili.length === 0 || utentiDisponibili.includes(u)) {
+        setFiltroUtente(u);
+        hasQueryFilter = true;
+      }
+    }
+
+    if (hasQueryFilter) {
+      // se viene passato almeno un filtro via query string vogliamo *vedere quei risultati*
+      // quindi disabilitiamo il filtro date (tutti = true)
+      setTutti(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scarichi, listiniDisponibili, fornitoriDisponibili, utentiDisponibili, location.search]);
+
+  // --- FILTRAGGIO SCARICHI ---
+  useEffect(() => {
+    let start = parseItalianDate(dal);
+    let end = parseItalianDate(al, true);
+
+    let dati = [...scarichi];
+
+    // applichiamo filtro date solo se la checkbox NON è attiva
+    if (!tutti && start && end) {
+      dati = dati.filter(s => s.data?.toDate && s.data.toDate() >= start && s.data.toDate() <= end);
+    }
+
+    // Validazione dei filtri rispetto ai valori disponibili (se esistono)
+    if (fornitoriDisponibili.length > 0 && !fornitoriDisponibili.includes(filtroFornitore) && filtroFornitore !== "tutti") {
+      setFiltroFornitore("tutti");
+    }
+    if (listiniDisponibili.length > 0 && !listiniDisponibili.includes(filtroListino) && filtroListino !== "tutti") {
+      setFiltroListino("tutti");
+    }
+    if (utentiDisponibili.length > 0 && !utentiDisponibili.includes(filtroUtente) && filtroUtente !== "tutti") {
+      setFiltroUtente("tutti");
+    }
+
     if (filtroFornitore !== "tutti") dati = dati.filter(s => s.fornitore === filtroFornitore);
-    if (filtroListino !== "tutti") dati = dati.filter(s => s.listino === filtroListino);
+    if (filtroListino !== "tutti") dati = dati.filter(s => s.listino === filtroListino); // listino sempre applicato se selezionato
+    if (filtroUtente !== "tutti") dati = dati.filter(s => (s.utente ?? "sconosciuto") === filtroUtente);
 
     setFilteredScarichi(dati);
-  }, [scarichi, dal, al, tutti, filtroFornitore, filtroListino]);
+  }, [scarichi, dal, al, tutti, filtroFornitore, filtroListino, filtroUtente, fornitoriDisponibili, listiniDisponibili, utentiDisponibili]);
 
-  // RAGGRUPPAMENTO PER GIORNO DD/MM/YYYY
+  // --- SCARICHI PER GIORNO ---
   const scarichiPerGiorno = {};
   filteredScarichi.forEach(s => {
     if (!s.data?.toDate) return;
     const d = s.data.toDate();
-    const giornoIT = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    const giornoIT = formatDataIT(d);
     if (!scarichiPerGiorno[giornoIT]) scarichiPerGiorno[giornoIT] = [];
     scarichiPerGiorno[giornoIT].push(s);
   });
 
-  // DETTAGLIO
+  // --- RETURN DETTAGLIO ---
   if (giornoSelezionato) {
     return (
       <GestioneScarichiDettaglio
@@ -91,46 +177,60 @@ const GestioneScarichi = () => {
         goBack={() => setGiornoSelezionato(null)}
         filtroFornitoreProp={filtroFornitore !== "tutti" ? filtroFornitore : "Tutti"}
         filtroListinoProp={filtroListino !== "tutti" ? filtroListino : "Tutti"}
+        filtroUtenteProp={filtroUtente !== "tutti" ? filtroUtente : "Tutti"}
       />
     );
   }
 
-  // --- FUNZIONE STAMPA PUNTUALE ---
+  // --- STAMPA ---
   const handleStampa = () => {
     const filtriHtml = `
       <div style="margin-bottom:15px;font-size:14px">
         <strong>Filtri applicati:</strong><br/>
         ${!tutti ? `Dal: ${dal}<br/>Al: ${al}<br/>` : ""}
         Fornitore: ${filtroFornitore}<br/>
-        Listino: ${filtroListino}
+        Listino: ${filtroListino}<br/>
+        Utente: ${filtroUtente}
       </div>
     `;
-
     let righeHtml = "";
     let totaleGenerale = 0;
 
-    Object.keys(scarichiPerGiorno).sort((a,b)=>b.localeCompare(a)).forEach(giornoIT => {
-      const scarichiDelGiorno = scarichiPerGiorno[giornoIT];
-      const nrScarichi = scarichiDelGiorno.length;
-      const nrFornitori = [...new Set(scarichiDelGiorno.map(s=>s.fornitore))].length;
-      const pesoTotale = scarichiDelGiorno.reduce(
-        (acc, s) => acc + s.scarico.reduce(
-          (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + (r.netto || 0), 0), 0), 0
-      );
-      const costoTotaleGiorno = scarichiDelGiorno.reduce(
-        (acc, s) => acc + s.scarico.reduce(
-          (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + ((r.prezzoAcquisto||0)*(r.netto||0)),0),0),0
-      );
-      totaleGenerale += costoTotaleGiorno;
-
-      righeHtml += `<tr>
-        <td>${giornoIT}</td>
-        <td>${nrScarichi}</td>
-        <td>${nrFornitori}</td>
-        <td>${pesoTotale.toFixed(2)}</td>
-        <td>${costoTotaleGiorno.toFixed(2)}</td>
-      </tr>`;
-    });
+    Object.keys(scarichiPerGiorno)
+      .sort((a,b)=>{
+        const [ggA,mmA,yyyyA]=a.split("/").map(Number);
+        const [ggB,mmB,yyyyB]=b.split("/").map(Number);
+        return new Date(yyyyB,mmB-1,ggB)-new Date(yyyyA,mmA-1,ggA);
+      })
+      .forEach(giornoIT => {
+        const scarichiDelGiorno = scarichiPerGiorno[giornoIT];
+        const nrScarichi = scarichiDelGiorno.length;
+        const nrFornitori = [...new Set(scarichiDelGiorno.map(s=>s.fornitore))].length;
+        const pesoTotale = scarichiDelGiorno.reduce(
+          (acc, s) => acc + s.scarico.reduce(
+            (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + (r.netto || 0), 0), 0), 0
+        );
+        const costoTotaleGiorno = scarichiDelGiorno.reduce((acc, s) => {
+          return acc + s.scarico.reduce((sum, cer) => {
+            return sum + cer.righe.reduce((suma, r) => {
+              const prezzo = r.prezzoAcquisto ?? listini[s.listino]?.[r.materiale] ?? 0;
+              return suma + (prezzo * (r.netto || 0));
+            }, 0);
+          }, 0);
+        }, 0);
+        totaleGenerale += costoTotaleGiorno;
+        const utentiDelGiorno = [...new Set(scarichiDelGiorno.map(s => s.utente))]
+          .filter(Boolean)
+          .join("; ");
+        righeHtml += `<tr>
+          <td>${giornoIT}</td>
+          <td>${nrScarichi}</td>
+          <td>${nrFornitori}</td>
+          <td>${pesoTotale.toFixed(2)}</td>
+          <td>${costoTotaleGiorno.toFixed(2)}</td>
+          ${filtroUtente === "tutti" ? `<td title="${utentiDelGiorno}">${utentiDelGiorno}</td>` : ""}
+        </tr>`;
+      });
 
     const html = `
       <html>
@@ -156,6 +256,7 @@ const GestioneScarichi = () => {
                 <th>Nr Fornitori</th>
                 <th>Peso Totale (kg)</th>
                 <th>Costo Totale €</th>
+                ${filtroUtente === "tutti" ? "<th>Utente</th>" : ""}
               </tr>
             </thead>
             <tbody>
@@ -168,7 +269,6 @@ const GestioneScarichi = () => {
         </body>
       </html>
     `;
-
     const win = window.open("", "_blank");
     win.document.write(html);
     win.document.close();
@@ -176,12 +276,24 @@ const GestioneScarichi = () => {
     win.print();
   };
 
+  const resetFiltri = () => {
+    setFiltroFornitore("tutti");
+    setFiltroListino("tutti");
+    setFiltroUtente("tutti");
+    setTutti(false);
+    const today = new Date();
+    const primo = new Date(today.getFullYear(), today.getMonth(), 1);
+    const minDate = minDataDB ?? primo;
+    const maxDate = maxDataDB ?? today;
+    setDal(formatDataIT(minDate));
+    setAl(formatDataIT(maxDate));
+  };
+
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goHome}>🏠 Dashboard</button>
         <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
-        {/* Pulsante Stampa */}
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
       </div>
 
@@ -189,6 +301,8 @@ const GestioneScarichi = () => {
 
       {/* FILTRI */}
       <div className="filtri">
+        <button onClick={resetFiltri} style={{marginLeft:"12px"}}>🔄 Reset filtri</button>
+
         <label style={{display:"flex",alignItems:"center"}}>
           <input type="checkbox" checked={tutti} onChange={e=>setTutti(e.target.checked)} />
           Disabilita filtro date
@@ -198,17 +312,31 @@ const GestioneScarichi = () => {
           <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
             <label>
               Dal:
-              <input type="text" value={dal} placeholder="gg/mm/yyyy"
+              <input
+                type="text"
+                value={dal}
+                placeholder="gg/mm/yyyy"
                 onChange={e => setDal(e.target.value)}
-                style={{ width:"100px" }}
+                onBlur={() => {
+                  const data = parseItalianDate(dal);
+                  if (!data && minDataDB) setDal(formatDataIT(minDataDB));
+                }}
+                style={{ width: "100px" }}
               />
             </label>
 
             <label>
               Al:
-              <input type="text" value={al} placeholder="gg/mm/yyyy"
+              <input
+                type="text"
+                value={al}
+                placeholder="gg/mm/yyyy"
                 onChange={e => setAl(e.target.value)}
-                style={{ width:"100px" }}
+                onBlur={() => {
+                  const data = parseItalianDate(al);
+                  if (!data && maxDataDB) setAl(formatDataIT(maxDataDB));
+                }}
+                style={{ width: "100px" }}
               />
             </label>
           </div>
@@ -229,6 +357,14 @@ const GestioneScarichi = () => {
             {listiniDisponibili.map(l => <option key={l}>{l}</option>)}
           </select>
         </label>
+
+        <label style={{marginLeft:"12px"}}>
+          Utente:
+          <select value={filtroUtente} onChange={e => setFiltroUtente(e.target.value)}>
+            <option value="tutti">Tutti</option>
+            {utentiDisponibili.map(u => <option key={u}>{u}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* TABELLA */}
@@ -240,39 +376,49 @@ const GestioneScarichi = () => {
             <th>Nr Fornitori</th>
             <th>Peso Totale (kg)</th>
             <th>Costo Totale €</th>
+            <th>Utente</th>
           </tr>
         </thead>
         <tbody>
-          {Object.keys(scarichiPerGiorno).sort((a,b) => b.localeCompare(a)).map(giornoIT => {
-            const scarichiDelGiorno = scarichiPerGiorno[giornoIT];
-            const fornitoriUnici = [...new Set(scarichiDelGiorno.map(s => s.fornitore))];
-            const pesoTotale = scarichiDelGiorno.reduce(
-              (acc, s) => acc + s.scarico.reduce(
-                (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + (r.netto || 0), 0),
-                0
-              ),
-              0
-            );
-            const costoTotaleGiorno = scarichiDelGiorno.reduce(
-              (acc, s) => acc + s.scarico.reduce(
-                (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + ((r.prezzoAcquisto||0)*(r.netto||0)),0),
-                0
-              ),
-              0
-            );
+          {Object.keys(scarichiPerGiorno)
+            .sort((a,b)=>{
+              const [ggA,mmA,yyyyA]=a.split("/").map(Number);
+              const [ggB,mmB,yyyyB]=b.split("/").map(Number);
+              return new Date(yyyyB,mmB-1,ggB)-new Date(yyyyA,mmA-1,ggA);
+            })
+            .map(giornoIT => {
+              const scarichiDelGiorno = scarichiPerGiorno[giornoIT];
+              const fornitoriUnici = [...new Set(scarichiDelGiorno.map(s => s.fornitore))];
+              const utentiUnici = [...new Set(scarichiDelGiorno.map(s => s.utente))].filter(Boolean);
+              const utentiString = utentiUnici.join("; ");
 
-            return (
-              <tr key={giornoIT} 
-                  onClick={() => setGiornoSelezionato({ giorno: giornoIT })}
-                  style={{ cursor: "pointer" }}>
-                <td>{giornoIT}</td>
-                <td>{scarichiDelGiorno.length}</td>
-                <td>{fornitoriUnici.length}</td>
-                <td>{pesoTotale.toFixed(2)}</td>
-                <td>{costoTotaleGiorno.toFixed(2)}</td>
-              </tr>
-            );
-          })}
+              const pesoTotale = scarichiDelGiorno.reduce(
+                (acc, s) => acc + s.scarico.reduce(
+                  (sum, cer) => sum + cer.righe.reduce((suma, r) => suma + (r.netto || 0), 0),
+                  0
+                ),
+                0
+              );
+              const costoTotaleGiorno = scarichiDelGiorno.reduce((acc, s) => {
+                return acc + s.scarico.reduce((sum, cer) => {
+                  return sum + cer.righe.reduce((suma, r) => {
+                    const prezzo = r.prezzoAcquisto ?? listini[s.listino]?.[r.materiale] ?? 0;
+                    return suma + (prezzo * (r.netto || 0));
+                  }, 0);
+                }, 0);
+              }, 0);
+
+              return (
+                <tr key={giornoIT} onClick={() => setGiornoSelezionato({ giorno: giornoIT })} style={{ cursor: "pointer" }}>
+                  <td>{giornoIT}</td>
+                  <td>{scarichiDelGiorno.length}</td>
+                  <td>{fornitoriUnici.length}</td>
+                  <td>{pesoTotale.toFixed(2)}</td>
+                  <td>{costoTotaleGiorno.toFixed(2)}</td>
+                  <td title={utentiString}>{utentiString}</td>
+                </tr>
+              );
+            })}
         </tbody>
       </table>
     </div>

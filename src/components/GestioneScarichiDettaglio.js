@@ -295,83 +295,108 @@ const handleStampa = () => {
     </div>
   `;
 
-  const righeHtml = righeFiltrate.map(r => `
-    <tr>
-      <td>${r.ora}</td>
-      <td>${r.fornitore}</td>
-      <td>${r.cer}</td>
-      <td>${r.materiale}</td>
-      <td>${r.peso}</td>
-      <td>${r.calo}</td>
-      <td>${r.netto}</td>
-      <td>${r.prezzoKg}</td>
-      <td>${r.costoTotale.toFixed(2)}</td>
-      <td>${r.listino}</td>
-    </tr>
-  `).join("");
+  // Raggruppo le righe per fornitore
+  const righePerFornitore = righeFiltrate.reduce((acc, r) => {
+    if (!acc[r.fornitore]) acc[r.fornitore] = [];
+    acc[r.fornitore].push(r);
+    return acc;
+  }, {});
 
- // Calcolo totale
-const totaleEuro = righeFiltrate.reduce((sum, r) => sum + (r.costoTotale || 0), 0);
+  let righeHtml = "";
+  let totaleGenerale = 0;
+  const fornitori = Object.keys(righePerFornitore);
 
-const html = `
-  <html>
-    <head>
-      <title>Stampa Scarichi</title>
-      <style>
-        body { font-family: Arial; padding:20px; }
-        h2 { margin-bottom:10px; }
-        table {
-          width:100%;
-          border-collapse: collapse;
-          margin-top:15px;
-        }
-        th, td {
-          border:1px solid #000;
-          padding:6px;
-          text-align:left;
-          font-size:12px;
-        }
-        th { background:#eee; }
-        .totale {
-          margin-top:15px;
-          font-weight: bold;
-          font-size:14px;
-        }
-      </style>
-    </head>
-    <body>
+  fornitori.forEach(fornitore => {
+    const rows = righePerFornitore[fornitore];
+    const subtotale = rows.reduce((sum, r) => sum + (r.costoTotale || 0), 0);
+    totaleGenerale += subtotale;
 
-      <h2>Scarichi del giorno ${dataLabel}</h2>
+    // Intestazione fornitore se ci sono più fornitori
+    if (fornitori.length > 1) {
+      righeHtml += `<tr><td colspan="9" style="font-weight:bold; background:#ddd;">Fornitore: ${fornitore}</td></tr>`;
+    }
 
-      ${filtri}
+    rows.forEach(r => {
+      righeHtml += `
+        <tr>
+          <td>${r.ora}</td>
+          <td>${r.cer}</td>
+          <td>${r.materiale}</td>
+          <td>${r.peso}</td>
+          <td>${r.calo}</td>
+          <td>${r.netto}</td>
+          <td>${r.prezzoKg}</td>
+          <td>${r.costoTotale.toFixed(2)}</td>
+          <td>${r.listino}</td>
+        </tr>
+      `;
+    });
 
-      <table>
-        <thead>
-          <tr>
-            <th>Ora</th>
-            <th>Fornitore</th>
-            <th>CER</th>
-            <th>Materiale</th>
-            <th>Peso</th>
-            <th>Calo</th>
-            <th>Netto</th>
-            <th>Prezzo €/Kg</th>
-            <th>Costo Totale €</th>
-            <th>Listino</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${righeHtml}
-        </tbody>
-      </table>
+    righeHtml += `<tr>
+      <td colspan="8" style="text-align:right;font-weight:bold;">Subtotale €</td>
+      <td style="font-weight:bold;">${subtotale.toFixed(2)}</td>
+    </tr>`;
+  });
 
-      <div class="totale" style="text-align:left;">
-        Totale €: ${totaleEuro.toFixed(2)}
-      </div>
+  // Solo se ci sono più fornitori aggiungo il totale generale
+  let totaleHtml = "";
+  if (fornitori.length > 1) {
+    totaleHtml = `<div class="totale" style="margin-top:15px;font-weight:bold;font-size:14px;">
+      Totale Generale €: ${totaleGenerale.toFixed(2)}
+    </div>`;
+  }
 
-    </body>
-  </html>
-`;
+  const html = `
+    <html>
+      <head>
+        <title>Stampa Scarichi</title>
+        <style>
+          body { font-family: Arial; padding:20px; }
+          h2 { margin-bottom:10px; }
+          table {
+            width:100%;
+            border-collapse: collapse;
+            margin-top:15px;
+          }
+          th, td {
+            border:1px solid #000;
+            padding:6px;
+            text-align:left;
+            font-size:12px;
+          }
+          th { background:#eee; }
+          .totale { font-weight:bold; font-size:14px; }
+        </style>
+      </head>
+      <body>
+
+        <h2>Scarichi del giorno ${dataLabel}</h2>
+        ${filtri}
+
+        <table>
+          <thead>
+            <tr>
+              <th>Ora</th>
+              <th>CER</th>
+              <th>Materiale</th>
+              <th>Peso</th>
+              <th>Calo</th>
+              <th>Netto</th>
+              <th>Prezzo €/Kg</th>
+              <th>Costo Totale €</th>
+              <th>Listino</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${righeHtml}
+          </tbody>
+        </table>
+
+        ${totaleHtml}
+
+      </body>
+    </html>
+  `;
 
   const win = window.open("", "_blank");
   win.document.write(html);
