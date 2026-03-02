@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { scriviLog } from "../utils/log";
 
 const GestioneCER = () => {
   const navigate = useNavigate();
@@ -92,19 +93,69 @@ const GestioneCER = () => {
 
   // ---------------- SAVE / EDIT ----------------
   const handleSave = async () => {
-    if (!nome || !codiceCER) { setMessage("Nome e CER obbligatori"); return; }
-    try {
-      if (editingId) {
-        const newData = {nome,categoria,codiceCER,descrizione};
-        await updateDoc(doc(db,"materiali",editingId), newData);
-        setMessage("Materiale aggiornato!");
-      } else {
-        await addDoc(collection(db,"materiali"), {nome,categoria,codiceCER,descrizione});
-        setMessage("Materiale aggiunto!");
-      }
-      resetForm(); fetchMateriali();
-    } catch(err){ console.error(err); setMessage("Errore salvataggio"); }
-  };
+  if (!nome || !codiceCER) {
+    setMessage("Nome e CER obbligatori");
+    return;
+  }
+
+  try {
+
+    const newData = {
+      nome,
+      categoria,
+      codiceCER,
+      descrizione
+    };
+
+    // =========================
+    // MODIFICA
+    // =========================
+    if (editingId) {
+
+      // recupero dati ORIGINALI per audit trail
+      const originale = materiali.find(m => m.idDoc === editingId);
+
+      await updateDoc(doc(db, "materiali", editingId), newData);
+
+      await scriviLog({
+        pagina: "Gestione Codici CER",
+        tipo: "MODIFICA MATERIALE",
+        collezioneRef: "materiali",
+        documentoId: editingId,
+        dati_originali: originale,
+        dati_modificati: newData
+      });
+
+      setMessage("Materiale aggiornato!");
+    }
+
+    // =========================
+    // CREAZIONE
+    // =========================
+    else {
+
+      const ref = await addDoc(collection(db, "materiali"), newData);
+
+      await scriviLog({
+        pagina: "Gestione Codici CER",
+        tipo: "CREAZIONE MATERIALE",
+        collezioneRef: "materiali",
+        documentoId: ref.id,
+        dati_originali: null,
+        dati_modificati: newData
+      });
+
+      setMessage("Materiale aggiunto!");
+    }
+
+    resetForm();
+    fetchMateriali();
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore salvataggio");
+  }
+};
 
   const handleEdit = (m) => { setNome(m.nome); setCategoria(m.categoria); setCodiceCER(m.codiceCER); setDescrizione(m.descrizione); setEditingId(m.idDoc); };
 
