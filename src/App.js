@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { auth, db } from "./firebase";
@@ -13,8 +14,6 @@ import GestioneFornitoriAvanzata from "./components/GestioneFornitoriAvanzata";
 import GestioneListini from "./components/GestioneListini";
 import GestioneCER from "./components/GestioneCER";
 import GestioneLog from "./components/GestioneLog";
-
-// ✅ NUOVA PAGINA DETTAGLI LOG
 import DettagliLog from "./components/DettagliLog";
 
 const App = () => {
@@ -74,7 +73,16 @@ const App = () => {
         {/* PAGINA SCARICHI */}
         <Route
           path="/scarichi"
-          element={user ? <Scarichi user={user} logout={logout} /> : <Navigate to="/login" />}
+          element={
+            user 
+              ? <Scarichi 
+                  user={user} 
+                  logout={logout} 
+                  role={role} 
+                  goToDashboard={() => window.location.href = "/admin"} 
+                /> 
+              : <Navigate to="/login" />
+          }
         />
 
         {/* DASHBOARD ADMIN */}
@@ -119,7 +127,7 @@ const App = () => {
           element={user && role === "admin" ? <GestioneLog /> : <Navigate to="/scarichi" />}
         />
 
-        {/* ✅ DETTAGLI LOG */}
+        {/* DETTAGLI LOG */}
         <Route
           path="/dettagli-log"
           element={user && role === "admin" ? <DettagliLog /> : <Navigate to="/scarichi" />}

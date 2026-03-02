@@ -1,15 +1,6 @@
-
 // src/utils/log.js
 import { db, auth } from "../firebase";
-import {
-  doc,
-  updateDoc,
-  addDoc,
-  collection,
-  serverTimestamp,
-  setDoc,
-  deleteDoc
-} from "firebase/firestore";
+import { doc, updateDoc, addDoc, collection, serverTimestamp, setDoc, deleteDoc } from "firebase/firestore";
 
 /**
  * ===============================
@@ -72,8 +63,8 @@ export const ripristinaLog = async (log) => {
     // MODIFICA / CANCELLAZIONE → RIPRISTINO COMPLETO
     // =============================
     else if ((tipo.startsWith("MODIFICA") || tipo.startsWith("CANCELLAZIONE")) && dati_originali) {
-      // Sovrascrive TUTTO il campo scarico originale salvato nel log
-      await updateDoc(ref, { scarico: dati_originali.scarico || [] });
+      // Sovrascrive tutto il documento originale salvato nel log
+      await setDoc(ref, dati_originali, { merge: true }); // merge: true evita di cancellare eventuali campi non salvati nel log
     }
 
     // =============================
