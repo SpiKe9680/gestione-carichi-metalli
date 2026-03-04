@@ -5,11 +5,14 @@ import { collection, getDocs } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { ripristinaLog } from "../utils/log";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
 const GestioneLog = () => {
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState("");
+  const [dal, setDal] = useState(null);
+  const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
   const [paginaFilter, setPaginaFilter] = useState("tutte");
   const [utenteFilter, setUtenteFilter] = useState("tutti");
@@ -18,19 +21,14 @@ const GestioneLog = () => {
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
   const [tipiDisponibili, setTipiDisponibili] = useState([]);
 
+  const [minDataDB, setMinDataDB] = useState(null);
+  const [maxDataDB, setMaxDataDB] = useState(null);
+
   const navigate = useNavigate();
 
   // NAV
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
   const goHome = () => navigate("/admin");
-
-  // DATE DEFAULT
-  useEffect(() => {
-    const today = new Date();
-    const primo = new Date(today.getFullYear(), today.getMonth(), 1);
-    setDal(`${String(primo.getDate()).padStart(2,"0")}/${String(primo.getMonth()+1).padStart(2,"0")}/${primo.getFullYear()}`);
-    setAl(`${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`);
-  }, []);
 
   // FETCH LOG
   const fetchLogs = async () => {
@@ -39,29 +37,35 @@ const GestioneLog = () => {
       const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       dati.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
       setLogs(dati);
+
+      if (dati.length) {
+        const timestamps = dati.map(l => l.timestamp?.toDate()).filter(Boolean);
+        setMinDataDB(new Date(Math.min(...timestamps)));
+        setMaxDataDB(new Date(Math.max(...timestamps)));
+      }
     } catch (err) {
       console.error("Errore caricamento log:", err);
     }
   };
   useEffect(() => { fetchLogs(); }, []);
 
-  // =========================
-  // PARSE DATE gg/mm/yyyy -> Date
-  const parseData = (val, endOfDay = false) => {
-    const [gg, mm, yyyy] = val.split("/").map(Number);
-    if (!gg || !mm || !yyyy) return null;
-    const d = new Date(yyyy, mm-1, gg);
-    if (endOfDay) d.setHours(23,59,59,999);
-    return d;
-  };
+  // DATE DEFAULT
+  useEffect(() => {
+    if (minDataDB && maxDataDB) {
+      setDal(minDataDB);
+      setAl(maxDataDB);
+    }
+  }, [minDataDB, maxDataDB]);
 
   // FILTRI
   useEffect(() => {
     let dati = [...logs];
-    if (!tutti) {
-      const start = parseData(dal);
-      const end = parseData(al, true);
-      if (start && end) dati = dati.filter(l => l.timestamp?.toDate && l.timestamp.toDate() >= start && l.timestamp.toDate() <= end);
+
+    if (!tutti && dal && al) {
+      const start = new Date(dal);
+      const end = new Date(al);
+      end.setHours(23,59,59,999);
+      dati = dati.filter(l => l.timestamp?.toDate && l.timestamp.toDate() >= start && l.timestamp.toDate() <= end);
     }
     if (paginaFilter !== "tutte") dati = dati.filter(l => l.pagina === paginaFilter);
     if (utenteFilter !== "tutti") dati = dati.filter(l => l.utente === utenteFilter);
@@ -74,16 +78,13 @@ const GestioneLog = () => {
   }, [logs, dal, al, tutti, paginaFilter, utenteFilter, tipoFilter]);
 
   const apriDettagli = (log) => navigate("/dettagli-log", { state: { log } });
-
   const formattaData = ts => ts?.toDate ? `${ts.toDate().toLocaleDateString("it-IT")} ${ts.toDate().toLocaleTimeString("it-IT")}` : "";
 
   return (
     <div className="gestione-log-container">
-
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goHome}>🏠 Dashboard</button>
         <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
-           
       </div>
 
       <h2>Gestione Log Operazioni</h2>
@@ -98,17 +99,25 @@ const GestioneLog = () => {
           <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
             <label>
               Dal:
-              <input type="text" value={dal} placeholder="gg/mm/yyyy"
-                onChange={e => setDal(e.target.value)}
-                style={{ width:"100px" }}
+              <DatePicker
+                selected={dal}
+                onChange={setDal}
+                minDate={minDataDB || null}
+                maxDate={al || maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
               />
             </label>
 
             <label>
               Al:
-              <input type="text" value={al} placeholder="gg/mm/yyyy"
-                onChange={e => setAl(e.target.value)}
-                style={{ width:"100px" }}
+              <DatePicker
+                selected={al}
+                onChange={setAl}
+                minDate={dal || minDataDB || null}
+                maxDate={maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
               />
             </label>
           </div>
@@ -161,9 +170,10 @@ const GestioneLog = () => {
               <td>{log.tipo || "NON DEFINITO"}</td>
               <td>{log.ripristinato ? "✅" : "❌"}</td>
               <td>
-                {log.ripristinabile && !log.ripristinato && <button onClick={async () => {await ripristinaLog(log); await fetchLogs(); }}>
-  Ripristina
-</button>}
+                {log.ripristinabile && !log.ripristinato && 
+                  <button onClick={async () => { await ripristinaLog(log); await fetchLogs(); }}>
+                    Ripristina
+                  </button>}
                 <button style={{marginLeft:"8px"}} onClick={()=>apriDettagli(log)}>Dettagli</button>
               </td>
             </tr>
