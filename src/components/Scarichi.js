@@ -1,4 +1,7 @@
 // src/components/Scarichi.js
+
+
+
 import React, { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
 import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
@@ -6,6 +9,14 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { scriviLog } from "../utils/log";
 import "./Scarichi.css";
+
+import DatePicker, { registerLocale } from "react-datepicker";
+import { it } from "date-fns/locale";
+import "react-datepicker/dist/react-datepicker.css";
+
+registerLocale("it", it);
+
+const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
 const Scarichi = ({ logout, role, goToDashboard }) => {
   const [fornitori, setFornitori] = useState([]);
@@ -24,123 +35,95 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
 
   // ---------------- MODIFICHE PUNTUALI ----------------
   const [usaOra, setUsaOra] = useState(true); // checkbox "Adesso"
-  const [dataScaricoStr, setDataScaricoStr] = useState(""); // gg/mm/yyyy
-  const [oraStr, setOraStr] = useState(""); // hh:mm
+  const [dataScaricoStr, setDataScaricoStr] = useState(""); // DD MMM YYYY
+  const [oraStr, setOraStr] = useState(""); // hh:mm 24h
+
+  // -------- FORMATTATORI --------
+  const formattaDataItaliana = (date) => {
+    const gg = String(date.getDate()).padStart(2, "0");
+    const mese = mesiItaliani[date.getMonth()];
+    const yyyy = date.getFullYear();
+    return `${gg} ${mese} ${yyyy}`;
+  };
+
+  const formattaOra24 = (date) =>
+    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   // ✅ INIZIALIZZAZIONE AUTOMATICA DATA/ORA AL MOUNT
   useEffect(() => {
+    const now = new Date();
     if (usaOra) {
-      const now = new Date();
-      setDataScaricoStr(
-        `${String(now.getDate()).padStart(2, "0")}/${String(
-          now.getMonth() + 1
-        ).padStart(2, "0")}/${now.getFullYear()}`
-      );
-      setOraStr(
-        `${String(now.getHours()).padStart(2, "0")}:${String(
-          now.getMinutes()
-        ).padStart(2, "0")}`
-      );
+      setDataScaricoStr(formattaDataItaliana(now));
+      setOraStr(formattaOra24(now));
     }
-  }, []);
+  }, [usaOra]);
 
   const handleUsaOraChange = (e) => {
     const checked = e.target.checked;
     setUsaOra(checked);
+    const now = new Date();
     if (checked) {
-      const now = new Date();
-      setDataScaricoStr(
-        `${String(now.getDate()).padStart(2, "0")}/${String(
-          now.getMonth() + 1
-        ).padStart(2, "0")}/${now.getFullYear()}`
-      );
-      setOraStr(
-        `${String(now.getHours()).padStart(2, "0")}:${String(
-          now.getMinutes()
-        ).padStart(2, "0")}`
-      );
+      setDataScaricoStr(formattaDataItaliana(now));
+      setOraStr(formattaOra24(now));
     } else {
       setDataScaricoStr("");
       setOraStr("");
     }
   };
 
-  // --- gestione input data
-  const handleDataInput = (e) => {
-    let val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
-    setDataScaricoStr(val);
-  };
+  // -------- GESTIONE INPUT DATA --------
+  const handleDataInput = (e) => setDataScaricoStr(e.target.value);
 
   const handleDataBlur = () => {
     const now = new Date();
-    const minDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-
-    let val = dataScaricoStr;
-    if (val.length < 8) {
-      val = val.padEnd(8, "0");
-    }
-    let gg = Number(val.slice(0, 2));
-    let mm = Number(val.slice(2, 4));
-    let yyyy = Number(val.slice(4, 8));
-
-    if (!gg || !mm || !yyyy) {
-      setDataScaricoStr(
-        `${String(now.getDate()).padStart(2, "0")}/${String(
-          now.getMonth() + 1
-        ).padStart(2, "0")}/${now.getFullYear()}`
-      );
+    const [gg, meseStr, yyyy] = dataScaricoStr.split(" ");
+    const mm = mesiItaliani.indexOf(meseStr);
+    let giorno = Number(gg);
+    let anno = Number(yyyy);
+    if (mm < 0 || isNaN(giorno) || isNaN(anno)) {
+      setDataScaricoStr(formattaDataItaliana(now));
       return;
     }
-
-    if (gg < 1) gg = 1;
-    if (gg > 31) gg = 31;
-    if (mm < 1) mm = 1;
-    if (mm > 12) mm = 12;
-    if (yyyy < now.getFullYear() - 1) yyyy = now.getFullYear() - 1;
-    if (yyyy > now.getFullYear()) yyyy = now.getFullYear();
-
-    let newDate = new Date(yyyy, mm - 1, gg);
+    let newDate = new Date(anno, mm, giorno);
     if (newDate > now) newDate = now;
-    if (newDate < minDate) newDate = minDate;
+    setDataScaricoStr(formattaDataItaliana(newDate));
 
-    setDataScaricoStr(
-      `${String(newDate.getDate()).padStart(2, "0")}/${String(
-        newDate.getMonth() + 1
-      ).padStart(2, "0")}/${newDate.getFullYear()}`
-    );
+    // se oggi, controlliamo l'ora
+    if (newDate.toDateString() === now.toDateString()) {
+      const [hh, min] = oraStr.split(":").map(Number);
+      if (hh > now.getHours() || (hh === now.getHours() && min > now.getMinutes())) {
+        setOraStr(formattaOra24(now));
+      }
+    }
   };
 
-  // --- gestione input ora
+  // -------- GESTIONE INPUT ORA --------
   const handleOraInput = (e) => {
-    let val = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
+    let val = e.target.value.replace(/[^0-9:]/g, "").slice(0, 5);
     setOraStr(val);
   };
 
   const handleOraBlur = () => {
     const now = new Date();
-    let hh = Number(oraStr.slice(0, 2)) || 0;
-    let mm = Number(oraStr.slice(2, 4)) || 0;
-
+    let [hh, min] = oraStr.split(":").map(Number);
+    if (isNaN(hh)) hh = 0;
+    if (isNaN(min)) min = 0;
     if (hh > 23) hh = 23;
-    if (mm > 59) mm = 59;
+    if (min > 59) min = 59;
 
-    if (dataScaricoStr) {
-      const [dG, dM, dY] = dataScaricoStr.split("/").map(Number);
-      const dInput = new Date(dY, dM - 1, dG, hh, mm);
-      if (dInput > now) {
-        hh = now.getHours();
-        mm = now.getMinutes();
-      }
-    }
-
-    setOraStr(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+    const [gg, meseStr, yyyy] = dataScaricoStr.split(" ");
+    const mm = mesiItaliani.indexOf(meseStr);
+    const inputDate = new Date(Number(yyyy), mm, Number(gg), hh, min);
+    if (inputDate > now) setOraStr(formattaOra24(now));
+    else setOraStr(`${String(hh).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
   };
 
   const parseDataOra = (dataStr, oraStr) => {
     if (!dataStr) return new Date();
-    const [gg, mm, yyyy] = dataStr.split("/").map(Number);
-    if (!gg || !mm || !yyyy) return new Date();
-    const d = new Date(yyyy, mm - 1, gg);
+    const [gg, meseStr, yyyy] = dataStr.split(" ");
+    const mm = mesiItaliani.indexOf(meseStr);
+    if (mm < 0) return new Date();
+    const d = new Date(Number(yyyy), mm, Number(gg));
     if (oraStr) {
       const [hh, min] = oraStr.split(":").map(Number);
       if (!isNaN(hh) && !isNaN(min)) d.setHours(hh, min, 0, 0);
@@ -167,39 +150,28 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
 
   // -------- CER DINAMICI --------
   const cerDisponibili = [...new Set(materiali.map((m) => m.codiceCER).filter((c) => c))];
-
-  const materialiFiltrati = selectedCer
-    ? materiali.filter((m) => m.codiceCER === selectedCer)
-    : [];
-
+  const materialiFiltrati = selectedCer ? materiali.filter((m) => m.codiceCER === selectedCer) : [];
   useEffect(() => {
-    if (materialiFiltrati.length === 1) {
-      setSelectedMateriale(materialiFiltrati[0].nome);
-    }
+    if (materialiFiltrati.length === 1) setSelectedMateriale(materialiFiltrati[0].nome);
   }, [selectedCer, materialiFiltrati]);
 
-  // -------- AGGIUNGI O AGGIORNA MATERIALI --------
+  // -------- AGGIUNGI, MODIFICA, ELIMINA, RESET, SAVE, PRINT --------
   const handleAdd = () => {
     if (!selectedCer || !selectedMateriale) return;
-
     const pesoNum = parseFloat(peso.replace(",", ".")) || 0;
     const caloNum = parseFloat(calo.replace(",", ".")) || 0;
     const netto = pesoNum - caloNum;
 
     setScarico((prev) => {
       const cerIndex = prev.findIndex((c) => c.cer === selectedCer);
-
       if (cerIndex >= 0) {
         const updated = prev.map((c, i) => {
           if (i === cerIndex) {
             const matIndex = c.righe.findIndex((r) => r.materiale === selectedMateriale);
-            let newRighe;
-            if (matIndex >= 0) {
-              newRighe = [...c.righe];
-              newRighe[matIndex] = { materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto };
-            } else {
-              newRighe = [...c.righe, { materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto }];
-            }
+            const newRighe =
+              matIndex >= 0
+                ? [...c.righe.slice(0, matIndex), { materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto }, ...c.righe.slice(matIndex + 1)]
+                : [...c.righe, { materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto }];
             const totaleCer = newRighe.reduce((sum, r) => sum + r.netto, 0);
             return { ...c, righe: newRighe, totaleCer };
           }
@@ -207,10 +179,7 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
         });
         return updated;
       } else {
-        return [
-          ...prev,
-          { cer: selectedCer, righe: [{ materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto }], totaleCer: netto },
-        ];
+        return [...prev, { cer: selectedCer, righe: [{ materiale: selectedMateriale, peso: pesoNum, calo: caloNum, netto }], totaleCer: netto }];
       }
     });
 
@@ -219,11 +188,9 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
     setSelectedMateriale("");
   };
 
-  // -------- MODIFICA RIGA --------
   const handleEdit = (cer, materiale) => {
     const cerObj = scarico.find((c) => c.cer === cer);
     if (!cerObj) return;
-
     const riga = cerObj.righe.find((r) => r.materiale === materiale);
     if (!riga) return;
 
@@ -233,10 +200,9 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
     setCalo(riga.calo.toString().replace(".", ","));
   };
 
-  // -------- ELIMINA RIGA --------
   const handleDelete = (cer, materiale) => {
-    setScarico((prev) => {
-      return prev
+    setScarico((prev) =>
+      prev
         .map((c) => {
           if (c.cer === cer) {
             const newRighe = c.righe.filter((r) => r.materiale !== materiale);
@@ -245,11 +211,10 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
           }
           return c;
         })
-        .filter((c) => c.righe.length > 0);
-    });
+        .filter((c) => c.righe.length > 0)
+    );
   };
 
-  // -------- RESET --------
   const handleReset = () => {
     setSelectedFornitore("");
     setSelectedListino("");
@@ -259,44 +224,27 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
     setCalo("");
     setScarico([]);
     setUsaOra(true);
-    setDataScaricoStr("");
-    setOraStr("");
+    const now = new Date();
+    setDataScaricoStr(formattaDataItaliana(now));
+    setOraStr(formattaOra24(now));
   };
 
-  // -------- SALVA SU FIRESTORE + LOG --------
   const handleSave = async () => {
     if (!selectedFornitore || !selectedListino || scarico.length === 0) {
       alert("Seleziona fornitore, listino e almeno un materiale!");
       return;
     }
-
     try {
       const utente = auth.currentUser?.email || "sconosciuto";
-
       const dataFinale = usaOra ? serverTimestamp() : parseDataOra(dataScaricoStr, oraStr);
-
-      const docRef = await addDoc(collection(db, "scarichi"), {
-        fornitore: selectedFornitore,
-        listino: selectedListino,
-        scarico,
-        utente,
-        data: dataFinale,
-      });
-
+      const docRef = await addDoc(collection(db, "scarichi"), { fornitore: selectedFornitore, listino: selectedListino, scarico, utente, data: dataFinale });
       await scriviLog({
         pagina: "Scarichi",
         tipo: "CREAZIONE_SCARICO",
         collezioneRef: "scarichi",
         documentoId: docRef.id,
-        dati_modificati: {
-          id: docRef.id,
-          fornitore: selectedFornitore,
-          listino: selectedListino,
-          scarico,
-          utente,
-        },
+        dati_modificati: { id: docRef.id, fornitore: selectedFornitore, listino: selectedListino, scarico, utente },
       });
-
       alert("Scarico salvato correttamente!");
       handleReset();
     } catch (err) {
@@ -305,24 +253,20 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
     }
   };
 
-  // -------- GENERA PDF --------
   const handlePrint = () => {
     if (!selectedFornitore || !selectedListino || scarico.length === 0) {
       alert("Niente da stampare!");
       return;
     }
-
     const doc = new jsPDF();
     doc.setFontSize(16);
     doc.text(`Fornitore: ${selectedFornitore}`, 10, 10);
     doc.text(`Listino: ${selectedListino}`, 10, 20);
-
     let y = 30;
     scarico.forEach((c) => {
       doc.setFontSize(14);
       doc.text(`CER ${c.cer}`, 10, y);
       y += 6;
-
       autoTable(doc, {
         startY: y,
         head: [["Materiale", "Peso", "Calo", "Netto"]],
@@ -332,13 +276,11 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
         headStyles: { fillColor: [200, 200, 200] },
         styles: { fontSize: 12 },
       });
-
       y = doc.lastAutoTable.finalY + 6;
       doc.setFontSize(12);
       doc.text(`Totale CER: ${c.totaleCer.toFixed(2)} kg`, 10, y);
       y += 10;
     });
-
     doc.save(`Scarico_${selectedFornitore}_${selectedListino}.pdf`);
   };
 
@@ -361,46 +303,72 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
 
       {/* TESTATA */}
       <div>
-        {/* --- MODIFICA PUNTUALE: INPUT DATA/ORA TESTUALE + CHECKBOX --- */}
+        {/* --- MODIFICA PUNTUALE: INPUT DATA/ORA PICKER --- */}
         <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-          <label>
-            Data:
-            <input
-              type="text"
-              value={dataScaricoStr}
-              placeholder="gg/mm/yyyy"
-              onChange={handleDataInput}
-              onBlur={handleDataBlur}
-              style={{ width: "100px" }}
-              disabled={usaOra}
-            />
-          </label>
+         
+<div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
+  <label>
+    Data:
+    <DatePicker
+      selected={dataScaricoStr ? parseDataOra(dataScaricoStr, oraStr) : new Date()}
+      onChange={(date) => {
+        setDataScaricoStr(formattaDataItaliana(date));
 
-          <label>
-            Ora:
-            <input
-              type="text"
-              value={oraStr}
-              placeholder="hh:mm"
-              onChange={handleOraInput}
-              onBlur={handleOraBlur}
-              style={{ width: "60px" }}
-              disabled={usaOra}
-            />
-          </label>
+        // Se selezioni oggi, controlliamo l'ora corrente
+        if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {
+          const now = new Date();
+          const [hh, mm] = oraStr.split(":").map(Number);
+          if (hh > now.getHours() || (hh === now.getHours() && mm > now.getMinutes())) {
+            setOraStr(formattaOra24(now));
+          }
+        } else {
+          setOraStr("00:00");
+        }
+      }}
+      dateFormat="dd MMM yyyy"
+      locale="it"
+      disabled={usaOra}
+      placeholderText="DD MMM YYYY"
+    />
+  </label>
 
-          <label style={{ marginLeft: "12px" }}>
-            <input type="checkbox" checked={usaOra} onChange={handleUsaOraChange} /> Adesso
-          </label>
+  <label>
+    Ora:
+    <DatePicker
+      selected={
+        oraStr
+          ? new Date(0, 0, 0, ...oraStr.split(":").map(Number))
+          : new Date()
+      }
+      onChange={(time) => setOraStr(formattaOra24(time))}
+      showTimeSelect
+      showTimeSelectOnly
+      timeIntervals={15}
+      timeFormat="HH:mm"
+      dateFormat="HH:mm"
+      disabled={usaOra}
+      placeholderText="HH:mm"
+      minTime={new Date(0, 0, 0, 0, 0)}
+      maxTime={
+        dataScaricoStr === formattaDataItaliana(new Date())
+          ? new Date(0, 0, 0, new Date().getHours(), new Date().getMinutes())
+          : new Date(0, 0, 0, 23, 59)
+      }
+    />
+  </label>
+
+  <label style={{ marginLeft: "12px" }}>
+    <input type="checkbox" checked={usaOra} onChange={handleUsaOraChange} /> Adesso
+  </label>
+</div>
+          
         </div>
 
         <label>Fornitore:</label>
         <select disabled={testataBloccata} value={selectedFornitore} onChange={(e) => setSelectedFornitore(e.target.value)}>
           <option value="">-- Seleziona --</option>
           {fornitori.map((f) => (
-            <option key={f.id} value={f.nome}>
-              {f.nome}
-            </option>
+            <option key={f.id} value={f.nome}>{f.nome}</option>
           ))}
         </select>
 
@@ -408,9 +376,7 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
         <select disabled={testataBloccata} value={selectedListino} onChange={(e) => setSelectedListino(e.target.value)}>
           <option value="">-- Seleziona --</option>
           {listini.map((l) => (
-            <option key={l.id} value={l.nome}>
-              {l.nome}
-            </option>
+            <option key={l.id} value={l.nome}>{l.nome}</option>
           ))}
         </select>
 
@@ -426,9 +392,7 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
           <select value={selectedCer} onChange={(e) => setSelectedCer(e.target.value)}>
             <option value="">-- Seleziona CER --</option>
             {cerDisponibili.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </>
@@ -441,9 +405,7 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
           <select value={selectedMateriale} onChange={(e) => setSelectedMateriale(e.target.value)}>
             <option value="">-- Seleziona Materiale --</option>
             {materialiFiltrati.map((m) => (
-              <option key={m.id} value={m.nome}>
-                {m.nome}
-              </option>
+              <option key={m.id} value={m.nome}>{m.nome}</option>
             ))}
           </select>
 
@@ -491,12 +453,8 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
                   <td>{r.calo}</td>
                   <td>{r.netto}</td>
                   <td className="actions">
-                    <button className="edit" onClick={() => handleEdit(c.cer, r.materiale)}>
-                      Modifica
-                    </button>
-                    <button className="delete" onClick={() => handleDelete(c.cer, r.materiale)}>
-                      Elimina
-                    </button>
+                    <button className="edit" onClick={() => handleEdit(c.cer, r.materiale)}>Modifica</button>
+                    <button className="delete" onClick={() => handleDelete(c.cer, r.materiale)}>Elimina</button>
                   </td>
                 </tr>
               ))}
@@ -510,9 +468,7 @@ const Scarichi = ({ logout, role, goToDashboard }) => {
       {scarico.length > 0 && (
         <>
           <button onClick={handleSave}>Salva Scarico</button>
-          <button onClick={handlePrint} style={{ marginLeft: "15px" }}>
-            Stampa PDF
-          </button>
+          <button onClick={handlePrint} style={{ marginLeft: "15px" }}>Stampa PDF</button>
         </>
       )}
     </div>

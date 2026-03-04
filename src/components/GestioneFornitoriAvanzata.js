@@ -12,6 +12,9 @@ import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import { scriviLog } from "../utils/log";
 
+import DatePicker from "react-datepicker"; 
+import "react-datepicker/dist/react-datepicker.css";
+
 const GestioneFornitoriAvanzata = () => {
   const navigate = useNavigate();
 
@@ -19,8 +22,8 @@ const GestioneFornitoriAvanzata = () => {
   const [scarichi, setScarichi] = useState([]);
   const [errori, setErrori] = useState([]);
 
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState("");
+  const [dal, setDal] = useState(null);
+  const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
 
   const [minDataDB, setMinDataDB] = useState(null);
@@ -48,23 +51,26 @@ const GestioneFornitoriAvanzata = () => {
 
     } catch (e) { setErrori([e.message]); }
   };
-
   useEffect(() => { loadData(); }, []);
 
-  // ---------------- COUNT SCARICHI ----------------
+  // ---------------- COUNT SCARICHI FILTRATI ----------------
   const countScarichi = (fornitore) => {
     let lista = scarichi.filter(s => s.fornitore === fornitore.nome);
-
     if (!tutti && dal && al) {
-      const inizio = parseItalianDate(dal);
-      const fine = parseItalianDate(al, true);
+      const inizio = dal;
+      const fine = new Date(al);
+      fine.setHours(23,59,59,999);
       lista = lista.filter(s => {
         const d = s.data?.toDate();
         return d >= inizio && d <= fine;
       });
     }
-
     return lista.length;
+  };
+
+  // ---------------- COUNT SCARICHI TOTALI ----------------
+  const countScarichiTotali = (fornitore) => {
+    return scarichi.filter(s => s.fornitore === fornitore.nome).length;
   };
 
   // ---------------- DATE UTILS ----------------
@@ -83,8 +89,8 @@ const GestioneFornitoriAvanzata = () => {
 
   useEffect(() => {
     if (minDataDB && maxDataDB) {
-      setDal(formatDataIT(minDataDB));
-      setAl(formatDataIT(maxDataDB));
+      setDal(minDataDB);
+      setAl(maxDataDB);
     }
   }, [minDataDB, maxDataDB]);
 
@@ -133,7 +139,7 @@ const GestioneFornitoriAvanzata = () => {
 
   // ---------------- ELIMINA ----------------
   const eliminaFornitore = async (f) => {
-    if (countScarichi(f)>0) { alert("Non eliminabile: esistono scarichi collegati."); return; }
+    if (countScarichiTotali(f)>0) { alert("Non eliminabile: esistono scarichi collegati."); return; }
     if (!window.confirm(`Eliminare ${f.nome}?`)) return;
     try {
       await deleteDoc(doc(db,"fornitori",f.id));
@@ -152,15 +158,14 @@ const GestioneFornitoriAvanzata = () => {
   const resetFiltri = () => {
     setTutti(false);
     if(minDataDB && maxDataDB){
-      setDal(formatDataIT(minDataDB));
-      setAl(formatDataIT(maxDataDB));
+      setDal(minDataDB);
+      setAl(maxDataDB);
     }
   };
 
   // ---------------- STAMPA ----------------
   const handleStampa = () => {
     let righeHtml = "";
-    let totaleGenerale = 0;
     fornitori.forEach(f => {
       const n = countScarichi(f);
       righeHtml += `<tr><td>${f.nome}</td><td>${f.indirizzo||"-"}</td><td>${f.piva_cf||"-"}</td><td>${n}</td></tr>`;
@@ -199,8 +204,29 @@ const GestioneFornitoriAvanzata = () => {
 
         {!tutti && (
           <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
-            <label>Dal:<input type="text" value={dal} onChange={e=>setDal(e.target.value)} placeholder="gg/mm/yyyy" style={{width:"100px"}}/></label>
-            <label>Al:<input type="text" value={al} onChange={e=>setAl(e.target.value)} placeholder="gg/mm/yyyy" style={{width:"100px"}}/></label>
+            <label>
+              Dal:
+              <DatePicker
+                selected={dal}
+                onChange={(date) => setDal(date)}
+                minDate={minDataDB || new Date(2000,0,1)}
+                maxDate={al || maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
+              />
+            </label>
+
+            <label>
+              Al:
+              <DatePicker
+                selected={al}
+                onChange={(date) => setAl(date)}
+                minDate={dal || minDataDB || new Date(2000,0,1)}
+                maxDate={maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
+              />
+            </label>
           </div>
         )}
       </div>
@@ -212,6 +238,7 @@ const GestioneFornitoriAvanzata = () => {
         <tbody>
           {fornitori.map(f => {
             const n = countScarichi(f);
+            const tot = countScarichiTotali(f);
             return (
               <tr key={f.id}>
                 <td><b>{f.nome}</b></td>
@@ -220,7 +247,7 @@ const GestioneFornitoriAvanzata = () => {
                 <td>{n}</td>
                 <td>
                   <button onClick={()=>modificaFornitore(f)}>Modifica</button>
-                  {n===0 ? <button onClick={()=>eliminaFornitore(f)} style={{marginLeft:5,background:"red",color:"white"}}>Elimina</button> : <button disabled style={{marginLeft:5}}>Non eliminabile</button>}
+                  {tot===0 ? <button onClick={()=>eliminaFornitore(f)} style={{marginLeft:5,background:"red",color:"white"}}>Elimina</button> : <button disabled style={{marginLeft:5}}>Non eliminabile</button>}
                 </td>
               </tr>
             );

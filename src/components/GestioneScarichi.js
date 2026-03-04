@@ -4,12 +4,19 @@ import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
+import DatePicker, { registerLocale } from "react-datepicker";
+import { it } from "date-fns/locale";
+import "react-datepicker/dist/react-datepicker.css";
 
+
+registerLocale("it", it);
 const GestioneScarichi = () => {
   const [scarichi, setScarichi] = useState([]);
   const [filteredScarichi, setFilteredScarichi] = useState([]);
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState("");
+
+
+const [dal, setDal] = useState(null);   // oggetto Date
+const [al, setAl] = useState(null);     // oggetto Date
   const [tutti, setTutti] = useState(false);
   const [filtroFornitore, setFiltroFornitore] = useState("tutti");
   const [filtroListino, setFiltroListino] = useState("tutti");
@@ -47,11 +54,11 @@ const GestioneScarichi = () => {
 
   // --- INIT DAL/AL ---
   useEffect(() => {
-    const today = new Date();
-    const primo = new Date(today.getFullYear(), today.getMonth(), 1);
-    setDal(formatDataIT(primo));
-    setAl(formatDataIT(today));
-  }, []);
+  const today = new Date();
+  const primo = new Date(today.getFullYear(), today.getMonth(), 1);
+  setDal(primo);
+  setAl(today);
+}, []);
 
   // --- FETCH SCARICHI ---
   const fetchScarichi = async () => {
@@ -131,8 +138,9 @@ const GestioneScarichi = () => {
 
   // --- FILTRAGGIO SCARICHI ---
   useEffect(() => {
-    let start = parseItalianDate(dal);
-    let end = parseItalianDate(al, true);
+    let start = dal;
+let end = al ? new Date(al) : null;
+if (end) end.setHours(23,59,59,999);
 
     let dati = [...scarichi];
 
@@ -308,39 +316,33 @@ const GestioneScarichi = () => {
           Disabilita filtro date
         </label>
 
-        {!tutti && (
-          <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
-            <label>
-              Dal:
-              <input
-                type="text"
-                value={dal}
-                placeholder="gg/mm/yyyy"
-                onChange={e => setDal(e.target.value)}
-                onBlur={() => {
-                  const data = parseItalianDate(dal);
-                  if (!data && minDataDB) setDal(formatDataIT(minDataDB));
-                }}
-                style={{ width: "100px" }}
-              />
-            </label>
+       {!tutti && (
+  <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+    <label>
+  Dal:
+  <DatePicker
+    selected={dal}
+    onChange={(date) => setDal(date)}
+    minDate={minDataDB || new Date(2000,0,1)}
+    maxDate={al || maxDataDB || new Date()}
+    dateFormat="dd/MM/yyyy"
+    placeholderText="gg/mm/yyyy"
+  />
+</label>
 
-            <label>
-              Al:
-              <input
-                type="text"
-                value={al}
-                placeholder="gg/mm/yyyy"
-                onChange={e => setAl(e.target.value)}
-                onBlur={() => {
-                  const data = parseItalianDate(al);
-                  if (!data && maxDataDB) setAl(formatDataIT(maxDataDB));
-                }}
-                style={{ width: "100px" }}
-              />
-            </label>
-          </div>
-        )}
+<label>
+  Al:
+  <DatePicker
+    selected={al}
+    onChange={(date) => setAl(date)}
+    minDate={dal || minDataDB || new Date(2000,0,1)}
+    maxDate={maxDataDB || new Date()}
+    dateFormat="dd/MM/yyyy"
+    placeholderText="gg/mm/yyyy"
+  />
+</label>
+  </div>
+)}
 
         <label style={{marginLeft:"12px"}}>
           Fornitore:
