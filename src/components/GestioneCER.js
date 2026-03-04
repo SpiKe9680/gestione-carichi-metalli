@@ -12,10 +12,12 @@ import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
 const GestioneCER = () => {
   const navigate = useNavigate();
 
-  // ---------------- STATE ----------------
   const [materiali, setMateriali] = useState([]);
   const [scarichi, setScarichi] = useState([]);
 
@@ -23,16 +25,14 @@ const GestioneCER = () => {
   const [categoria, setCategoria] = useState("");
   const [codiceCER, setCodiceCER] = useState("");
   const [descrizione, setDescrizione] = useState("");
-
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState("");
 
-  // filtri dropdown
   const [filtroMateriale, setFiltroMateriale] = useState("Tutti");
   const [filtroCER, setFiltroCER] = useState("Tutti");
 
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState("");
+  const [dal, setDal] = useState(null);
+  const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
 
   const [minDataDB, setMinDataDB] = useState(null);
@@ -40,6 +40,8 @@ const GestioneCER = () => {
 
   const [sortField, setSortField] = useState("nome");
   const [sortAsc, setSortAsc] = useState(true);
+
+  const [expandedRows, setExpandedRows] = useState({}); // per Dettagli scarichi
 
   // ---------------- FETCH MATERIALI ----------------
   const fetchMateriali = async () => {
@@ -52,7 +54,16 @@ const GestioneCER = () => {
   const fetchScarichi = async () => {
     const snap = await getDocs(collection(db, "scarichi"));
     const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dati.sort((a,b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
     setScarichi(dati);
+
+    if(dati.length){
+      const dates = dati.map(s => s.data?.toDate()).filter(Boolean);
+      setMinDataDB(new Date(Math.min(...dates)));
+      setMaxDataDB(new Date(Math.max(...dates)));
+      setDal(new Date(Math.min(...dates)));
+      setAl(new Date(Math.max(...dates)));
+    }
   };
 
   useEffect(() => {
@@ -75,15 +86,6 @@ const GestioneCER = () => {
     return date;
   };
 
-  // ---------------- INIT DATE RANGE ----------------
-  useEffect(() => {
-    if (materiali.length) {
-      const today = new Date();
-      setDal(formatDataIT(today));
-      setAl(formatDataIT(today));
-    }
-  }, [materiali]);
-
   // ---------------- NAV / LOGOUT ----------------
   const goHome = () => navigate("/admin");
   const handleLogout = async () => { await signOut(auth); navigate("/login"); };
@@ -93,84 +95,67 @@ const GestioneCER = () => {
 
   // ---------------- SAVE / EDIT ----------------
   const handleSave = async () => {
-  if (!nome || !codiceCER) {
-    setMessage("Nome e CER obbligatori");
-    return;
-  }
+    if (!nome || !codiceCER) { setMessage("Nome e CER obbligatori"); return; }
+    try {
+      const newData = { nome, categoria, codiceCER, descrizione };
 
-  try {
+      if(editingId){
+        const originale = materiali.find(m => m.idDoc === editingId);
+        await updateDoc(doc(db,"materiali",editingId), newData);
+        await scriviLog({
+          pagina: "Gestione Codici CER",
+          tipo: "MODIFICA MATERIALE",
+          collezioneRef: "materiali",
+          documentoId: editingId,
+          dati_originali: originale,
+          dati_modificati: newData
+        });
+        setMessage("Materiale aggiornato!");
+      } else {
+        const ref = await addDoc(collection(db,"materiali"), newData);
+        await scriviLog({
+          pagina: "Gestione Codici CER",
+          tipo: "CREAZIONE MATERIALE",
+          collezioneRef: "materiali",
+          documentoId: ref.id,
+          dati_originali: null,
+          dati_modificati: newData
+        });
+        setMessage("Materiale aggiunto!");
+      }
 
-    const newData = {
-      nome,
-      categoria,
-      codiceCER,
-      descrizione
-    };
+      resetForm();
+      fetchMateriali();
 
-    // =========================
-    // MODIFICA
-    // =========================
-    if (editingId) {
-
-      // recupero dati ORIGINALI per audit trail
-      const originale = materiali.find(m => m.idDoc === editingId);
-
-      await updateDoc(doc(db, "materiali", editingId), newData);
-
-      await scriviLog({
-        pagina: "Gestione Codici CER",
-        tipo: "MODIFICA MATERIALE",
-        collezioneRef: "materiali",
-        documentoId: editingId,
-        dati_originali: originale,
-        dati_modificati: newData
-      });
-
-      setMessage("Materiale aggiornato!");
+    } catch(err){
+      console.error(err);
+      setMessage("Errore salvataggio");
     }
+  };
 
-    // =========================
-    // CREAZIONE
-    // =========================
-    else {
+  // ---------------- EDIT + SCROLL ----------------
+  const handleEdit = (m) => {
+    setNome(m.nome);
+    setCategoria(m.categoria);
+    setCodiceCER(m.codiceCER);
+    setDescrizione(m.descrizione);
+    setEditingId(m.idDoc);
+    window.scrollTo({ top: 0, behavior: "smooth" }); // SCROLL UP
+  };
 
-      const ref = await addDoc(collection(db, "materiali"), newData);
+  // ---------------- TOGGLE DETTAGLI ----------------
+  const toggleDettagli = (id) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
-      await scriviLog({
-        pagina: "Gestione Codici CER",
-        tipo: "CREAZIONE MATERIALE",
-        collezioneRef: "materiali",
-        documentoId: ref.id,
-        dati_originali: null,
-        dati_modificati: newData
-      });
-
-      setMessage("Materiale aggiunto!");
-    }
-
-    resetForm();
-    fetchMateriali();
-
-  } catch (err) {
-    console.error(err);
-    setMessage("Errore salvataggio");
-  }
-};
-
-  const handleEdit = (m) => { setNome(m.nome); setCategoria(m.categoria); setCodiceCER(m.codiceCER); setDescrizione(m.descrizione); setEditingId(m.idDoc); };
-
-  // ---------------- FILTRAGGIO MATERIALI CON FILTRI CONNESSI ----------------
+  // ---------------- FILTRAGGIO ----------------
   const materialiFiltrati = materiali
-    .filter(m => {
-      // Filtro materiale
-      if(filtroMateriale!=="Tutti" && m.nome!==filtroMateriale) return false;
-      // Filtro CER
-      if(filtroCER!=="Tutti" && m.codiceCER!==filtroCER) return false;
-      return true;
-    })
+    .filter(m => (filtroMateriale==="Tutti" || m.nome===filtroMateriale) && (filtroCER==="Tutti" || m.codiceCER===filtroCER))
     .map(m => {
-      const start = parseItalianDate(dal);
-      const end = parseItalianDate(al, true);
+      const start = dal;
+      const end = al ? new Date(al) : null;
+      if(end) end.setHours(23,59,59,999);
+
       let scarichiPeriodo = scarichi.filter(s => s.data?.toDate);
       scarichiPeriodo = scarichiPeriodo.filter(s => (!tutti && start && end ? s.data.toDate()>=start && s.data.toDate()<=end : true));
 
@@ -184,7 +169,8 @@ const GestioneCER = () => {
         ...m,
         nrScarichi: scarichiMateriale.length,
         dataPrimoScarico: scarichiMateriale.length ? formatDataIT(scarichiMateriale[0].data.toDate()) : "",
-        dataUltimoScarico: scarichiMateriale.length ? formatDataIT(scarichiMateriale[scarichiMateriale.length-1].data.toDate()) : ""
+        dataUltimoScarico: scarichiMateriale.length ? formatDataIT(scarichiMateriale[scarichiMateriale.length-1].data.toDate()) : "",
+        scarichiDettaglio: scarichiMateriale
       };
     })
     .sort((a,b) => {
@@ -193,7 +179,6 @@ const GestioneCER = () => {
       return sortAsc ? v1.localeCompare(v2) : v2.localeCompare(v1);
     });
 
-  // --- LISTE FILTRI INCROCIATI ---
   const materialiDropdown = filtroCER==="Tutti"
     ? ["Tutti", ...new Set(materiali.map(m=>m.nome))]
     : ["Tutti", ...new Set(materiali.filter(m=>m.codiceCER===filtroCER).map(m=>m.nome))];
@@ -202,9 +187,8 @@ const GestioneCER = () => {
     ? ["Tutti", ...new Set(materiali.map(m=>m.codiceCER))]
     : ["Tutti", ...new Set(materiali.filter(m=>m.nome===filtroMateriale).map(m=>m.codiceCER))];
 
-  // ---------------- SORT ----------------
   const handleSort = (field) => {
-    if (field === sortField) setSortAsc(!sortAsc);
+    if(field===sortField) setSortAsc(!sortAsc);
     else { setSortField(field); setSortAsc(true); }
   };
 
@@ -226,14 +210,13 @@ const GestioneCER = () => {
           <option value="">Categoria</option>
           {[...new Set(materiali.map(m=>m.categoria).filter(Boolean))].map(c=> <option key={c}>{c}</option>)}
         </select>
-
         <input placeholder="Codice CER" value={codiceCER} onChange={e=>setCodiceCER(e.target.value)} />
         <input placeholder="Descrizione" value={descrizione} onChange={e=>setDescrizione(e.target.value)} />
         <button onClick={handleSave}>{editingId ? "Aggiorna" : "Aggiungi"}</button>
       </div>
 
       {/* FILTRI */}
-      <div style={{margin:"20px 0", display:"flex", gap:"12px"}}>
+      <div style={{margin:"20px 0", display:"flex", gap:"12px", alignItems:"center"}}>
         <label>
           Materiale:
           <select value={filtroMateriale} onChange={e=>setFiltroMateriale(e.target.value)}>
@@ -254,8 +237,29 @@ const GestioneCER = () => {
 
         {!tutti && (
           <>
-            Dal: <input type="text" value={dal} onChange={e=>setDal(e.target.value)} style={{width:"100px"}} />
-            Al: <input type="text" value={al} onChange={e=>setAl(e.target.value)} style={{width:"100px"}} />
+            <label>
+              Dal:
+              <DatePicker
+                selected={dal}
+                onChange={setDal}
+                minDate={minDataDB || null}
+                maxDate={al || maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
+              />
+            </label>
+
+            <label>
+              Al:
+              <DatePicker
+                selected={al}
+                onChange={setAl}
+                minDate={dal || minDataDB || null}
+                maxDate={maxDataDB || new Date()}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="gg/mm/yyyy"
+              />
+            </label>
           </>
         )}
       </div>
@@ -276,18 +280,55 @@ const GestioneCER = () => {
         </thead>
         <tbody>
           {materialiFiltrati.map(m => (
-            <tr key={m.idDoc}>
-              <td>{m.nome}</td>
-              <td>{m.categoria}</td>
-              <td>{m.codiceCER}</td>
-              <td>{m.descrizione}</td>
-              <td>{m.nrScarichi}</td>
-              <td>{m.dataPrimoScarico}</td>
-              <td>{m.dataUltimoScarico}</td>
-              <td>
-                <button onClick={()=>handleEdit(m)}>Modifica</button>
-              </td>
-            </tr>
+            <React.Fragment key={m.idDoc}>
+              <tr>
+                <td>{m.nome}</td>
+                <td>{m.categoria}</td>
+                <td>{m.codiceCER}</td>
+                <td>{m.descrizione}</td>
+                <td>{m.nrScarichi}</td>
+                <td>{m.dataPrimoScarico}</td>
+                <td>{m.dataUltimoScarico}</td>
+                <td>
+                  <button onClick={()=>handleEdit(m)}>Modifica</button>
+                  {m.nrScarichi>0 && (
+                    <button style={{marginLeft:5}} onClick={()=>toggleDettagli(m.idDoc)}>
+                      {expandedRows[m.idDoc] ? "Chiudi" : "Dettagli"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+
+              {/* DETTAGLI SCARICHI */}
+              {expandedRows[m.idDoc] && (
+                <tr>
+                  <td colSpan={8}>
+                    <table style={{width:"100%", marginTop:5, marginBottom:10, border:"1px solid #ccc"}}>
+                      <thead>
+                        <tr>
+                          <th>Data / Ora</th>
+                          <th>Peso Totale</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {m.scarichiDettaglio.map(s => {
+                          const pesoTot = s.scarico.reduce((acc, c) => {
+                            const r = c.righe?.find(r => r.materiale===m.nome);
+                            return acc + (r?.peso || 0);
+                          }, 0);
+                          return (
+                            <tr key={s.id}>
+                              <td>{s.data?.toDate().toLocaleString("it-IT")}</td>
+                              <td>{pesoTot}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
           ))}
         </tbody>
       </table>
