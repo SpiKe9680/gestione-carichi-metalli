@@ -4,6 +4,8 @@ import { db, auth } from "../firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
+import { getDoc } from "firebase/firestore";
+
 
 const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "Tutti", filtroListinoProp = "Tutti" }) => {
   const [righe, setRighe] = useState([]);
@@ -27,6 +29,8 @@ const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreP
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
   const goHome = () => navigate("/admin");
   const vaiGestioneListini = () => navigate("/gestione-listini");
+
+  
 
   // ---------------------------
   // PARSING SICURO DATA gg/mm/yyyy o ISO
@@ -405,6 +409,128 @@ const handleStampa = () => {
   win.print();
 };
 
+
+// ---------------------------
+// STAMPA CON FOTO
+
+const handleStampaConFoto = async () => {
+  const filtri = `
+    <div style="margin-bottom:15px;font-size:14px">
+      <strong>Filtri applicati:</strong><br/>
+      Fornitore: ${filtroFornitore}<br/>
+      Ora: ${filtroOra}<br/>
+      CER: ${filtroCER}<br/>
+      Listino: ${filtroListino}
+    </div>
+  `;
+
+  // Raggruppo righe per docId
+  const righePerDoc = {};
+  righeFiltrate.forEach(r => {
+    if (!righePerDoc[r.docId]) righePerDoc[r.docId] = [];
+    righePerDoc[r.docId].push(r);
+  });
+
+  let righeHtml = "";
+  let totaleGenerale = 0;
+
+  // Ciclo sui documenti
+  for (const docId of Object.keys(righePerDoc)) {
+    const rows = righePerDoc[docId];
+    const refDoc = doc(db, "scarichi", docId);
+    const snapshot = await getDoc(refDoc);
+    const docData = snapshot.data();
+
+    const fotoUrl = docData?.fotoURL || null;
+    const fornitore = docData?.fornitore || rows[0].fornitore;
+
+    const subtotale = rows.reduce((sum, r) => sum + (r.costoTotale || 0), 0);
+    totaleGenerale += subtotale;
+
+    // Intestazione fornitore
+    righeHtml += `<tr><td colspan="9" style="font-weight:bold; background:#ddd;">Fornitore: ${fornitore}</td></tr>`;
+
+    // Righe
+    rows.forEach(r => {
+      righeHtml += `
+        <tr>
+          <td>${r.ora}</td>
+          <td>${r.cer}</td>
+          <td>${r.materiale}</td>
+          <td>${r.peso}</td>
+          <td>${r.calo}</td>
+          <td>${r.netto}</td>
+          <td>${r.prezzoKg}</td>
+          <td>${r.costoTotale.toFixed(2)}</td>
+          <td>${r.listino}</td>
+        </tr>
+      `;
+    });
+
+    // Foto dal documento
+    righeHtml += `<tr><td colspan="9" style="text-align:center; padding:8px;">${
+      fotoUrl ? `<img src="${fotoUrl}" style="max-width:200px; max-height:200px; border:1px solid #ccc;"/>` 
+               : "Foto non disponibile"
+    }</td></tr>`;
+
+    // Subtotale
+    righeHtml += `<tr>
+      <td colspan="8" style="text-align:right;font-weight:bold;">Subtotale €</td>
+      <td style="font-weight:bold;">${subtotale.toFixed(2)}</td>
+    </tr>`;
+  }
+
+  // Totale generale
+  const totaleHtml = `<div class="totale" style="margin-top:15px;font-weight:bold;font-size:14px;">
+    Totale Generale €: ${totaleGenerale.toFixed(2)}
+  </div>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>Stampa Scarichi con Foto</title>
+        <style>
+          body { font-family: Arial; padding:20px; }
+          h2 { margin-bottom:10px; }
+          table { width:100%; border-collapse: collapse; margin-top:15px; }
+          th, td { border:1px solid #000; padding:6px; text-align:left; font-size:12px; }
+          th { background:#eee; }
+          .totale { font-weight:bold; font-size:14px; }
+        </style>
+      </head>
+      <body>
+        <h2>Scarichi del giorno ${dataLabel}</h2>
+        ${filtri}
+        <table>
+          <thead>
+            <tr>
+              <th>Ora</th>
+              <th>CER</th>
+              <th>Materiale</th>
+              <th>Peso</th>
+              <th>Calo</th>
+              <th>Netto</th>
+              <th>Prezzo €/Kg</th>
+              <th>Costo Totale €</th>
+              <th>Listino</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${righeHtml}
+          </tbody>
+        </table>
+        ${totaleHtml}
+      </body>
+    </html>
+  `;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+};
+
   // ---------------------------  
   // UI
   return (
@@ -420,7 +546,7 @@ const handleStampa = () => {
         <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
       </div>
 
-  <h2
+ <h2
   style={{
     display: "flex",
     alignItems: "center",
@@ -429,17 +555,32 @@ const handleStampa = () => {
 >
   <span>Scarichi del giorno {dataLabel}</span>
 
-  <button
-    onClick={handleStampa}
-    style={{
-      padding: "6px 12px",
-      cursor: "pointer",
-      fontSize: "14px"
-    }}
-  >
-    🖨 Stampa
-  </button>
+  <div style={{ display: "flex", gap: "10px" }}>
+    <button
+      onClick={handleStampa}
+      style={{
+        padding: "6px 12px",
+        cursor: "pointer",
+        fontSize: "14px"
+      }}
+    >
+      🖨 Stampa
+    </button>
+
+    <button
+      onClick={handleStampaConFoto}
+      style={{
+        padding: "6px 12px",
+        cursor: "pointer",
+        fontSize: "14px"
+      }}
+      title="Stampa con foto"
+    >
+      📸 Stampa con foto
+    </button>
+  </div>
 </h2>
+
 
       <div style={{margin:"10px 0", display:"flex", gap:"10px"}}>
         <label>

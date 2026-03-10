@@ -8,13 +8,13 @@ const AdminDashboard = ({ logout }) => {
   return (
     <div className="admin-dashboard-container">
       <div className="admin-header">
-        <h2>Dashboard Amministratore</h2> 
+        <h2>Strumenti di Amministrazione</h2> 
         <button onClick={logout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
       </div>
 
       <div className="admin-actions">
         <button onClick={() => navigate("/scarichi")}>
-          Nuovo Scarico / Visualizza Scarichi
+          Nuovo Scarico / Carico
         </button>
 
         <button onClick={() => navigate("/gestione-scarichi")}>

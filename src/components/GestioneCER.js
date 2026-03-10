@@ -20,6 +20,7 @@ const GestioneCER = () => {
 
   const [materiali, setMateriali] = useState([]);
   const [scarichi, setScarichi] = useState([]);
+  const [listini, setListini] = useState([]);
 
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -41,7 +42,7 @@ const GestioneCER = () => {
   const [sortField, setSortField] = useState("nome");
   const [sortAsc, setSortAsc] = useState(true);
 
-  const [expandedRows, setExpandedRows] = useState({}); // per Dettagli scarichi
+  const [expandedRows, setExpandedRows] = useState({});
 
   // ---------------- FETCH MATERIALI ----------------
   const fetchMateriali = async () => {
@@ -66,25 +67,21 @@ const GestioneCER = () => {
     }
   };
 
+  // ---------------- FETCH LISTINI ----------------
+  const fetchListini = async () => {
+    const snap = await getDocs(collection(db, "listini"));
+    const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setListini(dati);
+  };
+
   useEffect(() => {
     fetchMateriali();
     fetchScarichi();
+    fetchListini();
   }, []);
 
   // ---------------- DATE UTILS ----------------
   const formatDataIT = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
-  const parseItalianDate = (value, endOfDay=false) => {
-    if (!value) return null;
-    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return null;
-    const day = parseInt(match[1],10);
-    const month = parseInt(match[2],10)-1;
-    const year = parseInt(match[3],10);
-    const date = new Date(year, month, day);
-    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return null;
-    if (endOfDay) date.setHours(23,59,59,999);
-    return date;
-  };
 
   // ---------------- NAV / LOGOUT ----------------
   const goHome = () => navigate("/admin");
@@ -140,13 +137,16 @@ const GestioneCER = () => {
     setCodiceCER(m.codiceCER);
     setDescrizione(m.descrizione);
     setEditingId(m.idDoc);
-    window.scrollTo({ top: 0, behavior: "smooth" }); // SCROLL UP
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // ---------------- TOGGLE DETTAGLI ----------------
   const toggleDettagli = (id) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  // ---------------- PREPARO MAPPA LISTINI ----------------
+  const listiniMap = Object.fromEntries(listini.map(l => [l.nome, l]));
 
   // ---------------- FILTRAGGIO ----------------
   const materialiFiltrati = materiali
@@ -159,8 +159,20 @@ const GestioneCER = () => {
       let scarichiPeriodo = scarichi.filter(s => s.data?.toDate);
       scarichiPeriodo = scarichiPeriodo.filter(s => (!tutti && start && end ? s.data.toDate()>=start && s.data.toDate()<=end : true));
 
-      const scarichiMateriale = scarichiPeriodo.filter(s =>
-        s.scarico.some(c => c.righe?.some(r => r.materiale === m.nome))
+      // FILTRAGGIO E CALCOLO DETTAGLIO
+      const scarichiMateriale = scarichiPeriodo.flatMap(s =>
+        s.scarico.flatMap(blocco =>
+          blocco.righe
+            .filter(r => r.materiale === m.nome)
+            .map(r => ({
+              ...r,
+              data: s.data,
+              listino: s.listino,
+              fornitore: s.fornitore,
+              prezzoKg: listiniMap[s.listino]?.prezzi[r.materiale] || 0,
+              prezzoTotale: (r.peso || 0) * (listiniMap[s.listino]?.prezzi[r.materiale] || 0)
+            }))
+        )
       );
 
       scarichiMateriale.sort((a,b) => (a.data?.toDate?.() || new Date(0)) - (b.data?.toDate?.() || new Date(0)));
@@ -201,9 +213,11 @@ const GestioneCER = () => {
       </div>
 
       <h2>Gestione Codici CER</h2>
+      <div style={{marginBottom:15}}>
+        <button onClick={()=>window.print()}>🖨️ Stampa</button>
+      </div>
       {message && <p style={{color:"green"}}>{message}</p>}
 
-      {/* FORM */}
       <div className="form">
         <input placeholder="Nome materiale" value={nome} onChange={e=>setNome(e.target.value)} />
         <select value={categoria} onChange={e=>setCategoria(e.target.value)}>
@@ -215,7 +229,6 @@ const GestioneCER = () => {
         <button onClick={handleSave}>{editingId ? "Aggiorna" : "Aggiungi"}</button>
       </div>
 
-      {/* FILTRI */}
       <div style={{margin:"20px 0", display:"flex", gap:"12px", alignItems:"center"}}>
         <label>
           Materiale:
@@ -264,7 +277,6 @@ const GestioneCER = () => {
         )}
       </div>
 
-      {/* TABELLA */}
       <table>
         <thead>
           <tr>
@@ -299,7 +311,6 @@ const GestioneCER = () => {
                 </td>
               </tr>
 
-              {/* DETTAGLI SCARICHI */}
               {expandedRows[m.idDoc] && (
                 <tr>
                   <td colSpan={8}>
@@ -307,22 +318,30 @@ const GestioneCER = () => {
                       <thead>
                         <tr>
                           <th>Data / Ora</th>
+                          <th>Fornitore</th>
+                          <th>Listino</th>
+                          <th>Prezzo/kg</th>
                           <th>Peso Totale</th>
+                          <th>Prezzo Totale</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {m.scarichiDettaglio.map(s => {
-                          const pesoTot = s.scarico.reduce((acc, c) => {
-                            const r = c.righe?.find(r => r.materiale===m.nome);
-                            return acc + (r?.peso || 0);
-                          }, 0);
-                          return (
-                            <tr key={s.id}>
-                              <td>{s.data?.toDate().toLocaleString("it-IT")}</td>
-                              <td>{pesoTot}</td>
-                            </tr>
-                          );
-                        })}
+                        {m.scarichiDettaglio.map((r, idx) => (
+                          <tr key={idx}>
+                            <td>{r.data?.toDate().toLocaleString("it-IT")}</td>
+                            <td>{r.fornitore}</td>
+                            <td>{r.listino}</td>
+                            <td>{r.prezzoKg.toFixed(2)}</td>
+                            <td>{r.peso}</td>
+                            <td>{r.prezzoTotale.toFixed(2)}</td>
+                          </tr>
+                        ))}
+
+                        <tr style={{fontWeight:"bold"}}>
+                          <td colSpan={4}>Totale</td>
+                          <td>{m.scarichiDettaglio.reduce((sum,r)=>sum+(r.peso||0),0)}</td>
+                          <td>{m.scarichiDettaglio.reduce((sum,r)=>sum+(r.prezzoTotale||0),0).toFixed(2)}</td>
+                        </tr>
                       </tbody>
                     </table>
                   </td>
