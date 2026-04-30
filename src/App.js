@@ -1,9 +1,8 @@
 // src/App.js
-import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { auth, db } from "./firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { auth } from "./firebase";
+import { signOut } from "firebase/auth";
 
 import Login from "./components/Login";
 import Scarichi from "./components/Scarichi";
@@ -15,48 +14,41 @@ import GestioneListini from "./components/GestioneListini";
 import GestioneCER from "./components/GestioneCER";
 import GestioneLog from "./components/GestioneLog";
 import DettagliLog from "./components/DettagliLog";
+import ConfigurazioniGenerali from "./components/ConfigurazioniGenerali";
+
+const getUser = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem("utenteLoggato"));
+  } catch {
+    return null;
+  }
+};
+
+const ProtectedRoute = ({ children, roleRequired }) => {
+  const user = getUser();
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (roleRequired && user.ruolo !== roleRequired) return <Navigate to="/scarichi" replace />;
+
+  return children;
+};
+
+const AdminRoute = ({ children }) => {
+  const user = getUser();
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.ruolo !== "admin") return <Navigate to="/scarichi" replace />;
+
+  return children;
+};
 
 const App = () => {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-
-        try {
-          const docRef = doc(db, "utenti", currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setRole(docSnap.data().ruolo);
-          } else {
-            setRole("operatore");
-          }
-        } catch (err) {
-          console.error("Errore lettura ruolo:", err);
-          setRole("operatore");
-        }
-      } else {
-        setUser(null);
-        setRole(null);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
 
   const logout = async () => {
     await signOut(auth);
-    setUser(null);
-    setRole(null);
+    sessionStorage.removeItem("utenteLoggato");
+    window.location.href = "/login";
   };
-
-  if (loading || (user && role === null)) {
-    return <p>Loading...</p>;
-  }
 
   return (
     <Router>
@@ -66,85 +58,63 @@ const App = () => {
         <Route
           path="/login"
           element={
-            !user ? <Login onLogin={setUser} /> : <Navigate to={role === "admin" ? "/admin" : "/scarichi"} />
+            !getUser()
+              ? <Login />
+              : <Navigate to={getUser().ruolo === "admin" ? "/admin" : "/scarichi"} replace />
           }
         />
 
-        {/* PAGINA SCARICHI */}
+        {/* SCARICHI */}
         <Route
           path="/scarichi"
           element={
-            user 
-              ? <Scarichi 
-                  user={user} 
-                  logout={logout} 
-                  role={role} 
-                  goToDashboard={() => window.location.href = "/admin"} 
-                /> 
-              : <Navigate to="/login" />
+            <ProtectedRoute>
+              <Scarichi logout={logout} role={getUser()?.ruolo} user={getUser()} />
+            </ProtectedRoute>
           }
         />
 
-        {/* DASHBOARD ADMIN */}
+        {/* ADMIN */}
         <Route
           path="/admin"
-          element={user && role === "admin" ? <AdminDashboard logout={logout} /> : <Navigate to="/scarichi" />}
+          element={
+            <AdminRoute>
+              <AdminDashboard logout={logout} />
+            </AdminRoute>
+          }
         />
 
-        {/* GESTIONE UTENTI */}
-        <Route
-          path="/gestione-utenti"
-          element={user && role === "admin" ? <GestioneUtenti logout={logout} /> : <Navigate to="/scarichi" />}
-        />
+        {/* ALTRE */}
+        <Route path="/fornitori" element={<ProtectedRoute><GestioneFornitoriAvanzata /></ProtectedRoute>} />
 
-        {/* GESTIONE SCARICHI */}
-        <Route
-          path="/gestione-scarichi"
-          element={user && role === "admin" ? <GestioneScarichi logout={logout} /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/gestione-utenti"
+          element={<AdminRoute><GestioneUtenti logout={logout} /></AdminRoute>} />
 
-        {/* GESTIONE LISTINI */}
-        <Route
-          path="/gestione-listini"
-          element={user && role === "admin" ? <GestioneListini logout={logout} /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/gestione-scarichi"
+          element={<AdminRoute><GestioneScarichi logout={logout} /></AdminRoute>} />
 
-        {/* GESTIONE CER */}
-        <Route
-          path="/gestione-cer"
-          element={user && role === "admin" ? <GestioneCER logout={logout} /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/gestione-listini"
+          element={<AdminRoute><GestioneListini logout={logout} /></AdminRoute>} />
 
-        {/* GESTIONE FORNITORI */}
-        <Route
-          path="/gestione-fornitori"
-          element={user && role === "admin" ? <GestioneFornitoriAvanzata /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/gestione-cer"
+          element={<AdminRoute><GestioneCER logout={logout} /></AdminRoute>} />
 
-        {/* GESTIONE LOG */}
-        <Route
-          path="/gestione-log"
-          element={user && role === "admin" ? <GestioneLog /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/gestione-log"
+          element={<AdminRoute><GestioneLog /></AdminRoute>} />
 
-        {/* DETTAGLI LOG */}
-        <Route
-          path="/dettagli-log"
-          element={user && role === "admin" ? <DettagliLog /> : <Navigate to="/scarichi" />}
-        />
+        <Route path="/dettagli-log"
+          element={<AdminRoute><DettagliLog /></AdminRoute>} />
+
+        <Route path="/configurazioni-generali"
+          element={<AdminRoute><ConfigurazioniGenerali /></AdminRoute>} />
 
         {/* FALLBACK */}
         <Route
           path="*"
           element={
             <Navigate
-              to={
-                user
-                  ? role === "admin"
-                    ? "/admin"
-                    : "/scarichi"
-                  : "/login"
-              }
+              to={getUser() ? (getUser().ruolo === "admin" ? "/admin" : "/scarichi") : "/login"}
+              replace
             />
           }
         />

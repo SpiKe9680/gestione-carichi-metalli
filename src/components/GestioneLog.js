@@ -20,7 +20,7 @@ const GestioneLog = () => {
   const [pagineDisponibili, setPagineDisponibili] = useState([]);
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
   const [tipiDisponibili, setTipiDisponibili] = useState([]);
-
+const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
 
@@ -29,7 +29,16 @@ const GestioneLog = () => {
   // NAV
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
   const goHome = () => navigate("/admin");
-
+const logRipristinabile = (log) => {
+  return (
+    log?.ripristinabile === true &&
+    log?.ripristinato === false &&
+    log?.riferimento?.collezione &&
+    log?.riferimento?.documentoId &&
+    log?.before &&
+    typeof log.before === "object"
+  );
+};
   // FETCH LOG
   const fetchLogs = async () => {
     try {
@@ -69,12 +78,18 @@ const GestioneLog = () => {
     }
     if (paginaFilter !== "tutte") dati = dati.filter(l => l.pagina === paginaFilter);
     if (utenteFilter !== "tutti") dati = dati.filter(l => l.utente === utenteFilter);
-    if (tipoFilter !== "tutte") dati = dati.filter(l => l.tipo === tipoFilter);
+  if (tipoFilter !== "tutte") {
+  dati = dati.filter(l => l.evento === tipoFilter);
+}
+  
+
 
     setFilteredLogs(dati);
     setPagineDisponibili([...new Set(dati.map(l=>l.pagina || "sconosciuta"))]);
     setUtentiDisponibili([...new Set(dati.map(l=>l.utente || "sconosciuto"))]);
-    setTipiDisponibili([...new Set(dati.map(l=>l.tipo || "NON DEFINITO"))]);
+ setTipiDisponibili([
+  ...new Set(dati.map(l => l.evento).filter(Boolean))
+]);
   }, [logs, dal, al, tutti, paginaFilter, utenteFilter, tipoFilter]);
 
   const apriDettagli = (log) => navigate("/dettagli-log", { state: { log } });
@@ -84,8 +99,9 @@ const GestioneLog = () => {
     <div className="gestione-log-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goHome}>🏠 Dashboard</button>
-        <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
-      </div>
+       <button onClick={handleLogout}>
+  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+</button>  </div>
 
       <h2>Gestione Log Operazioni</h2>
 
@@ -167,13 +183,23 @@ const GestioneLog = () => {
               <td>{formattaData(log.timestamp)}</td>
               <td>{log.pagina || "sconosciuta"}</td>
               <td>{log.utente || "sconosciuto"}</td>
-              <td>{log.tipo || "NON DEFINITO"}</td>
+              <td>{log.evento || (log.azione ? `${log.azione}_${log.tipo}` : log.tipo) || "NON DEFINITO"}</td>
               <td>{log.ripristinato ? "✅" : "❌"}</td>
               <td>
-                {log.ripristinabile && !log.ripristinato && 
-                  <button onClick={async () => { await ripristinaLog(log); await fetchLogs(); }}>
-                    Ripristina
-                  </button>}
+                {logRipristinabile(log) && (  <button    onClick={async () => {      await ripristinaLog(log);
+
+      setLogs(prev =>
+        prev.map(l =>
+          l.id === log.id
+            ? { ...l, ripristinato: true }
+            : l
+        )
+      );
+    }}
+  >
+    Ripristina
+  </button>
+)}
                 <button style={{marginLeft:"8px"}} onClick={()=>apriDettagli(log)}>Dettagli</button>
               </td>
             </tr>

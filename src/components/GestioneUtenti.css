@@ -1,11 +1,12 @@
-.gestione-utenti-container {
-  max-width: 800px;
+.gestione-scarichi-container {
+  max-width: 1400px;
   margin: 20px auto;
   padding: 20px;
   background: #fdfdfd;
   border-radius: 10px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   font-family: Arial, sans-serif;
+  overflow-x: auto;
 }
 
 h2 {
@@ -32,6 +33,8 @@ button {
   cursor: pointer;
   color: white;
   transition: background 0.2s;
+  background: #444;
+  min-height: 32px;
 }
 
 button:hover {
@@ -53,6 +56,14 @@ table th, table td {
   border: 1px solid #ccc;
   text-align: left;
   vertical-align: middle;
+}
+select {
+  padding: 6px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  min-height: 32px;
+  background: white;
+  color: black;
 }
 
 table th {
