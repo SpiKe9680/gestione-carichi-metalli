@@ -1,4 +1,4 @@
-// src/components/GestioneFornitoriAvanzata.js
+// src/components/GestioneContropartiAvanzata.js
 import React, { useState, useEffect } from "react";
 import {
   collection,
@@ -15,13 +15,41 @@ import { scriviLog } from "../utils/log";
 import DatePicker from "react-datepicker"; 
 import "react-datepicker/dist/react-datepicker.css";
 
-const GestioneFornitoriAvanzata = () => {
+const createOperationId = () =>
+  `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+const GestioneContropartiAvanzata = () => {
   const navigate = useNavigate();
+const [sortConfig, setSortConfig] = useState({
+  key: null,
+  direction: "asc"
+});
+const requestSort = (key) => {
+  setSortConfig(prev => {
+    if (prev.key === key && prev.direction === "asc") {
+      return { key, direction: "desc" };
+    }
+    return { key, direction: "asc" };
+  });
+};
 
+const safeDate = (d) => {
+  if (!d) return null;
+
+  if (typeof d.toDate === "function") return d.toDate(); // Firestore Timestamp
+  if (d instanceof Date) return d; // già JS Date
+
+  return null;
+};
+const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [fornitori, setFornitori] = useState([]);
   const [scarichi, setScarichi] = useState([]);
+  const [carichi, setCarichi] = useState([]);
   const [errori, setErrori] = useState([]);
-
+const getUtenteReact = () => {
+  return (
+    currentUser.username || currentUser.email 
+  );
+};
   const [dal, setDal] = useState(null);
   const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
@@ -40,18 +68,51 @@ const GestioneFornitoriAvanzata = () => {
       setFornitori(fornSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
       const scarSnap = await getDocs(collection(db, "scarichi"));
+      const carSnap = await getDocs(collection(db, "carichi"));
+      const carData = carSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCarichi(carData);
       const scarData = scarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      scarData.sort((a,b) => (a.data?.seconds||0) - (b.data?.seconds||0));
+     
       setScarichi(scarData);
+ const validScarichi = scarData.filter(s => s.data?.toDate);
 
-      if (scarData.length) {
-        setMinDataDB(scarData[0].data.toDate());
-        setMaxDataDB(scarData[scarData.length-1].data.toDate());
-      }
+validScarichi.sort(
+  (a, b) => (a.data?.seconds || 0) - (b.data?.seconds || 0)
+);
+
+if (validScarichi.length) {
+  setMinDataDB(safeDate(validScarichi[0].data));
+setMaxDataDB(safeDate(validScarichi[validScarichi.length - 1].data));
+  setMaxDataDB(validScarichi[validScarichi.length - 1].data.toDate());
+} else {
+  setMinDataDB(null);
+  setMaxDataDB(null);
+}
 
     } catch (e) { setErrori([e.message]); }
   };
-  useEffect(() => { loadData(); }, []);
+
+  // ---------------- LOAD DATA + gestione openNew ----------------
+  useEffect(() => { 
+  const fetchData = async () => {
+    await loadData();
+setFornitori(prev => [...prev]); 
+    const params = new URLSearchParams(window.location.search);
+    const openNew = params.get("openNew") === "true";
+
+    if (openNew) {
+      // pulisce la URL per evitare che il form si riapra
+      window.history.replaceState({}, "", "/fornitori");
+
+      handleApriFormNuovoFornitore();
+    }
+  };
+
+  fetchData();
+
+  
+
+}, []);
 
   // ---------------- COUNT SCARICHI FILTRATI ----------------
   const countScarichi = (fornitore) => {
@@ -61,7 +122,8 @@ const GestioneFornitoriAvanzata = () => {
       const fine = new Date(al);
       fine.setHours(23,59,59,999);
       lista = lista.filter(s => {
-        const d = s.data?.toDate();
+       const d = safeDate(s.data);
+        if (!d) return false;
         return d >= inizio && d <= fine;
       });
     }
@@ -69,6 +131,27 @@ const GestioneFornitoriAvanzata = () => {
   };
 
   // ---------------- COUNT SCARICHI TOTALI ----------------
+const countCarichi = (fornitore) => {
+  let lista = carichi.filter(c => c.fornitore === fornitore.nome);
+
+  if (!tutti && dal && al) {
+    const inizio = dal;
+    const fine = new Date(al);
+    fine.setHours(23,59,59,999);
+
+    lista = lista.filter(c => {
+      const d = safeDate(c.data);
+      return d && d >= inizio && d <= fine;
+    });
+  }
+
+  return lista.length;
+};
+
+// ---------------- COUNT CARICHI TOTALI ----------------
+const countCarichiTotali = (fornitore) => {
+  return carichi.filter(c => c.fornitore === fornitore.nome).length;
+};
   const countScarichiTotali = (fornitore) => {
     return scarichi.filter(s => s.fornitore === fornitore.nome).length;
   };
@@ -95,61 +178,144 @@ const GestioneFornitoriAvanzata = () => {
   }, [minDataDB, maxDataDB]);
 
   // ---------------- AGGIUNGI ----------------
-  const aggiungiFornitore = async () => {
-    const nome = prompt("Nome fornitore (obbligatorio):");
-    if (!nome) return;
+  // ---------------- AGGIUNGI ----------------
+const handleApriFormNuovoFornitore = async () => {
+  try {
+    const nomeRaw = prompt("Nome controparte (obbligatorio):");
+    if (!nomeRaw) return;
 
-    const exists = fornitori.some(f => f.nome.toLowerCase()===nome.toLowerCase());
-    if (exists) { alert("Fornitore già esistente"); return; }
+    const nome = nomeRaw.trim();
 
     const indirizzo = prompt("Indirizzo (opzionale):") || "";
     const piva_cf = prompt("P.IVA / CF (opzionale):") || "";
 
-    try {
-      const ref = await addDoc(collection(db,"fornitori"), { nome, indirizzo, piva_cf });
-      await scriviLog({
-        pagina: "GestioneFornitori",
-        tipo: "CREAZIONE FORNITORE",
-        collezioneRef: "fornitori",
-        documentoId: ref.id,
-        dati_modificati: { nome, indirizzo, piva_cf }
+    // 🔥 CERCA DIRETTAMENTE SU FIRESTORE (NON SOLO ARRAY LOCALE)
+   const nomeKey = nome.toLowerCase().trim();
+
+const existing = fornitori.find(f =>
+  (f.nome || "").toLowerCase().trim() === nomeKey
+);
+
+    let refId;
+
+    if (existing) {
+      // 🔥 UPDATE INVECE DI DUPLICARE
+      refId = existing.id;
+
+      await updateDoc(doc(db, "fornitori", refId), {
+        nome,
+        indirizzo,
+        piva_cf
       });
-      loadData();
-    } catch(e){ setErrori(prev => [...prev,e.message]); }
-  };
+
+      await scriviLog({
+        pagina: "GestioneControparti",
+        tipo: "Aggiorna CONTROPARTE",
+        collezioneRef: "fornitori",
+        documentoId: refId,
+        dati_modificati: { nome, indirizzo, piva_cf },
+  utente: getUtenteReact()
+      });
+
+    } else {
+      // 🔥 SOLO QUI CREI NUOVO
+      const ref = await addDoc(collection(db, "fornitori"), {
+        nome,
+        indirizzo,
+        piva_cf
+      });
+
+      refId = ref.id;
+
+      const operationId = createOperationId();
+
+await scriviLog({
+  operationId,
+  pagina: "GestioneControparti",
+  evento: "FORNITORE_UPSERT",
+  tipo: existing ? "UPDATE" : "CREATE",
+  collezioneRef: "fornitori",
+  documentoId: refId,
+  before: existing ? existing : null,
+  after: { nome, indirizzo, piva_cf },
+  utente: getUtenteReact(),
+  ripristinabile: true
+});
+    }
+
+    localStorage.setItem("nuovoFornitore", nome);
+
+    await loadData();
+
+    const returnPage = localStorage.getItem("scaricoReturnPage");
+
+    if (returnPage === "/scarichi") {
+      localStorage.removeItem("scaricoReturnPage");
+      window.location.href = returnPage + "?newFornitore=" + encodeURIComponent(nome);
+    } else {
+      localStorage.removeItem("scaricoReturnPage");
+      alert(`Controparte "${nome}" salvata correttamente`);
+    }
+
+  } catch (e) {
+    setErrori(prev => [...prev, e.message || e]);
+  }
+};
+  const aggiungiFornitore = () => handleApriFormNuovoFornitore();
 
   // ---------------- MODIFICA ----------------
   const modificaFornitore = async (f) => {
-    const indirizzo = prompt(`Modifica indirizzo (${f.nome})`, f.indirizzo || "") || "";
+    const indirizzo = prompt(`Modifica indirizzo controparte (${f.nome})`, f.indirizzo || "") || "";
     const piva_cf = prompt(`Modifica P.IVA / CF (${f.nome})`, f.piva_cf || "") || "";
     try {
       const ref = doc(db,"fornitori",f.id);
       await updateDoc(ref, { indirizzo, piva_cf });
-      await scriviLog({
-        pagina: "GestioneFornitori",
-        tipo: "MODIFICA FORNITORE",
-        collezioneRef: "fornitori",
-        documentoId: f.id,
-        dati_originali: { nome: f.nome, indirizzo: f.indirizzo, piva_cf: f.piva_cf },
-        dati_modificati: { nome: f.nome, indirizzo, piva_cf }
-      });
+     const operationId = createOperationId();
+
+await scriviLog({
+  operationId,
+  pagina: "GestioneControparti",
+  evento: "CONTROPARTE_UPDATE",
+  tipo: "UPDATE",
+  collezioneRef: "fornitori",
+  documentoId: f.id,
+  before: {
+    nome: f.nome,
+    indirizzo: f.indirizzo,
+    piva_cf: f.piva_cf
+  },
+  after: { indirizzo, piva_cf },
+  utente: getUtenteReact(),
+  ripristinabile: true
+});
       loadData();
     } catch(e){ setErrori(prev=>[...prev,e.message]); }
   };
 
   // ---------------- ELIMINA ----------------
   const eliminaFornitore = async (f) => {
-    if (countScarichiTotali(f)>0) { alert("Non eliminabile: esistono scarichi collegati."); return; }
+    if (countScarichiTotali(f)>0 || countCarichiTotali(f)>0) { alert("Non eliminabile: esistono movimenti collegati (carichi o scarichi)."); return; }
     if (!window.confirm(`Eliminare ${f.nome}?`)) return;
     try {
       await deleteDoc(doc(db,"fornitori",f.id));
-      await scriviLog({
-        pagina: "GestioneFornitori",
-        tipo: "CANCELLAZIONE FORNITORE",
-        collezioneRef: "fornitori",
-        documentoId: f.id,
-        dati_originali: { nome: f.nome, indirizzo: f.indirizzo, piva_cf: f.piva_cf }
-      });
+      const operationId = createOperationId();
+
+await scriviLog({
+  operationId,
+  pagina: "GestioneControparti",
+  evento: "ELIMINA_CONTROPARTE",
+  tipo: "DELETE",
+  collezioneRef: "fornitori",
+  documentoId: f.id,
+  before: {
+    nome: f.nome,
+    indirizzo: f.indirizzo,
+    piva_cf: f.piva_cf
+  },
+  after: null,
+  utente: getUtenteReact(),
+  ripristinabile: true
+});
       loadData();
     } catch(e){ setErrori(prev=>[...prev,e.message]); }
   };
@@ -164,38 +330,126 @@ const GestioneFornitoriAvanzata = () => {
   };
 
   // ---------------- STAMPA ----------------
-  const handleStampa = () => {
-    let righeHtml = "";
-    fornitori.forEach(f => {
-      const n = countScarichi(f);
-      righeHtml += `<tr><td>${f.nome}</td><td>${f.indirizzo||"-"}</td><td>${f.piva_cf||"-"}</td><td>${n}</td></tr>`;
-    });
-    const html = `
-      <html>
-        <head><title>Stampa Fornitori</title></head>
-        <body>
-          <h2>Gestione Fornitori</h2>
-          <table border='1' cellpadding='4'>
-            <thead><tr><th>Nome</th><th>Indirizzo</th><th>P.IVA / CF</th><th>Scarichi</th></tr></thead>
-            <tbody>${righeHtml}</tbody>
-          </table>
-        </body>
-      </html>`;
-    const win = window.open("","_blank");
-    win.document.write(html); win.document.close(); win.focus(); win.print();
-  };
+const handleStampa = async () => {
+  if (!fornitori || fornitori.length === 0)
+    return alert("Nessuna controparte da stampare");
 
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  const { pdf, startY } = await PdfHeader();
+
+  let y = startY + 10;
+
+  pdf.setFontSize(16);
+  pdf.text("Movimenti Controparti (Scarichi/Carichi)", 14, y);
+  y += 10;
+
+  // 🔥 FIX: stampa SEMPRE se filtro NON disabilitato
+  if (!tutti) {
+    const formatData = (d) => {
+      if (!d) return "";
+      return `${String(d.getDate()).padStart(2, "0")}/${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}/${d.getFullYear()}`;
+    };
+
+    const dalTxt = formatData(dal);
+    const alTxt = formatData(al);
+
+    if (dalTxt || alTxt) {
+      const label = `Dal ${dalTxt || "..."} Al ${alTxt || "..."}`;
+      pdf.setFontSize(11);
+      pdf.text(label, 14, y);
+      y += 8;
+    }
+  }
+
+  const righe = fornitori.map((f) => {
+    const scarichi = countScarichi(f);
+    const carichi = countCarichi(f);
+
+    return [
+      f.nome || "",
+      f.indirizzo || "-",
+      f.piva_cf || "-",
+      scarichi,
+      carichi,
+    ];
+  });
+
+  autoTable(pdf, {
+    startY: y,
+    head: [["Nome", "Indirizzo", "P.IVA / CF", "Scarichi", "Carichi"]],
+    body: righe,
+    theme: "grid",
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [230, 230, 230] },
+  });
+
+  pdf.save("controparti.pdf");
+};
+let fornitoriOrdinati = [...fornitori];
+
+if (sortConfig.key) {
+  fornitoriOrdinati.sort((a, b) => {
+    let aVal = "";
+    let bVal = "";
+
+    switch (sortConfig.key) {
+      case "nome":
+        aVal = a.nome || "";
+        bVal = b.nome || "";
+        break;
+
+      case "indirizzo":
+        aVal = a.indirizzo || "";
+        bVal = b.indirizzo || "";
+        break;
+
+      case "piva":
+        aVal = a.piva_cf || "";
+        bVal = b.piva_cf || "";
+        break;
+
+      case "scarichi":
+        aVal = countScarichiTotali(a);
+        bVal = countScarichiTotali(b);
+        break;
+
+      case "carichi":
+        aVal = countCarichiTotali(a);
+        bVal = countCarichiTotali(b);
+        break;
+
+      default:
+        return 0;
+    }
+
+    if (typeof aVal === "number" && typeof bVal === "number") {
+      return sortConfig.direction === "asc"
+        ? aVal - bVal
+        : bVal - aVal;
+    }
+
+    return sortConfig.direction === "asc"
+      ? String(aVal).localeCompare(String(bVal), "it", { numeric: true })
+      : String(bVal).localeCompare(String(aVal), "it", { numeric: true });
+  });
+}
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goDashboard}>🏠 Dashboard</button>
-        <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email||"sconosciuto"})</button>
+      <button onClick={handleLogout}>
+  🚪Logout ({getUtenteReact()})
+</button>
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
       </div>
 
-      <h2>Gestione Fornitori</h2>
-      <button onClick={aggiungiFornitore} style={{marginBottom:15}}>➕ Aggiungi Fornitore</button>
-
+     <h2>Gestione Controparti</h2>
+     <button onClick={aggiungiFornitore} style={{marginBottom:15}}>➕ Aggiungi Controparte</button>
       {/* FILTRI */}
       <div style={{marginBottom:15}}>
         <label style={{display:"flex",alignItems:"center"}}>
@@ -233,26 +487,72 @@ const GestioneFornitoriAvanzata = () => {
 
       <table className="tabella-scarichi">
         <thead>
-          <tr><th>Nome</th><th>Indirizzo</th><th>P.IVA / CF</th><th>Scarichi</th><th>Azioni</th></tr>
-        </thead>
-        <tbody>
-          {fornitori.map(f => {
-            const n = countScarichi(f);
-            const tot = countScarichiTotali(f);
-            return (
-              <tr key={f.id}>
-                <td><b>{f.nome}</b></td>
-                <td>{f.indirizzo||"-"}</td>
-                <td>{f.piva_cf||"-"}</td>
-                <td>{n}</td>
-                <td>
-                  <button onClick={()=>modificaFornitore(f)}>Modifica</button>
-                  {tot===0 ? <button onClick={()=>eliminaFornitore(f)} style={{marginLeft:5,background:"red",color:"white"}}>Elimina</button> : <button disabled style={{marginLeft:5}}>Non eliminabile</button>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
+  <tr>
+    <th onClick={() => requestSort("nome")} style={{cursor:"pointer"}}>
+      Nome {sortConfig.key==="nome" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
+    </th>
+
+    <th onClick={() => requestSort("indirizzo")} style={{cursor:"pointer"}}>
+      Indirizzo {sortConfig.key==="indirizzo" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
+    </th>
+
+    <th onClick={() => requestSort("piva")} style={{cursor:"pointer"}}>
+      P.IVA / CF {sortConfig.key==="piva" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
+    </th>
+
+    <th onClick={() => requestSort("scarichi")} style={{cursor:"pointer"}}>
+      Scarichi {sortConfig.key==="scarichi" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
+    </th>
+
+    <th onClick={() => requestSort("carichi")} style={{cursor:"pointer"}}>
+      Carichi {sortConfig.key==="carichi" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
+    </th>
+
+    <th>Azioni</th>
+  </tr>
+</thead>
+<tbody>
+  {fornitoriOrdinati.map(f => {
+    const n = countScarichi(f);
+    const nc = countCarichi(f);
+    const tot = countScarichiTotali(f) + countCarichiTotali(f);
+
+    return (
+      <tr key={f.id}>
+        <td><b>{f.nome}</b></td>
+        <td>{f.indirizzo || "-"}</td>
+        <td>{f.piva_cf || "-"}</td>
+
+        <td style={{ color: n > 0 ? "red" : "inherit" }}>
+          {n}
+        </td>
+
+        <td style={{ color: nc > 0 ? "green" : "inherit" }}>
+          {nc}
+        </td>
+
+        <td>
+          <button onClick={() => modificaFornitore(f)}>
+            Modifica
+          </button>
+
+          {tot === 0 ? (
+            <button
+              onClick={() => eliminaFornitore(f)}
+              style={{ marginLeft: 5, background: "red", color: "white" }}
+            >
+              Elimina
+            </button>
+          ) : (
+            <button disabled style={{ marginLeft: 5 }}>
+              Non eliminabile
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
       </table>
 
       {errori.length>0 && <div style={{color:"red",marginTop:20}}>{errori.join("\n")}</div>}
@@ -260,4 +560,4 @@ const GestioneFornitoriAvanzata = () => {
   );
 };
 
-export default GestioneFornitoriAvanzata;
+export default GestioneContropartiAvanzata;

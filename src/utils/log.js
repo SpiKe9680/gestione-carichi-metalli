@@ -1,84 +1,118 @@
-// src/utils/log.js
-import { db, auth } from "../firebase";
-import { doc, updateDoc, addDoc, collection, serverTimestamp, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, doc,setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase";
 
-/**
- * ===============================
- * SCRITTURA LOG UNIVERSALE
- * ===============================
- */
-export const scriviLog = async ({
-  pagina,
-  tipo,
-  collezioneRef = null,
-  documentoId = null,
-  dati_originali = null,
-  dati_modificati = null
-}) => {
-  try {
-    const ripristinabile = tipo !== "RIPRISTINO";
-
-    await addDoc(collection(db, "log_operazioni"), {
-      pagina,
-      tipo,
-      utente: auth.currentUser?.email || "sconosciuto",
-      timestamp: serverTimestamp(),
-
-      collezioneRef,
-      documentoId,
-
-      // per MODIFICA e CANCELLAZIONE salvare TUTTO il documento originale
-      dati_originali,
-      dati_modificati,
-
-      ripristinato: false,
-      ripristinabile
-    });
-  } catch (e) {
-    console.error("Errore scrittura log:", e);
-  }
+/* =========================
+   SNAPSHOT (SAFE)
+========================= */
+export const createSnapshot = (docData) => {
+  return JSON.parse(JSON.stringify(docData, (key, value) => {
+    if (value?.toDate) {
+      return {
+        __type: "timestamp",
+        value: value.toDate().toISOString()
+      };
+    }
+    return value;
+  }));
 };
 
-/**
- * ===============================
- * RIPRISTINO UNIVERSALE
- * ===============================
- */
-export const ripristinaLog = async (log) => {
-  try {
-    const { tipo, collezioneRef, documentoId, dati_originali } = log;
+/* =========================
+   RESTORE SNAPSHOT
+========================= */
+export const restoreSnapshot = (snap) => {
+  const parsed = JSON.parse(JSON.stringify(snap));
 
-    if (!collezioneRef || !documentoId) throw new Error("Log non ripristinabile");
+  const walk = (obj) => {
+    if (!obj || typeof obj !== "object") return obj;
 
-    const ref = doc(db, collezioneRef, documentoId);
+    Object.keys(obj).forEach((k) => {
+      const v = obj[k];
 
-    // =============================
-    // CREAZIONE → DELETE
-    // =============================
-    if (tipo.startsWith("CREAZIONE")) {
-      await deleteDoc(ref);
-    }
+      // 🔥 FIX TIMESTAMP FIRESTORE
+      if (v?.__type === "timestamp") {
+        obj[k] = new Date(v.value); // ok per Firebase (lo converte lui)
+      }
 
-    // =============================
-    // MODIFICA / CANCELLAZIONE → RIPRISTINO COMPLETO
-    // =============================
-    else if ((tipo.startsWith("MODIFICA") || tipo.startsWith("CANCELLAZIONE")) && dati_originali) {
-      // Sovrascrive tutto il documento originale salvato nel log
-      await setDoc(ref, dati_originali, { merge: true }); // merge: true evita di cancellare eventuali campi non salvati nel log
-    }
+      // 🔥 FIX TIMESTAMP SERIALIZZATI FIRESTORE (seconds/nanoseconds)
+      else if (
+        v &&
+        typeof v === "object" &&
+        "seconds" in v &&
+        "nanoseconds" in v
+      ) {
+        obj[k] = new Date(v.seconds * 1000);
+      }
 
-    // =============================
-    // MARCA RIPRISTINATO
-    // =============================
-    await updateDoc(doc(db, "log_operazioni", log.id), {
-      ripristinato: true,
-      data_ripristino: serverTimestamp()
+      // 🔥 RICORSIVO
+      else if (typeof v === "object") {
+        obj[k] = walk(v);
+      }
     });
 
-    alert("Ripristino completato");
+    return obj;
+  };
 
-  } catch (err) {
-    console.error(err);
-    alert("Errore durante il ripristino");
+  return walk(parsed);
+};
+/* =========================
+   SCRIVI LOG
+========================= */
+export const scriviLog = async ({
+  pagina,
+  evento,
+  riferimento,
+  before,
+  after,
+  utente,
+  ripristinabile = true,
+  meta = {}
+}) => {
+  const safe = (obj) =>
+    Object.fromEntries(
+      Object.entries(obj).filter(([_, v]) => v !== undefined)
+    );
+
+  return await addDoc(collection(db, "log_operazioni"), safe({
+    pagina,
+    evento,
+    riferimento,
+    before: createSnapshot(before),
+    after: createSnapshot(after),
+    utente: utente ?? "sconosciuto",
+    timestamp: serverTimestamp(),
+    meta,
+    ripristinabile,
+    ripristinato: false
+  }));
+};
+
+/* =========================
+   RIPRISTINA LOG
+========================= */
+export const ripristinaLog = async (log) => {
+  if (!log?.before) {
+    throw new Error("Snapshot BEFORE mancante");
   }
+
+  const collezione = log?.riferimento?.collezione;
+  const documentoId = log?.riferimento?.documentoId;
+
+  if (!collezione || !documentoId) {
+    throw new Error("Riferimento log non valido");
+  }
+
+  const ref = doc(db, collezione, documentoId);
+
+  const restored = restoreSnapshot(log.before);
+
+  await setDoc(ref, restored, { merge: false }); // 🔥 overwrite vero
+
+  await setDoc(
+    doc(db, "log_operazioni", log.id),
+    {
+      ripristinato: true,
+      timestampRipristino: serverTimestamp()
+    },
+    { merge: true }
+  );
 };

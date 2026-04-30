@@ -1,23 +1,31 @@
-// Import delle funzioni necessarie dai SDK Firebase
+// src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
-import { getStorage } from "firebase/storage";  // <-- aggiungi questa riga
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
-// Configurazione Firebase del tuo progetto
+// Config Firebase dalle variabili .env
 const firebaseConfig = {
-  apiKey: "AIzaSyB2y2bdCYn8AaEDcWGXCIMbx-IWA4I4MEc",
-  authDomain: "gestione-carichi-metalli-231fc.firebaseapp.com",
-  projectId: "gestione-carichi-metalli-231fc",
-  storageBucket: "gestione-carichi-metalli-231fc.appspot.com",
-  messagingSenderId: "707976831222",
-  appId: "1:707976831222:web:dda5e13d6606dcd0264cd7"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
-// Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export dei servizi per usarli altrove
+// Export dei servizi Firebase
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);  // <-- aggiungi questa riga
+export const storage = getStorage(app);
+
+// 🔹 Funzione helper login admin Firebase
+export const loginAdminFirebase = async () => {
+  const email = process.env.REACT_APP_FIREBASE_ADMIN_EMAIL;
+  const password = process.env.REACT_APP_FIREBASE_ADMIN_PASSWORD;
+
+  if (!email || !password) throw new Error("Admin Firebase non configurato!");
+  return signInWithEmailAndPassword(auth, email, password);
+};

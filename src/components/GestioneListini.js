@@ -9,29 +9,46 @@ import {
   addDoc,
   deleteDoc,
   query,
-  where
+  where,
+  getDoc
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const GestioneListini = () => {
+import { loadConfigAzienda, getDataOraStampa, PdfHeader } from "../utils/dateUtils";
 
+const GestioneListini = () => {
+const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [listini, setListini] = useState([]);
   const [fornitori, setFornitori] = useState([]);
-  const [selectedIndex, setSelectedIndex] = useState(null);
+  //const [configAzienda, setConfigAzienda] = useState(null);
+  const [selectedIndex, ] = useState(null);
   const [editor, setEditor] = useState(null);
   const [originalEditor, setOriginalEditor] = useState(null);
-
+const [sortConfig, setSortConfig] = useState({
+  key: null,
+  direction: "asc",
+});
+const requestSort = (key) => {
+  setSortConfig(prev => {
+    if (prev.key === key && prev.direction === "asc") {
+      return { key, direction: "desc" };
+    }
+    return { key, direction: "asc" };
+  });
+};
   const [nuovoListino, setNuovoListino] = useState("");
   const [listinoDaCopiare, setListinoDaCopiare] = useState("");
+  const [nuovoTipoListino, setNuovoTipoListino] = useState("SCARICO");
   const [showCreaForm, setShowCreaForm] = useState(false);
   const [errori, setErrori] = useState([]);
   const [fornitoreSelezionato, setFornitoreSelezionato] = useState({}); // map listinoId -> fornitoreId
-
+const [modificaPercentuale, setModificaPercentuale] = useState(0);
+const [modificaAzione, setModificaAzione] = useState("AUMENTA");
   const navigate = useNavigate();
-
+const [tipoFiltroListino, setTipoFiltroListino] = useState("SCARICO");
   const codiciCER = [
     "CALDAIETTE","CARTER MEC.","CARTER MIS.","CAVI CAB.","CAVI RESA",
     "CERCHI","GRAN.98%","INOX","OTTONE G.","OTTONE M.","PIOMBO",
@@ -39,6 +56,7 @@ const GestioneListini = () => {
     "RAME I","RAME II","RAME III","SEMIDOLCE","STAGNATO","VASELLAME"
   ];
 
+const materialiDinamici = codiciCER;
   // =============================
   // NAV
   // =============================
@@ -72,30 +90,66 @@ const GestioneListini = () => {
     }
   };
 
-  useEffect(() => { 
-    loadListini();
-    loadFornitori();
-  }, []);
+ 
+
+
+ useEffect(() => { 
+  loadListini();
+  loadFornitori();
+  loadConfigAzienda();
+}, []);
 
   // =============================
   // SELEZIONE LISTINO
   // =============================
-  const selezionaListino = (index) => {
-    const l = listini[index];
-    setSelectedIndex(index);
-    setEditor({ ...l, prezzi: { ...l.prezzi } });
-    setOriginalEditor(JSON.parse(JSON.stringify(l)));
+const normalizzaPrezzi = (prezzi = {}) => {
+  const out = {};
+
+  Object.entries(prezzi).forEach(([k, v]) => {
+    if (typeof v === "object" && v !== null) {
+      out[k] = {
+        vendita: Number(v.vendita ?? v.acquisto ?? 0),
+        acquisto: Number(v.acquisto ?? v.vendita ?? 0)
+      };
+    } else {
+      out[k] = {
+        vendita: Number(v) || 0,
+        acquisto: Number(v) || 0
+      };
+    }
+  });
+
+  return out;
+};
+const selezionaListino = (listinoId) => {
+  const l = listini.find(x => x.id === listinoId);
+  if (!l) return;
+
+  const listinoFix = {
+    ...l,
+    prezzi: normalizzaPrezzi(l.prezzi || {}),
+    tipoListino: l.tipoListino || "SCARICO"
   };
 
+  setEditor(listinoFix);
+  setOriginalEditor(JSON.parse(JSON.stringify(listinoFix)));
+};
   // =============================
   // UPDATE PREZZO
   // =============================
-  const updatePrezzo = (codice, valore) => {
-    setEditor(prev => ({
-      ...prev,
-      prezzi: { ...prev.prezzi, [codice]: Number(valore) || 0 }
-    }));
-  };
+const updatePrezzo = (codice, valore) => {
+  setEditor(prev => ({
+    ...prev,
+    prezzi: {
+      ...prev.prezzi,
+      [codice]: {
+        ...(prev.prezzi?.[codice] || {}),
+        vendita: Number(valore) || 0,
+        acquisto: Number(valore) || 0
+      }
+    }
+  }));
+};
 
   const campoModificato = codice =>
     editor && originalEditor &&
@@ -134,10 +188,15 @@ const associaFornitore = async (listinoId, fornitoreId) => {
 
     // 4. Log
     await scriviLog({
-      pagina: "gestione-listini",
-      tipo: "ASSOCIA_FORNITORE",
-      dati_originali: datiOriginali,
-      dati_modificati: { listinoId, fornitoreId }
+      evento: "ASSOCIA_FORNITORE",
+tipo: "ASSOCIA_FORNITORE",
+pagina: "gestione-listini",
+collezioneRef: "listini",
+documentoId: listinoId,
+dati_originali: datiOriginali,
+dati_modificati: { listinoId, fornitoreId },
+utente: currentUser?.username || currentUser?.email || "sconosciuto",
+timestamp: new Date()
     });
 
     // 5. Reset dropdown e ricarica
@@ -150,6 +209,36 @@ const associaFornitore = async (listinoId, fornitoreId) => {
   }
 };
 
+
+const generaPDFListinoConHeader = async (listino) => {
+  const { pdf, startY } = await PdfHeader();
+  pdf.setFontSize(16);
+  const { data, ora } = getDataOraStampa();
+
+  pdf.setFontSize(16);
+  pdf.text(`Listino: ${listino.nome} - Stampato il ${data} alle ${ora}`, 14, 65);
+
+  pdf.setFontSize(12);
+pdf.text(`Tipo Listino: ${listino.tipoListino || "SCARICO"}`, 14, 75);  // <--- nuova riga
+
+  // Tabella prezzi
+  const materiali = Object.keys(listino.prezzi || {}).sort();
+const rows = materiali.map(c => [
+  c,
+  listino.tipoListino === "CARICO"
+    ? listino.prezzi?.[c]?.vendita ?? 0
+    : listino.prezzi?.[c]?.acquisto ?? 0
+]);
+  autoTable(pdf, {
+    startY: startY,
+    head: [["Materiale", "Prezzo"]],
+    body: rows,
+    styles: { fontSize: 9 },
+    theme: "grid"
+  });
+
+  pdf.save(`listino_${listino.nome}.pdf`);
+};
   // =============================
   // SALVA LISTINO
   // =============================
@@ -159,20 +248,26 @@ const associaFornitore = async (listinoId, fornitoreId) => {
     try {
       const ref = doc(db, "listini", editor.id);
 
-      await updateDoc(ref, {
-        prezzi: editor.prezzi,
-        nome: editor.nome
-      });
+     await updateDoc(ref, {
+  prezzi: editor.prezzi,
+  nome: editor.nome,
+  tipoListino: editor.tipoListino // <-- salva anche il tipo listino
+});
 
       await scriviLog({
-        pagina: "gestione-listini",
-        tipo: "MODIFICA_LISTINO",
-        dati_originali: originalEditor,
-        dati_modificati: editor
-      });
+  evento: "MODIFICA_LISTINO",
+tipo: "MODIFICA_LISTINO",
+pagina: "gestione-listini",
+collezioneRef: "listini",
+documentoId: editor.id,
+dati_originali: originalEditor,
+dati_modificati: editor,
+utente: currentUser?.username || currentUser?.email || "sconosciuto",
+timestamp: new Date()
+});
 
       setEditor(null);
-      setSelectedIndex(null);
+     
       setOriginalEditor(null);
 
       loadListini();
@@ -185,33 +280,77 @@ const associaFornitore = async (listinoId, fornitoreId) => {
   // =============================
   // CREA LISTINO
   // =============================
-  const creaNuovoListino = async () => {
-    if (!nuovoListino || !listinoDaCopiare) return alert("Compila tutti i campi");
+const creaNuovoListino = async () => {
+  if (!nuovoListino || !listinoDaCopiare) {
+    alert("Compila tutti i campi");
+    return;
+  }
 
-    const origine = listini.find(l => l.id === listinoDaCopiare);
-    if (!origine) return alert("Listino origine non trovato");
+  const origine = listini.find(l => l.id === listinoDaCopiare);
+  if (!origine) {
+    alert("Listino origine non trovato");
+    return;
+  }
 
-    const copia = { nome: nuovoListino, prezzi: { ...origine.prezzi }, predefFornitori: [] };
+  const prezziModificati = {};
 
-    try {
-      const docRef = await addDoc(collection(db, "listini"), copia);
+  Object.entries(origine.prezzi || {}).forEach(([codice, valore]) => {
+    const vendita = Number(valore?.vendita) || 0;
+    const acquisto = Number(valore?.acquisto) || 0;
 
-      await scriviLog({
-        pagina: "gestione-listini",
-        tipo: "CREAZIONE_LISTINO",
-        dati_originali: null,
-        dati_modificati: { id: docRef.id, ...copia }
-      });
+    let nuovaVendita = vendita;
+    let nuovoAcquisto = acquisto;
 
-      setShowCreaForm(false);
-      setNuovoListino("");
-      loadListini();
-      alert("Listino creato con successo");
-
-    } catch (e) {
-      setErrori(prev => [...prev, e.message]);
+    if (modificaPercentuale > 0) {
+      if (modificaAzione === "AUMENTA") {
+        nuovaVendita *= (1 + modificaPercentuale / 100);
+        nuovoAcquisto *= (1 + modificaPercentuale / 100);
+      } else {
+        nuovaVendita *= (1 - modificaPercentuale / 100);
+        nuovoAcquisto *= (1 - modificaPercentuale / 100);
+      }
     }
+
+    prezziModificati[codice] = {
+      vendita: parseFloat(nuovaVendita.toFixed(2)),
+      acquisto: parseFloat(nuovoAcquisto.toFixed(2))
+    };
+  });
+
+  const copia = { 
+    nome: nuovoListino, 
+    prezzi: prezziModificati, 
+    predefFornitori: [],
+    tipoListino: nuovoTipoListino || "SCARICO"
   };
+
+  try {
+    const docRef = await addDoc(collection(db, "listini"), copia);
+
+    await scriviLog({
+      evento: "CREAZIONE_LISTINO",
+tipo: "CREAZIONE_LISTINO",
+pagina: "gestione-listini",
+collezioneRef: "listini",
+documentoId: docRef.id,
+dati_originali: null,
+dati_modificati: { id: docRef.id, ...copia },
+utente: currentUser?.username || currentUser?.email || "sconosciuto",
+timestamp: new Date()
+    });
+
+    setShowCreaForm(false);
+    setNuovoListino("");
+    setModificaPercentuale(0);
+
+    loadListini();
+
+    alert("Listino creato con successo");
+
+  } catch (e) {
+    setErrori(prev => [...prev, e.message]);
+  }
+};
 
   // =============================
   // CANCELLA LISTINO
@@ -237,14 +376,19 @@ const associaFornitore = async (listinoId, fornitoreId) => {
       await deleteDoc(doc(db, "listini", editor.id));
 
       await scriviLog({
-        pagina: "gestione-listini",
-        tipo: "CANCELLAZIONE_LISTINO",
-        dati_originali: datiOriginali,
-        dati_modificati: null
-      });
+  evento: "CANCELLAZIONE_LISTINO",
+tipo: "CANCELLAZIONE_LISTINO",
+pagina: "gestione-listini",
+collezioneRef: "listini",
+documentoId: editor.id,
+dati_originali: datiOriginali,
+dati_modificati: null,
+utente: currentUser?.username || currentUser?.email || "sconosciuto",
+timestamp: new Date()
+});
 
       setEditor(null);
-      setSelectedIndex(null);
+  
       loadListini();
 
     } catch (e) {
@@ -252,40 +396,80 @@ const associaFornitore = async (listinoId, fornitoreId) => {
     }
   };
 
+
+ 
   // =============================
   // PDF
   // =============================
-  const generaPDFListino = (listino, pdf) => {
-    pdf.setFontSize(16);
-    pdf.text(`Listino: ${listino.nome}`, 14, 15);
 
-    const rows = codiciCER.map(c => [c, listino.prezzi?.[c] ?? 0]);
 
-    autoTable(pdf, {
-      startY: 25,
-      head: [["Materiale", "Prezzo"]],
-      body: rows,
-      styles: { fontSize: 9 },
-      theme: "grid"
-    });
-  };
+  const stampaListinoSelezionato = async () => {
+  if (!editor) return;
+  await generaPDFListinoConHeader(editor);
+};
 
-  const stampaListinoSelezionato = () => {
-    if (!editor) return;
-    const pdf = new jsPDF("p","mm","a4");
-    generaPDFListino(editor, pdf);
-    pdf.save(`listino_${editor.nome}.pdf`);
-  };
+const stampaTuttiListini = async () => {
+  const pdf = new jsPDF("p", "mm", "a4");
 
-  const stampaTuttiListini = () => {
-    const pdf = new jsPDF("p","mm","a4");
-    listini.forEach((l, i) => {
-      if (i !== 0) pdf.addPage();
-      generaPDFListino(l, pdf);
-    });
-    pdf.save("tutti_listini.pdf");
-  };
+  for (let i = 0; i < listini.length; i++) {
+    const l = listini[i];
 
+    if (i !== 0) pdf.addPage();
+
+    await generaPDFListinoConHeader(l, pdf);
+  }
+
+  pdf.save("tutti_listini.pdf");
+};
+let listiniFiltrati = listini.filter(
+  l => (l.tipoListino || "SCARICO") === tipoFiltroListino
+);
+
+let listiniOrdinati = [...listini].filter(
+  l => (l.tipoListino || "SCARICO") === tipoFiltroListino
+);
+
+if (sortConfig.key) {
+  listiniOrdinati.sort((a, b) => {
+    let aVal = "";
+    let bVal = "";
+
+    switch (sortConfig.key) {
+      case "nome":
+        aVal = a.nome || "";
+        bVal = b.nome || "";
+        break;
+
+      case "tipo":
+        aVal = a.tipoListino || "SCARICO";
+        bVal = b.tipoListino || "SCARICO";
+        break;
+
+      case "fornitori":
+        aVal = (a.predefFornitori || []).length;
+        bVal = (b.predefFornitori || []).length;
+        break;
+
+      case "index":
+        aVal = listini.indexOf(a);
+        bVal = listini.indexOf(b);
+        break;
+
+      default:
+        return 0;
+    }
+
+    if (typeof aVal === "number" && typeof bVal === "number") {
+      return sortConfig.direction === "asc"
+        ? aVal - bVal
+        : bVal - aVal;
+    }
+
+    return sortConfig.direction === "asc"
+      ? String(aVal).localeCompare(String(bVal), "it", { numeric: true })
+      : String(bVal).localeCompare(String(aVal), "it", { numeric: true });
+  });
+}
   // =============================
   // UI
   // =============================
@@ -294,10 +478,18 @@ const associaFornitore = async (listinoId, fornitoreId) => {
 
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <button onClick={goHome}>🏠 Dashboard</button>
-        <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
+        <button onClick={handleLogout}>🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})</button>
       </div>
 
       <h2>Gestione Listini</h2>
+
+      <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"15px"}}>
+  <label>Tipo Listino:</label>
+ <select value={tipoFiltroListino} onChange={e => { setTipoFiltroListino(e.target.value);  }}>
+    <option value="SCARICO">Scarico (ingresso)</option>
+    <option value="CARICO">Carico (uscita)</option>
+  </select>
+</div>
 
       <div style={{display:"flex",gap:"10px",marginBottom:"15px"}}>
         <button onClick={stampaTuttiListini}>🖨 Stampa tutti i listini</button>
@@ -309,57 +501,153 @@ const associaFornitore = async (listinoId, fornitoreId) => {
         <div style={{marginBottom:20}}>
           <input type="text" placeholder="Nome nuovo listino" value={nuovoListino} onChange={e=>setNuovoListino(e.target.value)} />
           <select value={listinoDaCopiare} onChange={e=>setListinoDaCopiare(e.target.value)} style={{marginLeft:8}}>
-            {listini.map(l=> <option key={l.id} value={l.id}>{l.nome}</option>)}
+            {listiniOrdinati.map((l, i) =>  <option key={l.id} value={l.id}>{l.nome}</option>)}
           </select>
+          <select value={nuovoTipoListino} onChange={e=>setNuovoTipoListino(e.target.value)} style={{marginLeft:8}}>
+  <option value="SCARICO">Scarico (ingresso)</option>
+  <option value="CARICO">Carico (uscita)</option>
+</select>
+<div style={{display:"inline-flex", alignItems:"center", gap:4, marginLeft:8}}>
+  <div style={{display:"flex", alignItems:"center", gap:"4px", marginLeft:8}}>
+  <select value={modificaAzione} onChange={e => setModificaAzione(e.target.value)}>
+    <option value="AUMENTA">Aumenta Prezzi</option>
+    <option value="DIMINUISCI">Diminuisci Prezzi</option>
+  </select>
+  <input 
+    type="number" 
+    value={modificaPercentuale} 
+    onChange={e => setModificaPercentuale(Number(e.target.value))}
+    min={0} max={99} style={{width:60}} 
+  />%
+</div>
+</div>
           <button style={{marginLeft:8}} onClick={creaNuovoListino}>✅ Crea</button>
         </div>
       )}
+<table className="tabella-scarichi">
+  <thead>
+    <tr>
+      <th onClick={() => requestSort("index")} style={{ cursor: "pointer" }}>
+        #
+      </th>
 
-      <table className="tabella-scarichi">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Nome</th>
-            {codiciCER.map(c=><th key={c}>{c}</th>)}
-            <th>Fornitori associati</th>
-            <th>Associa fornitore</th>
-          </tr>
-        </thead>
-        <tbody>
-          {listini.map((l,i)=>(
-            <tr key={l.id} onClick={()=>selezionaListino(i)} style={{ cursor:"pointer", background:i===selectedIndex?"#ffe7a3":"transparent" }}>
-              <td>{i+1}</td>
-              <td>{l.nome}</td>
-              {codiciCER.map(c=><td key={c}>{l.prezzi?.[c] ?? 0}</td>)}
-              <td>
-                {(l.predefFornitori || []).map(fid=>{
-                  const f = fornitori.find(f=>f.id===fid);
-                  return f?.nome || f?.id;
-                }).join("; ")}
-              </td>
-              <td>
-                <select style={{marginRight:8}}
-                  value={fornitoreSelezionato[l.id] || ""}
-                  onChange={e=>setFornitoreSelezionato(prev => ({ ...prev, [l.id]: e.target.value }))}
-                >
-                  <option value="">--Seleziona--</option>
-                  {fornitori.filter(f => !(l.predefFornitori || []).includes(f.id))
-                    .map(f=> <option key={f.id} value={f.id}>{f.nome || f.id}</option>)}
-                </select>
-                <button onClick={()=>associaFornitore(l.id, fornitoreSelezionato[l.id])} disabled={!fornitoreSelezionato[l.id]}>O Associa</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <th onClick={() => requestSort("nome")} style={{ cursor: "pointer" }}>
+        Nome {sortConfig.key === "nome" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+      </th>
+
+      <th onClick={() => requestSort("tipo")} style={{ cursor: "pointer" }}>
+        Tipo {sortConfig.key === "tipo" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+      </th>
+
+      {materialiDinamici.map((c) => (
+        <th key={c}>{c}</th>
+      ))}
+
+      <th onClick={() => requestSort("fornitori")} style={{ cursor: "pointer" }}>
+        Fornitori {sortConfig.key === "fornitori" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+      </th>
+
+      <th>Associa fornitore</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {listiniOrdinati.map((l, i) => (
+      <tr
+        key={l.id}
+        onClick={() => selezionaListino(l.id)}
+        style={{
+          cursor: "pointer",
+          background:
+           editor?.id === l.id ? "#ffe7a3" : "transparent"
+        }}
+      >
+        {/* # */}
+        <td>{i + 1}</td>
+
+        {/* NOME */}
+        <td>{l.nome}</td>
+
+        {/* TIPO (🔥 QUESTO RISOLVE LO SHIFT) */}
+        <td>{l.tipoListino || "SCARICO"}</td>
+
+        {/* MATERIALI */}
+        {materialiDinamici.map((c) => (
+          <td key={c}>
+            {l.tipoListino === "CARICO"
+              ? (l.prezzi?.[c]?.vendita ?? l.prezzi?.[c]?.acquisto ?? 0)
+              : (l.prezzi?.[c]?.acquisto ?? 0)}
+          </td>
+        ))}
+
+        {/* FORNITORI */}
+        <td>
+          {(l.predefFornitori || [])
+            .map((fid) => fornitori.find((f) => f.id === fid))
+            .filter(Boolean)
+            .map((f) => f.nome || f.id)
+            .join("; ")}
+        </td>
+
+        {/* ASSOCIA FORNITORE */}
+        <td>
+          <select
+            style={{ marginRight: 8 }}
+            value={fornitoreSelezionato[l.id] || ""}
+            onChange={(e) =>
+              setFornitoreSelezionato((prev) => ({
+                ...prev,
+                [l.id]: e.target.value
+              }))
+            }
+          >
+            <option value="">--Seleziona--</option>
+
+            {fornitori
+              .filter((f) => !(l.predefFornitori || []).includes(f.id))
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nome || f.id}
+                </option>
+              ))}
+          </select>
+
+          <button
+            onClick={() =>
+              associaFornitore(l.id, fornitoreSelezionato[l.id])
+            }
+            disabled={!fornitoreSelezionato[l.id]}
+          >
+            Associa
+          </button>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 
       {editor && (
         <div style={{marginTop:30}}>
           <h3>Modifica {editor.nome}</h3>
-          {codiciCER.map(c=>(
+          <div style={{marginBottom:15}}>
+  <label>Tipo Listino:</label>
+  <select 
+    value={editor.tipoListino || "SCARICO"} 
+    onChange={e => setEditor(prev => ({ ...prev, tipoListino: e.target.value }))}
+    style={{marginLeft:8}}
+  >
+    <option value="SCARICO">Scarico (ingresso)</option>
+    <option value="CARICO">Carico (uscita)</option>
+  </select>
+</div>
+         {materialiDinamici.map(c=>(
             <div key={c}>
               {c}:
-              <input type="number" value={editor.prezzi?.[c] ?? 0} onChange={e=>updatePrezzo(c,e.target.value)}
+              <input type="number" value={
+  editor.tipoListino === "CARICO"
+    ? editor.prezzi?.[c]?.vendita ?? 0
+    : editor.prezzi?.[c]?.acquisto ?? 0
+} onChange={e=>updatePrezzo(c,e.target.value)}
                      style={{marginLeft:10, background:campoModificato(c)?"#fff3a0":"white"}} />
             </div>
           ))}

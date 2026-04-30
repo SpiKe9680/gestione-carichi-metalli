@@ -1,44 +1,76 @@
 // src/components/GestioneScarichiDettaglio.js
 import React, { useEffect, useState, useRef } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
-import { getDoc } from "firebase/firestore";
+import { FiUpload, FiDownload } from 'react-icons/fi';
+import autoTable from "jspdf-autotable";
+// --- Blocchetto Data/Ora per editor ---
+import DatePicker, { registerLocale } from "react-datepicker";
+import { it } from "date-fns/locale";
+import {  PdfHeader } from "../utils/dateUtils";
+registerLocale("it", it);
+const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+const formattaDataItaliana = (date) => {
+  if (!date) return "";
+  const gg = String(date.getDate()).padStart(2, "0");
+  const mese = mesiItaliani[date.getMonth()];
+  const yyyy = date.getFullYear();
+  return `${gg} ${mese} ${yyyy}`;
+};
+const formattaOra24 = (date) =>
+  `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
+const getUtenteReact = () => {
+  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
 
+  return (
+    u?.username ||
+    u?.email ||
+    auth.currentUser?.displayName ||
+    auth.currentUser?.email ||
+    "sconosciuto"
+  );
+};
 
-const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "Tutti", filtroListinoProp = "Tutti" }) => {
+const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "tutti", filtroListinoProp = "tutti", tipoMovimentoProp = "scarico" }) => {
+  console.log("📌 Props ricevute nel dettaglio:", { 
+    giornoSelezionato, 
+    filtroFornitoreProp, 
+    filtroListinoProp, 
+    tipoMovimentoProp 
+});
+  const [tipoMovimento] = useState(tipoMovimentoProp); // default scarico
   const [righe, setRighe] = useState([]);
+  console.log("📌 Stato iniziale righe:", righe);
   const [listini, setListini] = useState({});
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [editor, setEditor] = useState(null);
+const [labelModifica, setLabelModifica] = useState(null);
   const [originalEditor, setOriginalEditor] = useState(null);
   const [errori, setErrori] = useState([]);
   const [rowsPerPage, setRowsPerPage] = useState(6);
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const [filtroOra, setFiltroOra] = useState("Tutti");
+ const [currentPageCarichi, setCurrentPageCarichi] = useState(1);
+const [currentPageScarichi, setCurrentPageScarichi] = useState(1);
+  const [filtroOra, setFiltroOra] = useState("tutti");
   const [filtroFornitore, setFiltroFornitore] = useState(filtroFornitoreProp);
-  const [filtroCER, setFiltroCER] = useState("Tutti");
+  const [filtroCER, setFiltroCER] = useState("tutti");
   const [filtroListino, setFiltroListino] = useState(filtroListinoProp);
-
+  const [filtroUtente, setFiltroUtente] = useState("tutti");
+const [filtroFIR, setFiltroFIR] = useState("tutti");
+const [filtroMateriale, setFiltroMateriale] = useState("tutti");
+const valoriTipo = React.useMemo(() => ["tutti", ...Array.from(new Set(righe.map(r => r.tipo).filter(Boolean)))], [righe]);
+console.log("📌 Righe aggiornate:", righe);
+const [filtroTipo, setFiltroTipo] = useState("tutti");
+  const [sortConfig] = useState({ key: "ora", direction: "desc" });
   const navigate = useNavigate();
   const editorRef = useRef(null);
-
-  // -------- NAV
-  const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
-  const goHome = () => navigate("/admin");
-  const vaiGestioneListini = () => navigate("/gestione-listini");
-
   
-
-  // ---------------------------
-  // PARSING SICURO DATA gg/mm/yyyy o ISO
   const parseData = val => {
     if(!val) return null;
-    if(typeof val === "string" && val.includes("-")) {
+    if(typeof val==="string" && val.includes("-")) {
       const d = new Date(val);
-      return isNaN(d) ? null : d;
+      return isNaN(d)?null:d;
     }
     const [gg, mm, yyyy] = val.split("/").map(Number);
     if(!gg || !mm || !yyyy) return null;
@@ -47,9 +79,7 @@ const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreP
 
   const giornoParsed = parseData(giornoSelezionato);
   const dataLabel = giornoParsed ? giornoParsed.toLocaleDateString("it-IT") : "Data non valida";
-
-  // ---------------------------  
-  // CARICA LISTINI
+const getLabelFornDest = () => tipoMovimento === "scarico" ? "Fornitore" : "Destinatario";
   const loadListini = async () => {
     try {
       const snap = await getDocs(collection(db, "listini"));
@@ -58,652 +88,1460 @@ const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreP
         mapListini[d.data().nome] = d.data().prezzi || {};
       });
       setListini(mapListini);
-    } catch(e) {
-      console.error("Errore load listini:", e);
-    }
+    } catch(e) { console.error("Errore load listini:", e); }
   };
-
-  // ---------------------------  
-  // CARICA SCARICHI
   useEffect(() => {
-    const load = async () => {
-      await loadListini();
-      try {
-        if(!giornoParsed) return;
+  loadListini(); // carica la lista dei listini
+}, []);
+useEffect(() => {
+  setFiltroTipo(tipoMovimentoProp?.toLowerCase() || "tutti");
+}, [tipoMovimentoProp]);
+const [refresh, setRefresh] = useState(0);
+// Inserisci in alto, vicino agli altri useState
+const [scarichiDelGiorno, setScarichiDelGiorno] = useState([]);
+// ---------- CARICAMENTO SCARICHI E POPOLAMENTO RIGHE ----------
+useEffect(() => {
+  const load = async () => {
+    try {
+      const snapScarichi = await getDocs(collection(db, "scarichi"));
+      const snapCarichi = await getDocs(collection(db, "carichi"));
 
-        const start = new Date(giornoParsed); start.setHours(0,0,0,0);
-        const end = new Date(giornoParsed); end.setHours(23,59,59,999);
+      const tuttiDocs = [
+        ...snapScarichi.docs.map(d => ({ id: d.id, ...d.data() })),
+        ...snapCarichi.docs.map(d => ({ id: d.id, ...d.data() }))
+      ];
 
-        const snap = await getDocs(collection(db,"scarichi"));
-        const rows = [];
+      const giornoParsedLocal = parseData(giornoSelezionato);
+      if (!giornoParsedLocal) return;
 
-        snap.docs.forEach(d => {
-          const data = d.data();
-          if(!data.data) return;
-          const dataScarico = data.data.toDate();
-          if(dataScarico < start || dataScarico > end) return;
+      const start = new Date(giornoParsedLocal);
+      start.setHours(0, 0, 0, 0);
 
-          if(filtroFornitore !== "Tutti" && data.fornitore !== filtroFornitore) return;
-          if(filtroListino !== "Tutti" && data.listino !== filtroListino) return;
+      const end = new Date(giornoParsedLocal);
+      end.setHours(23, 59, 59, 999);
 
-          data.scarico.forEach((cer,cerIndex)=>{
-            cer.righe.forEach((r,rIndex)=>{
-              const prezzo = r.prezzoAcquisto ?? listini[data.listino]?.[r.materiale] ?? 0;
-              const costoTot = prezzo * r.netto;
-
-              rows.push({
-                docId:d.id,
-                cerIndex,
-                rIndex,
-                scaricoCompleto:data.scarico,
-                ora:dataScarico.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}),
-                fornitore:data.fornitore,
-                cer:cer.cer,
-                materiale:r.materiale,
-                peso:r.peso,
-                calo:r.calo,
-                netto:r.netto,
-                prezzoKg:prezzo,
-                costoTotale:costoTot,
-                listino:data.listino
-              });
-            });
-          });
-        });
-
-        setRighe(rows);
-
-      } catch(e){
-        setErrori([e.message]);
-      }
-    };
-    load();
-  }, [giornoSelezionato, listini, filtroFornitore, filtroListino]);
-
-  // ---------------------------  
-  // FILTRI DINAMICI
-  const valoriOra = ["Tutti", ...Array.from(new Set(righe.map(r => r.ora)))];
-  const valoriFornitore = ["Tutti", ...Array.from(new Set(righe.map(r => r.fornitore)))];
-  const valoriCER = ["Tutti", ...Array.from(new Set(righe.map(r => r.cer)))];
-  const valoriListino = ["Tutti", ...Array.from(new Set(righe.map(r => r.listino)))];
-
-  const righeFiltrate = righe.filter(r => 
-    (filtroOra === "Tutti" || r.ora === filtroOra) &&
-    (filtroFornitore === "Tutti" || r.fornitore === filtroFornitore) &&
-    (filtroCER === "Tutti" || r.cer === filtroCER) &&
-    (filtroListino === "Tutti" || r.listino === filtroListino)
-  );
-
-  const paginatedRighe = rowsPerPage && rowsPerPage !== "tutte"
-    ? righeFiltrate.slice((currentPage-1)*rowsPerPage, currentPage*rowsPerPage)
-    : righeFiltrate;
-
-  const totalPages = rowsPerPage && rowsPerPage !== "tutte" ? Math.ceil(righeFiltrate.length/rowsPerPage) : 1;
-
-  // ---------------------------  
-  // SELEZIONE RIGA
-  const selezionaRiga = (index) => {
-    const r = paginatedRighe[index];
-    const realIndex = righeFiltrate.indexOf(r);
-    setSelectedIndex(realIndex);
-
-    setEditor({...righe[realIndex], prezzoKg: righe[realIndex].prezzoKg});
-    setOriginalEditor({...righe[realIndex], prezzoKg: righe[realIndex].prezzoKg});
-  };
-
-  useEffect(() => {
-    if(editorRef.current){
-      editorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [editor]);
-
-  // ---------------------------  
-  // AGGIORNA EDITOR
-  const updateEditor = (campo, valore) => {
-    setEditor(prev => {
-      const nuovo = {...prev};
-      const numVal = Number(valore) || 0;
-
-      if(campo==="peso"){ 
-        nuovo.peso = numVal; 
-        nuovo.netto = nuovo.peso - nuovo.calo; 
-      }
-      else if(campo==="calo"){ 
-        nuovo.calo = numVal; 
-        nuovo.netto = nuovo.peso - nuovo.calo; 
-      }
-      else if(campo==="netto"){
-        nuovo.netto = numVal;
-        if(nuovo.netto <= nuovo.peso) nuovo.calo = nuovo.peso - nuovo.netto;
-        else { nuovo.calo = 0; nuovo.peso = nuovo.netto; }
-      } 
-      else if(campo==="prezzoKg"){ 
-        nuovo.prezzoKg = numVal; 
-      }
-
-      nuovo.costoTotale = (nuovo.netto || 0) * (nuovo.prezzoKg || 0);
-      return nuovo;
-    });
-  };
-
-  const campoModificato = campo => editor && originalEditor && editor[campo] !== originalEditor[campo];
-
-  const ricalcolaTotaleCer = (cerObj) => {
-    cerObj.totaleCer = cerObj.righe.reduce(
-      (tot, r) => tot + (Number(r.netto) || 0),
-      0
-    );
-  };
-
-  // ---------------------------  
-  // SALVA MODIFICHE
-  const salvaModifiche = async () => {
-  if (selectedIndex === null) return;
-  const rigaOriginale = righe[selectedIndex];
-  try {
-    const ref = doc(db, "scarichi", rigaOriginale.docId);
-    const nuovoScarico = [...rigaOriginale.scaricoCompleto];
-    const cerObj = nuovoScarico[rigaOriginale.cerIndex];
-    const target = cerObj.righe[rigaOriginale.rIndex];
-
-    // --- Qui salviamo CORRETTAMENTE lo snapshot originale prima di modificare ---
-    const datiOriginali = { scarico: JSON.parse(JSON.stringify(rigaOriginale.scaricoCompleto)) };
-    // --- Applico modifiche dal editor ---
-    target.peso = editor.peso;
-    target.calo = editor.calo;
-    target.netto = editor.netto;
-    target.prezzoAcquisto = Number(editor.prezzoKg);
-    target.costoTotale = target.netto * target.prezzoAcquisto;
-
-    ricalcolaTotaleCer(cerObj);
-
-    await updateDoc(ref, { scarico: nuovoScarico });
-
-    // --- Log corretto: dati_originali = riga prima della modifica ---
-    await scriviLog({
-      pagina: "gestione-scarichi-dettaglio",
-      tipo: "MODIFICA_RIGA",
-      collezioneRef: "scarichi",
-      documentoId: rigaOriginale.docId,
-      dati_originali: datiOriginali,
-      dati_modificati: { ...target }
-    });
-
-    const copia = [...righe];
-    copia[selectedIndex] = { ...rigaOriginale, ...target, prezzoKg: editor.prezzoKg };
-    setRighe(copia);
-    setSelectedIndex(null);
-    setEditor(null);
-    setOriginalEditor(null);
-
-  } catch (e) {
-    setErrori(prev => [...prev, e.message]);
-  }
-};
-
-  // ---------------------------  
-  // ELIMINA RIGA
-  const eliminaRiga = async () => {
-    if(selectedIndex===null) return;
-    if(!window.confirm("Sei sicuro di eliminare questa riga?")) return;
-
-    const rigaOriginale = righe[selectedIndex];
-    try{
-      const ref = doc(db,"scarichi",rigaOriginale.docId);
-      const nuovoScarico = [...rigaOriginale.scaricoCompleto];
-      const cerObj = nuovoScarico[rigaOriginale.cerIndex];
-      const rigaEliminata = cerObj.righe[rigaOriginale.rIndex];
-
-      cerObj.righe.splice(rigaOriginale.rIndex,1);
-
-      if(cerObj.righe.length === 0){
-        nuovoScarico.splice(rigaOriginale.cerIndex,1);
-      } else {
-        ricalcolaTotaleCer(cerObj);
-      }
-
-      if(nuovoScarico.length === 0){
-        await deleteDoc(ref);
-      } else {
-        await updateDoc(ref,{scarico:nuovoScarico});
-      }
-
-      await scriviLog({
-        pagina: "gestione-scarichi-dettaglio",
-        tipo: "CANCELLAZIONE_RIGA",
-        collezioneRef: "scarichi",
-        documentoId: rigaOriginale.docId,
-        dati_originali: { ...rigaOriginale }, // <-- SALVIAMO tutto il documento originale
-        dati_modificati: null
+      const datiGiorno = tuttiDocs.filter(d => {
+        if (!d.data) return false;
+        const ts = d.data.toDate ? d.data.toDate() : new Date(d.data);
+        return ts >= start && ts <= end;
       });
 
-      const copia=[...righe]; copia.splice(selectedIndex,1); setRighe(copia);
-      setSelectedIndex(null); setEditor(null); setOriginalEditor(null);
+      setScarichiDelGiorno(datiGiorno);
 
-    }catch(e){ setErrori(prev=>[...prev,e.message]); }
+    } catch (e) {
+      console.error("Errore load:", e);
+      setErrori(prev => [...prev, e.message]);
+    }
   };
 
-  const annullaModifiche=()=>{ setSelectedIndex(null); setEditor(null); setOriginalEditor(null); };
+  load();
+}, [giornoSelezionato, refresh]);
+useEffect(() => {
+  if (!scarichiDelGiorno || scarichiDelGiorno.length === 0) {
+    setRighe([]);
+    return;
+  }
+  const righePronte = scarichiDelGiorno.flatMap(scarico => {
+const movimenti = [
+  ...(scarico.scarico || []).map((c, i) => ({
+    ...c,
+    tipoMov: "scarico",
+    cerIndex: i,
+    sourceCollection: "scarichi"
+  })),
+  ...(scarico.carico || []).map((c, i) => ({
+    ...c,
+    tipoMov: "carico",
+    cerIndex: i,
+    sourceCollection: "carichi"
+  }))
+];
 
-// ---------------------------
-// STAMPA
-const handleStampa = () => {
+return movimenti.flatMap((cer) => {
+  const tipoMov = cer.tipoMov;
+  const cerIndex = cer.cerIndex;
+      if (cer.righe && cer.righe.length > 0) {
+        return cer.righe.map((r, rIndex) => {
+          const netto = Number(r.netto) || 0;
+          const prezzo = Number(r.prezzoAcquisto || r.prezzoVendita) || 0;
+          const dataObj =
+  scarico.data?.toDate?.() ||
+  parseData(scarico.dataScaricoStr) ||
+  parseData(scarico.data) ||
+  null;
+          return {
+            ...r,
+            docId: scarico.id,
+            cerIndex,
+            rIndex,
+            cer: cer.cer,
+            fir: cer.fir,
+            sourceCollection: cer.sourceCollection,
+tipo: tipoMov,
+            fornitore: scarico.fornitore,
+            listino: scarico.listino,
+            dataMovimentoObj: dataObj,
+            ora: dataObj
+              ? dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+              : "",
+            utente: getUtenteReact(),
+            prezzoKg: prezzo,
+            costoTotale: netto * prezzo
+          };
+        });
+      }
+      const netto = Number(cer.netto || cer.peso || 0);
+      const prezzoVendita = Number(cer.prezzoVendita ?? 0);
+const prezzoAcquisto = Number(cer.prezzoAcquisto ?? 0);
+      const dataObj = scarico.data?.toDate?.() || null;
+      return [{
+        docId: scarico.id,
+        cerIndex,
+        rIndex: 0,
+        cer: cer.cer,
+        fir: cer.fir || "",
+        materiale: cer.materiale || "N/D",
+       sourceCollection: cer.sourceCollection,
+tipo: tipoMov,
+        fornitore: scarico.fornitore,
+        listino: scarico.listino,
+        dataMovimentoObj: dataObj,
+        ora: dataObj
+          ? dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+          : "",
+        utente: getUtenteReact(),
+        prezzoVendita,
+prezzoAcquisto,
+prezzoKg: tipoMov === "carico" ? prezzoVendita : prezzoAcquisto,
+costoTotale: netto * (tipoMov === "carico" ? prezzoVendita : prezzoAcquisto)
+      }];
+    });
+  });
+  const sorted = [...righePronte];
+  setRighe(sorted);
+}, [scarichiDelGiorno, sortConfig]);
+  const ordinaDropdown = (valori) => {
+  // Estrai tutti tranne "tutti" e ordina
+  const ordinati = valori.filter(v => v !== "tutti").sort((a,b) => a.localeCompare(b));
+  // Rimetti "tutti" in cima
+  return ["tutti", ...ordinati];
+};
+// Poi li usi così:
+const valoriOra = ordinaDropdown([...new Set(righe.map(r => r.ora))].map(v => v || ""));
+const valoriFornitore = ordinaDropdown([...new Set(righe.map(r => r.fornitore))].map(v => v || ""));
+const valoriCER = ordinaDropdown([...new Set(righe.map(r => r.cer))].map(v => v || ""));
+const valoriListino = ordinaDropdown([...new Set(righe.map(r => r.listino))].map(v => v || ""));
+const valoriUtente = ordinaDropdown([...new Set(righe.map(r => r.utente).filter(u => u))]);
+const valoriFIR = ordinaDropdown([...new Set(righe.map(r => r.fir || ""))]);
+const valoriMateriale = ordinaDropdown([...new Set(righe.map(r => r.materiale))]);
+const righeFiltrate = righe.filter(r =>
+  (filtroOra==="tutti" || r.ora===filtroOra) &&
+  (filtroFornitore==="tutti" || r.fornitore===filtroFornitore) &&
+  (filtroCER==="tutti" || r.cer===filtroCER) &&
+  (filtroListino==="tutti" || r.listino===filtroListino) &&
+  (filtroUtente==="tutti" || r.utente===filtroUtente) &&
+  (filtroFIR==="tutti" || r.fir===filtroFIR) &&
+  (filtroMateriale==="tutti" || r.materiale===filtroMateriale) &&
+  (filtroTipo==="tutti" || (r.tipo || "").toLowerCase() === filtroTipo.toLowerCase())
+);
+const righeOrdinati = [...righeFiltrate].sort((a, b) => {
+  const { key, direction } = sortConfig;
 
-  const filtri = `
-    <div style="margin-bottom:15px;font-size:14px">
-      <strong>Filtri applicati:</strong><br/>
-      Fornitore: ${filtroFornitore}<br/>
-      Ora: ${filtroOra}<br/>
-      CER: ${filtroCER}<br/>
-      Listino: ${filtroListino}
-    </div>
-  `;
+  let va = a[key];
+  let vb = b[key];
 
-  // Raggruppo le righe per fornitore
-  const righePerFornitore = righeFiltrate.reduce((acc, r) => {
-    if (!acc[r.fornitore]) acc[r.fornitore] = [];
-    acc[r.fornitore].push(r);
-    return acc;
-  }, {});
+  // null/undefined safe
+  if (va == null) va = "";
+  if (vb == null) vb = "";
 
-  let righeHtml = "";
-  let totaleGenerale = 0;
-  const fornitori = Object.keys(righePerFornitore);
+  // numeri
+  if (!isNaN(va) && !isNaN(vb)) {
+    va = Number(va);
+    vb = Number(vb);
+  }
 
-  fornitori.forEach(fornitore => {
-    const rows = righePerFornitore[fornitore];
-    const subtotale = rows.reduce((sum, r) => sum + (r.costoTotale || 0), 0);
-    totaleGenerale += subtotale;
+  // stringhe
+  if (typeof va === "string") va = va.toLowerCase();
+  if (typeof vb === "string") vb = vb.toLowerCase();
 
-    // Intestazione fornitore se ci sono più fornitori
-    if (fornitori.length > 1) {
-      righeHtml += `<tr><td colspan="9" style="font-weight:bold; background:#ddd;">Fornitore: ${fornitore}</td></tr>`;
+  // date (ora)
+  if (key === "ora") {
+    va = new Date("1970-01-01 " + a.ora);
+    vb = new Date("1970-01-01 " + b.ora);
+  }
+
+  if (va < vb) return direction === "asc" ? -1 : 1;
+  if (va > vb) return direction === "asc" ? 1 : -1;
+  return 0;
+});
+// 🔥 PRIMA SPLIT
+const righeCarichiAll = righeOrdinati.filter(r => (r.tipo || "").toLowerCase() === "carico");
+const righeScarichiAll = righeOrdinati.filter(r => (r.tipo || "").toLowerCase() === "scarico");
+
+// 🔥 PAGINAZIONE SEPARATA
+const paginatedCarichi = rowsPerPage && rowsPerPage !== "tutte"
+  ? righeCarichiAll.slice(
+      (currentPageCarichi - 1) * rowsPerPage,
+      currentPageCarichi * rowsPerPage
+    )
+  : righeCarichiAll;
+
+const paginatedScarichi = rowsPerPage && rowsPerPage !== "tutte"
+  ? righeScarichiAll.slice(
+      (currentPageScarichi - 1) * rowsPerPage,
+      currentPageScarichi * rowsPerPage
+    )
+  : righeScarichiAll;
+
+const totalPagesCarichi = rowsPerPage && rowsPerPage !== "tutte"
+  ? Math.ceil(righeCarichiAll.length / rowsPerPage)
+  : 1;
+
+const totalPagesScarichi = rowsPerPage && rowsPerPage !== "tutte"
+  ? Math.ceil(righeScarichiAll.length / rowsPerPage)
+  : 1;
+  const carichi = righeFiltrate.filter(r => (r.tipo || "").toLowerCase() === "carico");
+const scarichi = righeFiltrate.filter(r => (r.tipo || "").toLowerCase() === "scarico");
+
+// CARICHI TOTALI
+const totCarichiNetto = carichi.reduce((t, r) => t + (Number(r.netto) || 0), 0);
+const totCarichiRicavi = carichi.reduce((t, r) => t + ((Number(r.netto) || 0) * (Number(r.prezzoKg) || 0)), 0);
+const mediaCarichi = carichi.length ? totCarichiRicavi / totCarichiNetto : 0;
+
+// SCARICHI TOTALI
+const totScarichiNetto = scarichi.reduce((t, r) => t + (Number(r.netto) || 0), 0);
+const totScarichiCosti = scarichi.reduce((t, r) => t + ((Number(r.netto) || 0) * (Number(r.prezzoKg) || 0)), 0);
+const mediaScarichi = scarichi.length ? totScarichiCosti / totScarichiNetto : 0;
+
+// UTILE
+const utile = totCarichiRicavi - totScarichiCosti;
+const selezionaRiga = (r, tipo) => {
+  console.log("CLICK:", tipo, r);
+
+  setLabelModifica(tipo);
+
+  const baseDate =
+    r.dataMovimentoObj ||
+    parseData(r.dataScaricoStr) ||
+    new Date();
+
+  const oraCalcolata =
+    r.ora ||
+    `${String(baseDate.getHours()).padStart(2, "0")}:${String(baseDate.getMinutes()).padStart(2, "0")}`;
+
+  // 🔥 editor = RIGA COMPLETA FLAT (NON SOLO POINTER)
+  const editorCompleto = {
+    ...r, // 👈 QUESTO è il FIX CRITICO
+
+    tipo,
+
+    sourceCollection: tipo === "carico" ? "carichi" : "scarichi",
+
+    data: baseDate,
+    ora: oraCalcolata,
+
+    // sicurezza campi mancanti
+    peso: r.peso ?? 0,
+    calo: r.calo ?? 0,
+    netto: r.netto ?? (r.peso - r.calo),
+    prezzoKg: r.prezzoKg ?? r.prezzoAcquisto ?? r.prezzoVendita ?? 0
+  };
+
+  setEditor(editorCompleto);
+  setOriginalEditor(editorCompleto);
+};
+  useEffect(()=>{
+    if(editorRef.current){
+      editorRef.current.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  }, [editor]);
+const updateEditor = (campo, valore) => {
+  setEditor(prev => {
+    if (!prev) return prev;
+
+    const nuovo = { ...prev };
+    const num = (v) => Number(v) || 0;
+
+    // =========================
+    // PESI
+    // =========================
+    if (campo === "peso") {
+      nuovo.peso = num(valore);
+      nuovo.netto = nuovo.peso - (nuovo.calo || 0);
     }
 
-    rows.forEach(r => {
-      righeHtml += `
-        <tr>
-          <td>${r.ora}</td>
-          <td>${r.cer}</td>
-          <td>${r.materiale}</td>
-          <td>${r.peso}</td>
-          <td>${r.calo}</td>
-          <td>${r.netto}</td>
-          <td>${r.prezzoKg}</td>
-          <td>${r.costoTotale.toFixed(2)}</td>
-          <td>${r.listino}</td>
-        </tr>
-      `;
+    if (campo === "calo") {
+      nuovo.calo = num(valore);
+      nuovo.netto = (nuovo.peso || 0) - nuovo.calo;
+    }
+
+    if (campo === "netto") {
+      nuovo.netto = num(valore);
+      nuovo.peso = nuovo.netto + (nuovo.calo || 0);
+    }
+
+    // =========================
+    // PREZZO
+    // =========================
+    if (campo === "prezzoKg") {
+      const prezzo = num(valore);
+      nuovo.prezzoKg = prezzo;
+      nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
+    }
+
+    // =========================
+    // LISTINO
+    // =========================
+    if (campo === "listino") {
+      nuovo.listino = valore;
+
+      const materiale = nuovo.materiale;
+      const tipoPrezzo = nuovo.tipo === "carico" ? "vendita" : "acquisto";
+
+      const prezziListino = listini?.[valore];
+      const prezzoDaListino = prezziListino?.[materiale]?.[tipoPrezzo];
+
+      if (prezzoDaListino != null) {
+        const prezzo = num(prezzoDaListino);
+        nuovo.prezzoKg = prezzo;
+        nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
+      }
+    }
+
+    // =========================
+    // FIR
+    // =========================
+    if (campo === "fir") {
+      nuovo.fir = valore;
+    }
+
+    // =========================
+    // DATA
+    // =========================
+    if (campo === "data") {
+      nuovo.data = valore;
+    }
+
+    // =========================
+    // ORA
+    // =========================
+    if (campo === "ora") {
+      nuovo.ora = valore;
+    }
+
+    // =========================
+    // 🔥 FIX DEFINITIVO DATA + ORA (SEMPRE SINCRONIZZATI)
+    // =========================
+
+    const base = nuovo.data ? new Date(nuovo.data) : new Date();
+
+    // ora finale sempre coerente
+    const oraFinale = nuovo.ora || prev.ora || "00:00";
+
+    let hh = 0;
+    let mm = 0;
+
+    if (oraFinale.includes(":")) {
+      const parts = oraFinale.split(":");
+      hh = Number(parts[0]) || 0;
+      mm = Number(parts[1]) || 0;
+    }
+
+    base.setHours(hh, mm, 0, 0);
+
+    // forza nuova istanza (React safe)
+    nuovo.data = new Date(base);
+
+    // normalizza formato ora
+    nuovo.ora = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+
+    return nuovo;
+  });
+};
+const campoModificato = campo => {
+  if (!editor || !originalEditor) return false;
+  if (campo === "data") {
+    return editor.data?.getTime() !== originalEditor.data?.getTime();
+  }
+  if (campo === "ora") {
+    return editor.ora !== originalEditor.ora;
+  }
+  if (campo === "listino") {
+    return editor.listino !== originalEditor.listino;
+  }
+  return editor[campo] !== originalEditor[campo];
+};
+  const ricalcolaTotaleCer = cerObj => {
+    cerObj.totaleCer = cerObj.righe.reduce((tot,r)=>tot+(Number(r.netto)||0),0);
+  };
+ const handleStampaScaricoRiga = async (riga) => {
+  if (!riga || !riga.docId) return alert("Riga non valida per la stampa");
+  // tipo: carico o scarico (qui ci interessa scarico)
+  const tipo = riga.tipo?.toLowerCase() === "carico" ? "carico" : "scarico";
+  // chiama la funzione esistente passando docId e tipo
+  await handlePrint(riga.docId, tipo);
+};
+const handlePrint = async (movimentoId = null, tipo) => {
+  try {
+    if (!tipo) return alert("Errore: tipo di movimento non specificato (carico/scarico)");
+    const collezione = tipo === "carico" ? "carichi" : "scarichi";
+    let docData;
+    // --- Recupero documento ---
+    if (movimentoId) {
+      // Stampa movimento specifico
+      const movimentoRef = doc(db, collezione, movimentoId);
+      const movimentoSnap = await getDoc(movimentoRef);
+      if (!movimentoSnap.exists()) throw new Error("Movimento non trovato");
+      docData = movimentoSnap.data();
+    } else {
+      // Stampa ultimo movimento dell'utente
+      const utente = getUtenteReact();
+      const movimentoSnap = await getDocs(collection(db, collezione));
+      // Filtra per utente e ordina per data
+      const userDocs = movimentoSnap.docs
+        .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
+        .sort((a, b) => {
+          const aTime = a.data().data?.toDate ? a.data().data.toDate().getTime() : 0;
+          const bTime = b.data().data?.toDate ? b.data().data.toDate().getTime() : 0;
+          return bTime - aTime; // dal più recente al più vecchio
+        });
+      if (!userDocs.length) return alert(`Nessun movimento ${tipo} da stampare`);
+      docData = userDocs[0].data();
+    }
+    const { pdf, startY } = await PdfHeader();
+    const dataObj = docData.data?.toDate ? docData.data.toDate() : new Date();
+    pdf.setFontSize(14);
+    pdf.text(`Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`, 10, startY - 20);
+    const label = tipo === "carico" ? "Destinatario:" : "Fornitore:";
+    pdf.setFontSize(12);
+    pdf.text(`${label} ${docData.fornitore || "-"}`, 10, startY -12);
+    pdf.text(`Data e Ora: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`, 10, startY -6);
+    pdf.text(`Listino: ${docData.listino || "-"}`, 10, startY );
+    let y = startY + 10;
+    const righeMovimento = Array.isArray(docData[tipo === "carico" ? "carico" : "scarico"])
+      ? docData[tipo === "carico" ? "carico" : "scarico"]
+      : [];
+    for (const c of righeMovimento) {
+      const innerRighe = Array.isArray(c.righe) ? c.righe : [];
+      if (!innerRighe.length) continue; // salta CER senza righe
+      pdf.setFontSize(14);
+      let titoloCer = `CER ${c.cer}`;
+      if (c.fir) titoloCer += ` - FIR: ${c.fir}`;
+      pdf.text(titoloCer, 10, y);
+      y += 6;
+      const bodyRighe = innerRighe.map(r => [
+        r.materiale || "-",
+        r.peso != null ? Number(r.peso).toFixed(2) : "-",
+        r.calo != null ? Number(r.calo).toFixed(2) : "-",
+        r.netto != null ? Number(r.netto).toFixed(2) : "-"
+      ]);
+      autoTable(pdf, {
+        startY: y,
+        head: [["Materiale", "Peso", "Calo", "Netto"]],
+        body: bodyRighe,
+        theme: "grid",
+        margin: { left: 10 },
+        headStyles: { fillColor: [200, 200, 200] },
+        styles: { fontSize: 12 },
+      });
+      y = pdf.lastAutoTable.finalY + 6;
+      pdf.setFontSize(12);
+      pdf.text(`Totale CER: ${c.totaleCer != null ? Number(c.totaleCer).toFixed(2) : 0} kg`, 10, y);
+      y += 10;
+    }
+// --- FIX POSIZIONE FOTO ---
+// usa SEMPRE la posizione reale dell'ultima tabella
+if (pdf.lastAutoTable) {
+  y = pdf.lastAutoTable.finalY + 10;
+}
+// se sei troppo in basso → nuova pagina
+if (y > 250) {
+  pdf.addPage();
+  y = 20;
+}
+// Aggiungi foto se presente
+// Aggiungi foto scarichi se presenti (ARRAY supportato)
+const fotoArray = docData.fotoURL || [];
+if (Array.isArray(fotoArray) && fotoArray.length > 0) {
+  for (const url of fotoArray) {
+    try {
+      const response = await fetch(url, {
+  method: "GET",
+  mode: "cors",
+  cache: "no-cache",
+  credentials: "omit",
+  headers: {
+    "Accept": "image/*"
+  }
+});
+
+if (!response.ok) {
+  throw new Error(`HTTP ${response.status} su immagine`);
+}
+
+const blob = await response.blob();
+
+const base64data = await new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onloadend = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(blob);
+});
+      // nuova pagina se serve spazio
+      if (y > 200) {
+        pdf.addPage();
+        y = 20;
+      }
+      pdf.addImage(base64data, "JPEG", 10, y, 80, 80);
+      y += 90;
+    } catch (e) {
+      console.error("Errore immagine:", url, e);
+    }
+  }
+}
+    pdf.save(`${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "Sconosciuto"}_${docData.listino || "Sconosciuto"}.pdf`);
+  } catch (err) {
+    console.error("Errore generazione PDF:", err);
+    alert("Errore generazione PDF, vedi console");
+  }
+};
+async function salvaModifiche({ docRef, editor }) {
+  try {
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) throw new Error("Documento non trovato");
+
+    const dati = snap.data();
+    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
+
+    const beforeSnapshot = structuredClone(dati);
+
+    const movimentoArray = (dati[field] || []).map(cerObj => {
+
+      const righeAggiornate = (cerObj.righe || []).map(r => {
+
+        // MATCH LOGICO (non index-based)
+        const isTarget =
+          cerObj.cer === editor.cer &&
+          r.materiale === editor.materiale &&
+          Number(r.netto) === Number(editor.netto);
+
+        if (!isTarget) return r;
+
+        const peso = Number(editor.peso ?? r.peso ?? 0);
+        const calo = Number(editor.calo ?? r.calo ?? 0);
+        const netto = peso - calo;
+        const prezzo = Number(editor.prezzoKg ?? r.prezzoKg ?? 0);
+
+        return {
+          ...r,
+          peso,
+          calo,
+          netto,
+          prezzoKg: prezzo,
+          prezzoAcquisto: editor.tipo === "scarico" ? prezzo : r.prezzoAcquisto,
+          prezzoVendita: editor.tipo === "carico" ? prezzo : r.prezzoVendita,
+          costoTotale: netto * prezzo
+        };
+      });
+
+      return {
+        ...cerObj,
+        righe: righeAggiornate
+      };
     });
 
-    righeHtml += `<tr>
-      <td colspan="8" style="text-align:right;font-weight:bold;">Subtotale €</td>
-      <td style="font-weight:bold;">${subtotale.toFixed(2)}</td>
-    </tr>`;
-  });
+    const updatedSnapshot = {
+      ...dati,
+      [field]: movimentoArray,
+      data: editor.data || dati.data,
+      listino: editor.listino
+    };
 
-  // Solo se ci sono più fornitori aggiungo il totale generale
-  let totaleHtml = "";
-  if (fornitori.length > 1) {
-    totaleHtml = `<div class="totale" style="margin-top:15px;font-weight:bold;font-size:14px;">
-      Totale Generale €: ${totaleGenerale.toFixed(2)}
-    </div>`;
+    await updateDoc(docRef, updatedSnapshot);
+
+    await scriviLog({
+      pagina: "gestione-scarichi-dettaglio",
+      evento: `AGGIORNA_${editor.tipo?.toUpperCase()}`,
+      riferimento: {
+        collezione: docRef.path.includes("carichi") ? "carichi" : "scarichi",
+        documentoId: docRef.id
+      },
+      before: beforeSnapshot,
+      after: updatedSnapshot,
+      utente: getUtenteReact(),
+      ripristinabile: true
+    });
+
+  } catch (err) {
+    console.error(err);
+    throw err;
   }
+}
+const eliminaRiga = async (riga) => {
+  try {
+    const collezione = riga.sourceCollection || "scarichi";
+    const ref = doc(db, collezione, riga.docId);
 
-  const html = `
-    <html>
-      <head>
-        <title>Stampa Scarichi</title>
-        <style>
-          body { font-family: Arial; padding:20px; }
-          h2 { margin-bottom:10px; }
-          table {
-            width:100%;
-            border-collapse: collapse;
-            margin-top:15px;
-          }
-          th, td {
-            border:1px solid #000;
-            padding:6px;
-            text-align:left;
-            font-size:12px;
-          }
-          th { background:#eee; }
-          .totale { font-weight:bold; font-size:14px; }
-        </style>
-      </head>
-      <body>
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
 
-        <h2>Scarichi del giorno ${dataLabel}</h2>
-        ${filtri}
+    const dati = snap.data();
 
-        <table>
-          <thead>
-            <tr>
-              <th>Ora</th>
-              <th>CER</th>
-              <th>Materiale</th>
-              <th>Peso</th>
-              <th>Calo</th>
-              <th>Netto</th>
-              <th>Prezzo €/Kg</th>
-              <th>Costo Totale €</th>
-              <th>Listino</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${righeHtml}
-          </tbody>
-        </table>
+    const field = Array.isArray(dati.scarico)
+      ? "scarico"
+      : "carico";
 
-        ${totaleHtml}
+    const before = structuredClone(dati);
+    const updated = structuredClone(dati);
 
-      </body>
-    </html>
-  `;
+    const movimenti = updated[field];
 
-  const win = window.open("", "_blank");
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
+    const cer = movimenti?.[riga.cerIndex];
+    if (!cer) return;
+
+    // 🔥 sicurezza extra: verifica FIR + CER + indice riga
+    const nuovaRighe = (cer.righe || []).filter((_, idx) => idx !== riga.rIndex);
+
+    updated[field][riga.cerIndex] = {
+      ...cer,
+      righe: nuovaRighe
+    };
+
+    // 🔥 elimina CER solo se VUOTO
+    if (nuovaRighe.length === 0) {
+      updated[field].splice(riga.cerIndex, 1);
+    }
+
+    await setDoc(ref, updated);
+
+    // 🔥 CLEAN UI
+    setEditor(null);
+    setOriginalEditor(null);
+    setSelectedIndex(null);
+
+    await reloadDati();
+    setRefresh(p => p + 1);
+
+    await scriviLog({
+      pagina: "gestione-scarichi-dettaglio",
+      evento: `ELIMINA_RIGA_${riga.tipo?.toUpperCase()}`,
+      riferimento: {
+        collezione,
+        documentoId: riga.docId,
+        cerIndex: riga.cerIndex,
+        rIndex: riga.rIndex
+      },
+      before,
+      after: updated,
+      utente: getUtenteReact(),
+      ripristinabile: true
+    });
+
+  } catch (e) {
+    console.error("Errore eliminaRiga:", e);
+  }
+};
+const reloadDati = async () => {
+  try {
+    const snapScarichi = await getDocs(collection(db, "scarichi"));
+    const snapCarichi = await getDocs(collection(db, "carichi"));
+
+    const tuttiDocs = [
+      ...snapScarichi.docs.map(d => ({ id: d.id, ...d.data() })),
+      ...snapCarichi.docs.map(d => ({ id: d.id, ...d.data() }))
+    ];
+
+    const giornoParsedLocal = parseData(giornoSelezionato);
+    if (!giornoParsedLocal) return;
+
+    const start = new Date(giornoParsedLocal);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(giornoParsedLocal);
+    end.setHours(23, 59, 59, 999);
+
+    const datiGiorno = tuttiDocs.filter(d => {
+      if (!d.data) return false;
+      const ts = d.data.toDate ? d.data.toDate() : new Date(d.data);
+      return ts >= start && ts <= end;
+    });
+
+    setScarichiDelGiorno(datiGiorno);
+
+  } catch (e) {
+    console.error("reloadDati error:", e);
+  }
 };
 
 
-// ---------------------------
-// STAMPA CON FOTO
+  const annullaModifiche = ()=>{ setSelectedIndex(null); setEditor(null); setOriginalEditor(null); };
+  const handleLogout = async ()=>{ await auth.signOut(); navigate("/login"); };
+  const goHome = ()=>navigate("/admin");
+  const vaiGestioneListini = ()=>navigate("/gestione-scarichi", { state: { refresh: true } });
 
-const handleStampaConFoto = async () => {
-  const filtri = `
-    <div style="margin-bottom:15px;font-size:14px">
-      <strong>Filtri applicati:</strong><br/>
-      Fornitore: ${filtroFornitore}<br/>
-      Ora: ${filtroOra}<br/>
-      CER: ${filtroCER}<br/>
-      Listino: ${filtroListino}
-    </div>
-  `;
+const salvaDraftScarico = async (riga) => {
+  try {
+    const utenteId = getUtenteReact();
+    const utenteNome = getUtenteReact();
+    if (!utenteId || !riga) return;
 
-  // Raggruppo righe per docId
-  const righePerDoc = {};
-  righeFiltrate.forEach(r => {
-    if (!righePerDoc[r.docId]) righePerDoc[r.docId] = [];
-    righePerDoc[r.docId].push(r);
-  });
+    const draftRef = doc(db, "scarichi_draft", utenteId);
 
-  let righeHtml = "";
-  let totaleGenerale = 0;
+    // 🔥 PRENDO DOCUMENTO ORIGINALE COMPLETO
+    const snapshot = scarichiDelGiorno.find(d => d.id === riga.docId);
+    if (!snapshot) return;
 
-  // Ciclo sui documenti
-  for (const docId of Object.keys(righePerDoc)) {
-    const rows = righePerDoc[docId];
-    const refDoc = doc(db, "scarichi", docId);
-    const snapshot = await getDoc(refDoc);
-    const docData = snapshot.data();
+    const field = Array.isArray(snapshot.scarico) ? "scarico" : "carico";
 
-    const fotoUrl = docData?.fotoURL || null;
-    const fornitore = docData?.fornitore || rows[0].fornitore;
+    // 🔥 CLONE COMPLETO SENZA PERDITE
+    const fullCopy = (snapshot[field] || []).map(cerObj => ({
+      ...cerObj,
+      righe: (cerObj.righe || []).map(r => ({ ...r }))
+    }));
 
-    const subtotale = rows.reduce((sum, r) => sum + (r.costoTotale || 0), 0);
-    totaleGenerale += subtotale;
+    // 🔥 IDENTIFICO SOLO IL PUNTO SELEZIONATO (NON TAGLIO NULLA)
+    const selectedPointer = {
+      docId: riga.docId,
+      cer: riga.cer,
+      fir: riga.fir,
+      materiale: riga.materiale,
+      rIndex: riga.rIndex,
+      cerIndex: riga.cerIndex
+    };
 
-    // Intestazione fornitore
-    righeHtml += `<tr><td colspan="9" style="font-weight:bold; background:#ddd;">Fornitore: ${fornitore}</td></tr>`;
+    await setDoc(draftRef, {
+      [field]: fullCopy, // 🔥 SEMPRE COMPLETO
 
-    // Righe
-    rows.forEach(r => {
-      righeHtml += `
-        <tr>
-          <td>${r.ora}</td>
-          <td>${r.cer}</td>
-          <td>${r.materiale}</td>
-          <td>${r.peso}</td>
-          <td>${r.calo}</td>
-          <td>${r.netto}</td>
-          <td>${r.prezzoKg}</td>
-          <td>${r.costoTotale.toFixed(2)}</td>
-          <td>${r.listino}</td>
-        </tr>
-      `;
-    });
+      fornitore: snapshot.fornitore || "",
+      listino: snapshot.listino || "",
 
-    // Foto dal documento
-    righeHtml += `<tr><td colspan="9" style="text-align:center; padding:8px;">${
-      fotoUrl ? `<img src="${fotoUrl}" style="max-width:200px; max-height:200px; border:1px solid #ccc;"/>` 
-               : "Foto non disponibile"
-    }</td></tr>`;
+      tipoMovimento: riga.tipo || "scarico",
 
-    // Subtotale
-    righeHtml += `<tr>
-      <td colspan="8" style="text-align:right;font-weight:bold;">Subtotale €</td>
-      <td style="font-weight:bold;">${subtotale.toFixed(2)}</td>
-    </tr>`;
+      // 🔥 SOLO POINTER, NON STRUTTURA
+      selected: selectedPointer,
+
+      data: snapshot.data?.toDate?.() || new Date(),
+      dataScaricoStr: snapshot.dataScaricoStr || "",
+
+      oraStr: riga.ora || "",
+
+      fotoURL: Array.isArray(snapshot.fotoURL) ? snapshot.fotoURL : [],
+
+      inModifica: true,
+
+      docIdOriginale: riga.docId,
+      originalFir: riga.fir,
+
+      utente: utenteNome,
+
+      updatedAt: serverTimestamp(),
+      source: "gestione_scarichi_dettaglio"
+    }, { merge: true });
+
+  } catch (e) {
+    console.error("Errore salvaDraftScarico:", e);
   }
-
-  // Totale generale
-  const totaleHtml = `<div class="totale" style="margin-top:15px;font-weight:bold;font-size:14px;">
-    Totale Generale €: ${totaleGenerale.toFixed(2)}
-  </div>`;
-
-  const html = `
-    <html>
-      <head>
-        <title>Stampa Scarichi con Foto</title>
-        <style>
-          body { font-family: Arial; padding:20px; }
-          h2 { margin-bottom:10px; }
-          table { width:100%; border-collapse: collapse; margin-top:15px; }
-          th, td { border:1px solid #000; padding:6px; text-align:left; font-size:12px; }
-          th { background:#eee; }
-          .totale { font-weight:bold; font-size:14px; }
-        </style>
-      </head>
-      <body>
-        <h2>Scarichi del giorno ${dataLabel}</h2>
-        ${filtri}
-        <table>
-          <thead>
-            <tr>
-              <th>Ora</th>
-              <th>CER</th>
-              <th>Materiale</th>
-              <th>Peso</th>
-              <th>Calo</th>
-              <th>Netto</th>
-              <th>Prezzo €/Kg</th>
-              <th>Costo Totale €</th>
-              <th>Listino</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${righeHtml}
-          </tbody>
-        </table>
-        ${totaleHtml}
-      </body>
-    </html>
-  `;
-
-  const win = window.open("", "_blank");
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
 };
 
-  // ---------------------------  
-  // UI
+const modificaScarico = async (riga) => {
+  try {
+    const collectionName = riga.sourceCollection || "scarichi";
+    const ref = doc(db, collectionName, riga.docId);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      alert("Documento non trovato");
+      return;
+    }
+
+    const dati = snap.data();
+    const utenteUI = getUtenteReact();
+
+    // =========================
+    // NORMALIZZAZIONE DATA
+    // =========================
+    const normalizeDate = (d) => {
+      if (!d) return new Date();
+      if (d.toDate) return d.toDate();
+      if (d.seconds) return new Date(d.seconds * 1000);
+      return new Date(d);
+    };
+
+    const baseDate = normalizeDate(dati.data);
+    const safeDate = new Date(baseDate);
+
+    if (dati.ora) {
+      const [hh, mm] = dati.ora.split(":").map(Number);
+      safeDate.setHours(hh || 0, mm || 0, 0, 0);
+    }
+
+    // =========================
+    // FOTO CLEAN
+    // =========================
+    let fotoArray = [];
+
+    const sorgenti = [
+      dati.fotoURL,
+      dati.foto,
+      dati.fotoScarichi,
+      riga.fotoURL,
+      riga.foto
+    ];
+
+    for (const src of sorgenti) {
+      if (!src) continue;
+
+      if (Array.isArray(src)) {
+        fotoArray.push(...src);
+      } else if (typeof src === "string" && src.trim()) {
+        fotoArray.push(src);
+      }
+    }
+
+    fotoArray = [...new Set(fotoArray)].filter(
+      f => typeof f === "string" && f.startsWith("http")
+    );
+
+    const fileName =
+      riga.fileName ||
+      dati.fileName ||
+      dati.nomeFile ||
+      "";
+
+    const sitoWeb =
+      riga.sitoWeb ||
+      dati.sitoWeb ||
+      dati.website ||
+      "";
+
+    // =========================
+    // BEFORE SNAPSHOT
+    // =========================
+    const beforeSnapshot = structuredClone(dati);
+
+    // =========================
+    // COSTRUZIONE UPDATE SICURO (NO OVERWRITE TOTALE)
+    // =========================
+    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
+
+    const updatedField = (dati[field] || []).map((cerObj, cIdx) => {
+      if (cIdx !== riga.cerIndex) return cerObj;
+
+      return {
+        ...cerObj,
+        righe: (cerObj.righe || []).map((r, rIdx) => {
+          if (rIdx !== riga.rIndex) return r;
+
+          const peso = Number(riga.peso ?? r.peso ?? 0);
+          const calo = Number(riga.calo ?? r.calo ?? 0);
+          const netto = Number(riga.netto ?? (peso - calo));
+          const prezzo = Number(riga.prezzoKg ?? r.prezzoKg ?? 0);
+
+          return {
+            ...r,
+            peso,
+            calo,
+            netto,
+            prezzoKg: prezzo,
+            prezzoAcquisto: field === "scarico" ? prezzo : r.prezzoAcquisto,
+            prezzoVendita: field === "carico" ? prezzo : r.prezzoVendita,
+            costoTotale: netto * prezzo
+          };
+        }),
+        fir: riga.fir ?? cerObj.fir,
+        cer: riga.cer ?? cerObj.cer
+      };
+    });
+
+    const updatePayload = {
+      [field]: updatedField,
+      data: safeDate,
+      fotoURL: fotoArray,
+      fileName,
+      sitoWeb,
+      lastUpdate: serverTimestamp()
+    };
+
+    // =========================
+    // UPDATE DOC (NON SETDOC)
+    // =========================
+    await updateDoc(ref, updatePayload);
+
+    // =========================
+    // LOG
+    // =========================
+ await scriviLog({
+  pagina: "gestione-scarichi-dettaglio",
+  evento: "AGGIORNA_SCARICO",
+  riferimento: {
+    collezione: collectionName,
+    documentoId: riga.docId
+  },
+  before: beforeSnapshot,
+  after: updatePayload,
+  utente: getUtenteReact(),
+  ripristinabile: true
+});
+
+    // =========================
+    // NAVIGAZIONE STABILE
+    // =========================
+    await salvaDraftScarico({
+  ...riga,
+  fotoURL: fotoArray
+});
+    navigate("/scarichi");
+
+  } catch (error) {
+    console.error("Errore modifica scarico:", error);
+    alert("Errore durante la modifica");
+  }
+};
+
+  // ---------- FUNZIONE STAMPA ----------
+
+
+
+
+const handleStampa = async () => {
+  if (righeFiltrate.length === 0)
+    return alert("Nessuna riga da stampare");
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  // 🔥 ORDINAMENTO SOLO PER ORA (DESC)
+  const parseOra = (ora) => {
+    if (!ora) return -1;
+    const [h, m] = ora.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const righeOrdinate = [...righeFiltrate].sort(
+    (a, b) => parseOra(b.ora) - parseOra(a.ora)
+  );
+
+  const carichi = righeOrdinate.filter(
+    (r) => (r.tipo || "").toLowerCase() === "carico"
+  );
+
+  const scarichi = righeOrdinate.filter(
+    (r) => (r.tipo || "").toLowerCase() === "scarico"
+  );
+
+  const totCarichiNetto = carichi.reduce(
+    (t, r) => t + (Number(r.netto) || 0),
+    0
+  );
+
+  const totCarichiRicavi = carichi.reduce(
+    (t, r) =>
+      t + (Number(r.netto) || 0) * (Number(r.prezzoKg) || 0),
+    0
+  );
+
+
+
+  const mediaCarichi = totCarichiNetto
+    ? totCarichiRicavi / totCarichiNetto
+    : 0;
+
+  const totScarichiNetto = scarichi.reduce(
+    (t, r) => t + (Number(r.netto) || 0),
+    0
+  );
+
+  const totScarichiCosti = scarichi.reduce(
+    (t, r) =>
+      t + (Number(r.netto) || 0) * (Number(r.prezzoKg) || 0),
+    0
+  );
+
+  const mediaScarichi = totScarichiNetto
+    ? totScarichiCosti / totScarichiNetto
+    : 0;
+
+  const utileScarichi = -totScarichiCosti;
+  const utileCarichi = totCarichiRicavi;
+  const utileFinale = utileCarichi + utileScarichi;
+
+  const { pdf, startY } = await PdfHeader();
+
+  let y = startY -25;
+
+  pdf.setFontSize(16);
+
+  
+  pdf.text("Riepilogo Movimenti "+ dataLabel, 14, y);
+  y += 10;
+
+  if (carichi.length > 0) {
+    pdf.setFontSize(13);
+    pdf.text("CARICHI", 14, y);
+    y += 5;
+
+    autoTable(pdf, {
+      startY: y,
+      head: [["Ora", "Destinatario", "CER", "FIR", "Materiale", "Netto", "€/Kg", "Totale", "Listino"]],
+      body: carichi.map((r) => [
+        r.ora,
+        r.fornitore,
+        r.cer,
+        r.fir || "",
+        r.materiale,
+        r.netto,
+        Number(r.prezzoVendita || r.prezzoKg || 0).toFixed(2),
+        (Number(r.netto || 0) * Number(r.prezzoVendita || r.prezzoKg || 0)).toFixed(2),
+        r.listino || "",
+      ]),
+      theme: "grid",
+      styles: { fontSize: 9 },
+    });
+
+    y = pdf.lastAutoTable.finalY + 5;
+
+    pdf.text(
+      `Netto: ${totCarichiNetto.toFixed(2)} Kg | Media: ${mediaCarichi.toFixed(2)} €/Kg | Ricavi: ${totCarichiRicavi.toFixed(2)} € | UTILE: ${utileCarichi.toFixed(2)} €`,
+      14,
+      y
+    );
+
+    y += 10;
+  }
+
+  if (scarichi.length > 0) {
+    pdf.setFontSize(13);
+    pdf.text("SCARICHI", 14, y);
+    y += 5;
+
+    autoTable(pdf, {
+      startY: y,
+      head: [["Ora", "Fornitore", "CER", "FIR", "Materiale", "Netto", "€/Kg", "Totale", "Listino"]],
+      body: scarichi.map((r) => [
+        r.ora,
+        r.fornitore,
+        r.cer,
+        r.fir || "",
+        r.materiale,
+        r.netto,
+        Number(r.prezzoAcquisto || r.prezzoKg || 0).toFixed(2),
+        (Number(r.netto || 0) * Number(r.prezzoAcquisto || r.prezzoKg || 0)).toFixed(2),
+        r.listino || "",
+      ]),
+      theme: "grid",
+      styles: { fontSize: 9 },
+    });
+
+    y = pdf.lastAutoTable.finalY + 5;
+
+    pdf.text(
+      `Netto: ${totScarichiNetto.toFixed(2)} Kg | Media: ${mediaScarichi.toFixed(2)} €/Kg | Costi: ${totScarichiCosti.toFixed(2)} € | UTILE: ${utileScarichi.toFixed(2)} €`,
+      14,
+      y
+    );
+
+    y += 10;
+  }
+
+  if (carichi.length && scarichi.length) {
+    pdf.setFontSize(14);
+    pdf.text(`UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`, 14, y + 10);
+  }
+
+  pdf.save("movimenti.pdf");
+};
+
+
+const nessunMovimento =
+  righeCarichiAll.length === 0 && righeScarichiAll.length === 0;
+const trovaRigaIndex = (riga) =>
+  righeOrdinati.findIndex(x =>
+    x.docId === riga.docId &&
+    x.cerIndex === riga.cerIndex &&
+    x.rIndex === riga.rIndex
+  );
+  // ---------- RENDER ----------
   return (
     <div className="gestione-scarichi-container">
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
         <button onClick={goHome}>🏠 Dashboard</button>
-       <button onClick={handleLogout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
-          
+        <button onClick={handleLogout}>🚪Logout ({getUtenteReact()})</button>
       </div>
 
-      <div style={{marginBottom: 10}}>
-        <button onClick={goBack}>← Torna agli Scarichi</button>
-        <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
-      </div>
-
- <h2
-  style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between"
-  }}
->
-  <span>Scarichi del giorno {dataLabel}</span>
-
-  <div style={{ display: "flex", gap: "10px" }}>
-    <button
-      onClick={handleStampa}
-      style={{
-        padding: "6px 12px",
-        cursor: "pointer",
-        fontSize: "14px"
-      }}
-    >
-      🖨 Stampa
-    </button>
-
-    <button
-      onClick={handleStampaConFoto}
-      style={{
-        padding: "6px 12px",
-        cursor: "pointer",
-        fontSize: "14px"
-      }}
-      title="Stampa con foto"
-    >
-      📸 Stampa con foto
-    </button>
-  </div>
-</h2>
-
+      <div style={{marginBottom:10}}>
+  <h3>Lista movimenti giorno {dataLabel}</h3>  {/* ← nuova intestazione */}
+  <button onClick={goBack}>
+    ← Torna ai Carichi / Scarichi
+  </button>
+  <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
+</div>
 
       <div style={{margin:"10px 0", display:"flex", gap:"10px"}}>
-        <label>
-          Ora:
-          <select value={filtroOra} onChange={e=>{ setFiltroOra(e.target.value); setCurrentPage(1); }}>
-            {valoriOra.map(v => <option key={v} value={v}>{v}</option>)}
+        <label>Utente: 
+          <select value={filtroUtente} onChange={e=>{setFiltroUtente(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}}>
+            {valoriUtente.map(v=><option key={v} value={v}>{v}</option>)}
           </select>
         </label>
-        <label>
-          Fornitore:
-          <select value={filtroFornitore} onChange={e=>{ setFiltroFornitore(e.target.value); setCurrentPage(1); }}>
-            {valoriFornitore.map(v => <option key={v} value={v}>{v}</option>)}
+        <label>Ora:
+          <select value={filtroOra} onChange={e=>{setFiltroOra(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}}>
+            {valoriOra.map(v=><option key={v} value={v}>{v}</option>)}
           </select>
         </label>
-        <label>
-          CER:
-          <select value={filtroCER} onChange={e=>{ setFiltroCER(e.target.value); setCurrentPage(1); }}>
-            {valoriCER.map(v => <option key={v} value={v}>{v}</option>)}
+       <label>{getLabelFornDest()}:
+  <select value={filtroFornitore} onChange={e=>{setFiltroFornitore(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}}>
+    {valoriFornitore.map(v=><option key={v} value={v}>{v}</option>)}
+  </select>
+</label>
+        <label>CER:
+          <select value={filtroCER} onChange={e=>{setFiltroCER(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}}>
+            {valoriCER.map(v=><option key={v} value={v}>{v}</option>)}
           </select>
         </label>
-        <label>
-          Listino:
-          <select value={filtroListino} onChange={e=>{ setFiltroListino(e.target.value); setCurrentPage(1); }}>
-            {valoriListino.map(v => <option key={v} value={v}>{v}</option>)}
+        <label>Listino:
+          <select value={filtroListino} onChange={e=>{setFiltroListino(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}}>
+            {valoriListino.map(v=><option key={v} value={v}>{v}</option>)}
           </select>
         </label>
+        <label>FIR:
+  <select value={filtroFIR} onChange={e => { setFiltroFIR(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1); }}>
+    {valoriFIR.map(v => <option key={v} value={v}>{v || "(vuoto)"}</option>)}
+  </select>
+</label>
+
+<label>Materiale:
+  <select value={filtroMateriale} onChange={e => { setFiltroMateriale(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1); }}>
+    {valoriMateriale.map(v => <option key={v} value={v}>{v}</option>)}
+  </select>
+</label>
+<label>Tipo:
+  <select
+    value={filtroTipo}
+    onChange={e => { setFiltroTipo(e.target.value); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1); }}
+  >
+    {valoriTipo.map(v => <option key={v} value={v}>{v}</option>)}
+  </select>
+</label>
+        <label>Mostra:
+          <select value={rowsPerPage} onChange={e=>{setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value)); setCurrentPageCarichi(1);
+setCurrentPageScarichi(1);}} style={{marginLeft:5}}>
+            <option value={6}>6</option><option value={12}>12</option><option value={24}>24</option><option value="tutte">Tutte</option>
+          </select> righe
+        </label>
+        <button onClick={handleStampa} style={{marginLeft:10}}>🖨 Stampa</button>
       </div>
+{nessunMovimento && (
+  <div style={{ marginTop: 40, textAlign: "center", fontSize: 18 }}>
+    Nessun movimento per questo giorno
+  </div>
+)}
+{/* ===================== CARICHI ===================== */}
+{righeCarichiAll.length > 0 && (
+   <>
+<table className="tabella-scarichi">
+<thead>
+  <tr>
+    <th>Ora</th>
+    <th>Destinatario</th>
+    <th>FIR</th>
+    <th>CER</th>
+    <th>Materiale</th>
+    <th>Peso</th>
+    <th>Calo</th>
+    <th>Netto</th>
+    <th>€/Kg</th>
+    <th>Ricavo Totale</th>
+    <th>Azioni</th>
+  </tr>
+</thead>
+<tbody>
+  {paginatedCarichi.map((r) => (
+    <tr key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}>
+      <td>{r.ora}</td>
+      <td>{r.fornitore}</td>
+      <td>{r.fir}</td>
+      <td>{r.cer}</td>
+      <td>{r.materiale}</td>
+      <td>{r.peso}</td>
+      <td>{r.calo}</td>
+      <td>{r.netto}</td>
+      <td>{r.prezzoKg}</td>
+      <td>{((r.netto || 0) * (r.prezzoKg || 0)).toFixed(2)}</td>
+      <td>
+        <button onClick={() => selezionaRiga(r, "carico")}>✏ Modifica</button>
+        <button onClick={() => handleStampaScaricoRiga(r)}>
+    🖨 Stampa
+  </button>
 
-      <div style={{margin:"10px 0"}}>
-        Mostra
-        <select value={rowsPerPage} onChange={e=>{
-          setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value));
-          setCurrentPage(1);
-        }} style={{marginLeft:10}}>
-          <option value={6}>6</option>
-          <option value={12}>12</option>
-          <option value={24}>24</option>
-          <option value="tutte">Tutte</option>
-        </select> righe
-      </div>
+  <button onClick={() => modificaScarico(r)}>
+    🔧 Apri originale
+  </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
+</table>
+<div style={{ margin: "10px 0" }}>
+  {currentPageCarichi > 1 && (
+    <button onClick={() => setCurrentPageCarichi(p => p - 1)}>◀</button>
+  )}
 
-      <table className="tabella-scarichi">
-        <thead>
-          <tr>
-            <th>Ora</th>
-            <th>Fornitore</th>
-            <th>CER</th>
-            <th>Materiale</th>
-            <th>Peso</th>
-            <th>Calo</th>
-            <th>Netto</th>
-            <th>Prezzo €/Kg</th>
-            <th>Costo Totale €</th>
-            <th>Listino</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedRighe.map((r,i)=>(
-            <tr
-              key={i}
-              onClick={()=>selezionaRiga(i)}
-              style={{
-                cursor:"pointer",
-                background: righe.indexOf(r)===selectedIndex ? "#ffe7a3" : "transparent"
-              }}
-            >
-              <td>{r.ora}</td>
-              <td>{r.fornitore}</td>
-              <td>{r.cer}</td>
-              <td>{r.materiale}</td>
-              <td>{r.peso}</td>
-              <td>{r.calo}</td>
-              <td>{r.netto}</td>
-              <td>{r.prezzoKg}</td>
-              <td>{r.costoTotale.toFixed(2)}</td>
-              <td>{r.listino}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  {Array.from({ length: totalPagesCarichi }, (_, i) => (
+    <button
+      key={i}
+      style={{ fontWeight: i + 1 === currentPageCarichi ? "bold" : "normal" }}
+      onClick={() => setCurrentPageCarichi(i + 1)}
+    >
+      {i + 1}
+    </button>
+  ))}
 
-      {rowsPerPage !== "tutte" && totalPages>1 && (
-        <div style={{marginTop:10}}>
-          <button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}>◀</button>
-          <span style={{margin:"0 10px"}}>{currentPage} / {totalPages}</span>
-          <button disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}>▶</button>
-        </div>
-      )}
+  {currentPageCarichi < totalPagesCarichi && (
+    <button onClick={() => setCurrentPageCarichi(p => p + 1)}>▶</button>
+  )}
+</div>
+<div style={{ margin: "10px 0", fontWeight: "bold" }}>
+  Peso Netto Totale: {totCarichiNetto.toFixed(2)} |
+  €/Kg medio: {mediaCarichi.toFixed(2)} |
+  Ricavi Totali: {totCarichiRicavi.toFixed(2)}
+</div>
+</>
+)}
+{/* ===================== SCARICHI ===================== */}
+{righeScarichiAll.length > 0 && (
+  <>
+<table className="tabella-scarichi">
+<thead>
+  <tr>
+    <th>Ora</th>
+    <th>Fornitore</th>
+    <th>FIR</th>
+    <th>CER</th>
+    <th>Materiale</th>
+    <th>Peso</th>
+    <th>Calo</th>
+    <th>Netto</th>
+    <th>€/Kg</th>
+    <th>Costo Totale</th>
+    <th>Azioni</th>
+  </tr>
+</thead>
+<tbody>
+  {paginatedScarichi.map((r) => (
+    <tr key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}>
+      <td>{r.ora}</td>
+      <td>{r.fornitore}</td>
+      <td>{r.fir}</td>
+      <td>{r.cer}</td>
+      <td>{r.materiale}</td>
+      <td>{r.peso}</td>
+      <td>{r.calo}</td>
+      <td>{r.netto}</td>
+      <td>{r.prezzoKg}</td>
+      <td>{((r.netto || 0) * (r.prezzoKg || 0)).toFixed(2)}</td>
+      <td>
+        <button onClick={() => selezionaRiga(r, "scarico")}>✏ Modifica</button>
+        <button onClick={() => handleStampaScaricoRiga(r)}>
+    🖨 Stampa
+  </button>
+
+  <button onClick={() => modificaScarico(r)}>
+    🔧 Apri originale
+  </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
+</table>
+<div style={{ margin: "10px 0" }}>
+  {currentPageScarichi > 1 && (
+    <button onClick={() => setCurrentPageScarichi(p => p - 1)}>◀</button>
+  )}
+
+  {Array.from({ length: totalPagesScarichi }, (_, i) => (
+    <button
+      key={i}
+      style={{ fontWeight: i + 1 === currentPageScarichi ? "bold" : "normal" }}
+      onClick={() => setCurrentPageScarichi(i + 1)}
+    >
+      {i + 1}
+    </button>
+  ))}
+
+  {currentPageScarichi < totalPagesScarichi && (
+    <button onClick={() => setCurrentPageScarichi(p => p + 1)}>▶</button>
+  )}
+</div>
+<div style={{ margin: "10px 0", fontWeight: "bold" }}>
+  Peso Netto Totale: {totScarichiNetto.toFixed(2)} |
+  €/Kg medio: {mediaScarichi.toFixed(2)} |
+  Costi Totali: {totScarichiCosti.toFixed(2)}
+</div>
+</>
+)}
+{/* ===================== UTILE ===================== */}
+<div style={{ marginTop: 20, fontSize: 18, fontWeight: "bold" }}>
+  UTILE: {utile.toFixed(2)}
+</div>
+
+   
 
       {editor && (
-        <div ref={editorRef} style={{marginTop:30,borderTop:"2px solid #ccc",paddingTop:20, background:"#f9f9f9", paddingBottom:20}}>
-          <h3>Modifica riga selezionata - {editor.fornitore} - {editor.materiale}</h3>
-          <button onClick={eliminaRiga} style={{marginBottom:10, backgroundColor:"#f44336", color:"white"}}>Elimina riga</button>
-          {["peso","calo","netto","prezzoKg"].map(campo=>(
-            <label key={campo} style={{display:"block",marginTop:10}}>
-              {campo==="prezzoKg"?"Prezzo €/Kg":campo.toUpperCase()}:
-              <input
-                type="number"
-                step={campo==="prezzoKg"?0.01:1}
-                value={editor[campo]}
-                onChange={e=>updateEditor(campo,e.target.value)}
-                style={{backgroundColor: campoModificato(campo) ? "#fff3a0" : "white", marginLeft:10}}
-              />
-            </label>
-          ))}
-          <label style={{display:"block",marginTop:10}}>
-            Costo Totale €:
-            <input value={editor.costoTotale.toFixed(2)} readOnly style={{marginLeft:10}}/>
-          </label>
-          <div style={{marginTop:15}}>
-            <button onClick={salvaModifiche}>Salva modifiche</button>
-            <button onClick={annullaModifiche} style={{marginLeft:10}}>Annulla</button>
+        <div ref={editorRef} style={{marginTop:20, border:"1px solid #ccc", padding:10, background:"#f9f9f9"}}>
+         <h3>
+  Modifica riga ({editor?.tipo === "carico" ? "Carico" : "Scarico"})
+</h3>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+ <label> Data:
+  <DatePicker
+    selected={editor.data}
+    onChange={(date) => setEditor(prev => ({ ...prev, data: date }))}
+    dateFormat="dd MMM yyyy"
+    locale="it"
+  />
+</label>
+
+<label> Ora:
+<DatePicker
+  selected={
+    editor.data
+      ? (() => {
+          const d = new Date(editor.data);
+
+          if (editor.ora) {
+            const [hh, mm] = editor.ora.split(":").map(Number);
+            d.setHours(hh, mm, 0, 0);
+          }
+
+          return d;
+        })()
+      : new Date()
+  }
+  onChange={(time) => {
+    const hh = time.getHours();
+    const mm = time.getMinutes();
+
+   updateEditor("ora", `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  }}
+  showTimeSelect
+  showTimeSelectOnly
+  timeIntervals={15}
+  timeFormat="HH:mm"
+  dateFormat="HH:mm"
+/>
+</label>
+</div>
+ <label>Netto: <input type="number" value={editor.netto} onChange={e=>updateEditor("netto", e.target.value)} /></label>
+          <label>Calo: 
+  <input type="number" value={editor.calo} onChange={e=>updateEditor("calo", e.target.value)} />
+</label>
+
+          <label>€/Kg: <input type="number" value={editor.prezzoKg} onChange={e=>updateEditor("prezzoKg", e.target.value)} /></label>
+          <label>FIR: 
+  <input
+    type="text"
+    value={editor.fir || ""}
+    onChange={e => updateEditor("fir", e.target.value.toUpperCase())}
+    style={{ textTransform: "uppercase" }}
+  />
+</label>
+          <label>Listino: 
+             <select value={editor.listino} onChange={e => updateEditor("listino", e.target.value)}>
+                {Object.keys(listini).map(l => <option key={l} value={l}>{l}</option>)}  </select></label>         
+          <div style={{marginTop:10}}>
+
+
+<button
+  onClick={async () => {
+    if (!editor) return;
+    try {
+      const collezione = editor.sourceCollection || (editor.tipo === "carico" ? "carichi" : "scarichi");
+      const ref = doc(db, collezione, editor.docId);
+console.log("EDITOR PRIMA SAVE:", editor);
+      // 🔥 SALVATAGGIO NEL DB
+      await salvaModifiche({ docRef: ref, editor, tipoMovimento: editor.tipo });
+
+      // 🔥 REFRESH DATI
+      setRefresh(prev => prev + 1);
+
+      // 🔥 VERIFICA SE CI SONO RIGHE FILTRATE DOPO L'UPDATE
+      const snapshotScarichi = await getDocs(collection(db, "scarichi"));
+      const snapshotCarichi = await getDocs(collection(db, "carichi"));
+      const tuttiDocs = [
+        ...snapshotScarichi.docs.map(d => ({ id: d.id, ...d.data() })),
+        ...snapshotCarichi.docs.map(d => ({ id: d.id, ...d.data() }))
+      ];
+
+      const giornoParsedLocal = parseData(giornoSelezionato);
+      const start = new Date(giornoParsedLocal); start.setHours(0,0,0,0);
+      const end = new Date(giornoParsedLocal); end.setHours(23,59,59,999);
+
+      const datiGiorno = tuttiDocs.filter(d => {
+        if (!d.data) return false;
+        const timestamp = d.data.toDate ? d.data.toDate() : new Date(d.data);
+        return timestamp >= start && timestamp <= end;
+      });
+
+      if (datiGiorno.length === 0) {
+        // 🔥 NESSUNA RIGA RIMASTA → TORNA ALLA PAGINA PRECEDENTE
+        goBack();
+      } else {
+        // 🔥 CI SONO ANCORA RIGHE → RIMANI NEL DETTAGLIO
+        setEditor(null);
+        setOriginalEditor(null);
+        setSelectedIndex(null);
+      }
+
+    } catch (e) {
+      console.error(e);
+      setErrori(prev => [...prev, e.message]);
+    }
+  }}
+  disabled={
+    !campoModificato("peso") &&
+    !campoModificato("calo") &&
+    !campoModificato("netto") &&
+    !campoModificato("prezzoKg") &&
+    !campoModificato("listino") &&
+    !campoModificato("fir") &&
+    !campoModificato("data") &&
+    !campoModificato("ora")
+  }
+>
+  💾 Salva modifiche
+</button>
+ <button onClick={annullaModifiche} style={{marginLeft:5}}>✖ Annulla</button>
+            <button
+  onClick={() =>
+    eliminaRiga(
+      editor,
+      editor.cerIndex,
+      editor.rIndex
+    )
+  }
+  style={{ marginLeft: 5 }}
+>
+  🗑 Elimina
+</button>
           </div>
         </div>
       )}
 
       {errori.length>0 && (
-        <div style={{marginTop:20,color:"red"}}>
-          {errori.map((e,i)=><div key={i}>{e}</div>)}
+        <div style={{marginTop:10, color:"red"}}>
+          <h4>Errore/i:</h4>
+          <ul>{errori.map((e,i)=><li key={i}>{e}</li>)}</ul>
         </div>
       )}
     </div>
   );
 };
-
 export default GestioneScarichiDettaglio;

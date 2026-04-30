@@ -1,24 +1,31 @@
 // src/components/AdminDashboard.js
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+
 const AdminDashboard = ({ logout }) => {
   const navigate = useNavigate();
+  const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
 
+
+if (!currentUser) return null;
   return (
     <div className="admin-dashboard-container">
       <div className="admin-header">
-        <h2>Strumenti di Amministrazione</h2> 
-        <button onClick={logout}>🚪Logout ({auth.currentUser?.email || "sconosciuto"})</button>
+        <h2>Gestione Carico Scarico Metalli</h2> 
+        
+        {/* 🔹 Mostra username o email, mai auth.currentUser */}
+        <button onClick={logout}>
+          🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </button>
       </div>
 
       <div className="admin-actions">
         <button onClick={() => navigate("/scarichi")}>
-          Nuovo Scarico / Carico
+          Inserisci Scarico/Carico
         </button>
 
         <button onClick={() => navigate("/gestione-scarichi")}>
-          Gestione Scarichi con Prezzi
+          Gestione Scarichi/Carichi 
         </button>
 
         <button onClick={() => navigate("/gestione-utenti")}>
@@ -29,17 +36,23 @@ const AdminDashboard = ({ logout }) => {
           Gestione Listini
         </button>
 
-        <button onClick={() => navigate("/gestione-fornitori")}>
-          Gestione Fornitori
+        <button onClick={() => navigate("/fornitori")}>
+          Gestione Controparti
         </button>
 
         <button onClick={() => navigate("/gestione-cer")}>
           Gestione Codici C.E.R.
         </button>
 
-        {/* ✅ NUOVO PULSANTE LOG */}
         <button onClick={() => navigate("/gestione-log")}>
           Gestione Log Operazioni
+        </button>
+
+        <button 
+          onClick={() => navigate("/configurazioni-generali")}
+          style={{ backgroundColor: "#4CAF50", color: "#fff", marginTop: "10px" }}
+        >
+          Configurazione Generale
         </button>
       </div>
     </div>
