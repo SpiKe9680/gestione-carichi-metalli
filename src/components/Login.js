@@ -4,10 +4,12 @@ import { db, auth, loginAdminFirebase } from "../firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
-
+import { useEffect } from "react";
+import { getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 const Login = () => {
   const navigate = useNavigate();
-
+const [logoBase64, setLogoBase64] = useState(null);
   const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -97,6 +99,37 @@ const Login = () => {
     return found || null;
   };
 
+const loadConfigAzienda = async () => {
+  await loginAdminFirebase(); // 👈 STESSO IDENTICO PASSAGGIO
+
+  const docRef = doc(db, "configurazioni", "datiAzienda");
+  const snap = await getDoc(docRef);
+
+  if (!snap.exists()) return null;
+
+  return snap.data();
+};
+
+useEffect(() => {
+  const loadLogo = async () => {
+    try {
+      console.log("🚀 Carico config azienda...");
+
+      const data = await loadConfigAzienda();
+
+      console.log("✅ CONFIG:", data);
+
+      if (data?.logoBase64) {
+        setLogoBase64(data.logoBase64);
+      }
+
+    } catch (e) {
+      console.error("💥 errore logo:", e);
+    }
+  };
+
+  loadLogo();
+}, []);
   // =============================
   // CAMBIO USERNAME
   // =============================
@@ -186,7 +219,16 @@ const Login = () => {
 
   return (
     <div style={{ padding: 20, maxWidth: 400, margin: "0 auto" }}>
-      <h2>Login</h2>
+   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+  <h2 style={{ margin: 0 }}>Login</h2>
+  {logoBase64 && (
+    <img
+      src={`data:image/png;base64,${logoBase64}`}
+      alt="logo"
+      style={{ height: 190 }}
+    />
+  )}
+</div>
 
       {message && <p style={{ color: "red" }}>{message}</p>}
 
@@ -211,16 +253,15 @@ const Login = () => {
       </button>
 
       {/* AZIONI EXTRA */}
-      <div style={{ marginTop: 20 }}>
-        <button onClick={() => setMode("username")} style={{ marginRight: 10 }}>
+    
+        <button onClick={() => setMode("username")} style={{ width: "100%", padding: 10 }}>
           Cambia Username
         </button>
 
-        <button onClick={() => setMode("password")}>
+        <button onClick={() => setMode("password")} style={{ width: "100%", padding: 10 }}> 
           Cambia Password
         </button>
-      </div>
-
+    
       {/* MODIFICA USERNAME */}
       {mode === "username" && (
         <div style={{ marginTop: 20 }}>
