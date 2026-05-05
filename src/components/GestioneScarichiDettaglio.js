@@ -1,7 +1,7 @@
 // src/components/GestioneScarichiDettaglio.js
 import React, { useEffect, useState, useRef } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, addDoc, setDoc, serverTimestamp,Timestamp  } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { FiUpload, FiDownload } from 'react-icons/fi';
@@ -605,78 +605,97 @@ const base64data = await new Promise((resolve, reject) => {
     alert("Errore generazione PDF, vedi console");
   }
 };
+
+
 async function salvaModifiche({ docRef, editor }) {
   try {
+    console.log("🟡 START salvaModifiche");
+
     const snap = await getDoc(docRef);
     if (!snap.exists()) throw new Error("Documento non trovato");
 
     const dati = snap.data();
+
     const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
 
-    const beforeSnapshot = structuredClone(dati);
+    const normalize = (v) =>
+      (v ?? "")
+        .toString()
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, " ");
 
-    const movimentoArray = (dati[field] || []).map(cerObj => {
+    console.log("📦 FIELD:", field);
+    console.log("📦 EDITOR INPUT:", editor);
 
-      const righeAggiornate = (cerObj.righe || []).map(r => {
+    const scarichiAggiornati = (dati[field] || []).map((cerObj, cerIndex) => {
 
-        // MATCH LOGICO (non index-based)
-        const isTarget =
-          cerObj.cer === editor.cer &&
-          r.materiale === editor.materiale &&
-          Number(r.netto) === Number(editor.netto);
+      const righeAggiornate = (cerObj.righe || []).map((r, rIndex) => {
 
-        if (!isTarget) return r;
+        // 🔥 MATCH STABILE: SOLO INDICI (NON FIR, NON CER, NON MATERIALI)
+        const match =
+          cerIndex === editor.cerIndex &&
+          rIndex === editor.rIndex;
 
-        const peso = Number(editor.peso ?? r.peso ?? 0);
-        const calo = Number(editor.calo ?? r.calo ?? 0);
+        if (!match) return r;
+
+        const peso = Number(editor.peso ?? r.peso);
+        const calo = Number(editor.calo ?? r.calo);
         const netto = peso - calo;
-        const prezzo = Number(editor.prezzoKg ?? r.prezzoKg ?? 0);
+        const prezzoKg = Number(editor.prezzoKg ?? r.prezzoKg);
 
         return {
           ...r,
           peso,
           calo,
           netto,
-          prezzoKg: prezzo,
-          prezzoAcquisto: editor.tipo === "scarico" ? prezzo : r.prezzoAcquisto,
-          prezzoVendita: editor.tipo === "carico" ? prezzo : r.prezzoVendita,
-          costoTotale: netto * prezzo
+          prezzoKg,
+
+          prezzoAcquisto:
+            editor.tipo === "scarico"
+              ? prezzoKg
+              : r.prezzoAcquisto,
+
+          prezzoVendita:
+            editor.tipo === "carico"
+              ? prezzoKg
+              : r.prezzoVendita,
+
+          costoTotale: netto * prezzoKg
         };
       });
 
       return {
         ...cerObj,
-        righe: righeAggiornate
+        righe: righeAggiornate,
+
+        // FIR aggiornato SOLO COME DATO, NON COME CHIAVE
+        fir: normalize(editor.fir) || cerObj.fir
       };
     });
 
-    const updatedSnapshot = {
-      ...dati,
-      [field]: movimentoArray,
-      data: editor.data || dati.data,
-      listino: editor.listino
+    const payload = {
+      [field]: scarichiAggiornati,
+
+      ...(editor.data ? { data: editor.data } : {}),
+
+      lastUpdate: new Date(),
+
+      listino: editor.listino ?? dati.listino
     };
 
-    await updateDoc(docRef, updatedSnapshot);
+    console.log("💾 PAYLOAD:", payload);
 
-    await scriviLog({
-      pagina: "gestione-scarichi-dettaglio",
-      evento: `AGGIORNA_${editor.tipo?.toUpperCase()}`,
-      riferimento: {
-        collezione: docRef.path.includes("carichi") ? "carichi" : "scarichi",
-        documentoId: docRef.id
-      },
-      before: beforeSnapshot,
-      after: updatedSnapshot,
-      utente: getUtenteReact(),
-      ripristinabile: true
-    });
+    await updateDoc(docRef, payload);
+
+    console.log("✅ WRITE COMPLETATO");
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ ERRORE salvaModifiche:", err);
     throw err;
   }
 }
+
 const eliminaRiga = async (riga) => {
   try {
     const collezione = riga.sourceCollection || "scarichi";

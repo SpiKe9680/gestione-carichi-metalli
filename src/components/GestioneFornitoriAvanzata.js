@@ -1,4 +1,5 @@
 // src/components/GestioneContropartiAvanzata.js
+
 import React, { useState, useEffect } from "react";
 import {
   collection,
@@ -6,7 +7,7 @@ import {
   addDoc,
   doc,
   updateDoc,
-  deleteDoc
+  deleteDoc, writeBatch, query, where
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
@@ -50,6 +51,105 @@ const getUtenteReact = () => {
     currentUser.username || currentUser.email 
   );
 };
+
+const safeRenameControparte = async (fornitore) => {
+  try {
+    const nuovoNomeRaw = prompt(
+      `Nuovo nome per "${fornitore.nome}":`,
+      fornitore.nome
+    );
+
+    if (!nuovoNomeRaw) return;
+
+    const nuovoNome = nuovoNomeRaw.trim();
+    if (!nuovoNome) return;
+
+    const oldNome = fornitore.nome;
+
+    // 🔥 1. CHECK DUPLICATO
+    const dup = fornitori.find(
+      f => f.nome?.toLowerCase().trim() === nuovoNome.toLowerCase().trim()
+    );
+
+    if (dup && dup.id !== fornitore.id) {
+      alert("⚠️ Esiste già una controparte con questo nome");
+      return;
+    }
+
+    const confirm = window.confirm(
+      `Confermi cambio nome?\n\n${oldNome} ➜ ${nuovoNome}\n\nVerranno aggiornati carichi e scarichi.`
+    );
+
+    if (!confirm) return;
+
+    const batch = writeBatch(db);
+
+    let updatedCarichi = 0;
+    let updatedScarichi = 0;
+
+    // 🔥 2. UPDATE FORNITORE
+    batch.update(doc(db, "fornitori", fornitore.id), {
+      nome: nuovoNome
+    });
+
+    // 🔥 3. CARICHI
+    const carSnap = await getDocs(
+      query(collection(db, "carichi"), where("fornitore", "==", oldNome))
+    );
+
+    carSnap.forEach(docu => {
+      batch.update(doc(db, "carichi", docu.id), {
+        fornitore: nuovoNome
+      });
+      updatedCarichi++;
+    });
+
+    // 🔥 4. SCARICHI
+    const scarSnap = await getDocs(
+      query(collection(db, "scarichi"), where("fornitore", "==", oldNome))
+    );
+
+    scarSnap.forEach(docu => {
+      batch.update(doc(db, "scarichi", docu.id), {
+        fornitore: nuovoNome
+      });
+      updatedScarichi++;
+    });
+
+    // 🔥 5. COMMIT ATOMICO
+    await batch.commit();
+
+    // 🔥 6. LOG
+    const operationId = createOperationId();
+
+    await scriviLog({
+      operationId,
+      pagina: "GestioneControparti",
+      evento: "RENAME_CONTROPARTE",
+      tipo: "UPDATE",
+      collezioneRef: "fornitori",
+      documentoId: fornitore.id,
+      before: { nome: oldNome },
+      after: { nome: nuovoNome },
+      extra: {
+        carichiAggiornati: updatedCarichi,
+        scarichiAggiornati: updatedScarichi
+      },
+      utente: getUtenteReact(),
+      ripristinabile: true
+    });
+
+    alert(
+      `✅ Rename completato!\n\nCarichi aggiornati: ${updatedCarichi}\nScarichi aggiornati: ${updatedScarichi}`
+    );
+
+    await loadData();
+
+  } catch (e) {
+    console.error("❌ RENAME FAILED", e);
+    alert("❌ Operazione fallita, nessuna modifica applicata");
+  }
+};
   const [dal, setDal] = useState(null);
   const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
@@ -82,8 +182,8 @@ validScarichi.sort(
 
 if (validScarichi.length) {
   setMinDataDB(safeDate(validScarichi[0].data));
+setMinDataDB(safeDate(validScarichi[0].data));
 setMaxDataDB(safeDate(validScarichi[validScarichi.length - 1].data));
-  setMaxDataDB(validScarichi[validScarichi.length - 1].data.toDate());
 } else {
   setMinDataDB(null);
   setMaxDataDB(null);
@@ -96,7 +196,6 @@ setMaxDataDB(safeDate(validScarichi[validScarichi.length - 1].data));
   useEffect(() => { 
   const fetchData = async () => {
     await loadData();
-setFornitori(prev => [...prev]); 
     const params = new URLSearchParams(window.location.search);
     const openNew = params.get("openNew") === "true";
 
@@ -155,21 +254,6 @@ const countCarichiTotali = (fornitore) => {
   const countScarichiTotali = (fornitore) => {
     return scarichi.filter(s => s.fornitore === fornitore.nome).length;
   };
-
-  // ---------------- DATE UTILS ----------------
-  const formatDataIT = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  const parseItalianDate = (value, endOfDay=false) => {
-    if (!value) return null;
-    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return null;
-    const day = parseInt(match[1],10);
-    const month = parseInt(match[2],10)-1;
-    const year = parseInt(match[3],10);
-    const date = new Date(year, month, day);
-    if (endOfDay) date.setHours(23,59,59,999);
-    return date;
-  };
-
   useEffect(() => {
     if (minDataDB && maxDataDB) {
       setDal(minDataDB);
@@ -181,25 +265,35 @@ const countCarichiTotali = (fornitore) => {
   // ---------------- AGGIUNGI ----------------
 const handleApriFormNuovoFornitore = async () => {
   try {
+    const returnPage = localStorage.getItem("scaricoReturnPage");
+
     const nomeRaw = prompt("Nome controparte (obbligatorio):");
-    if (!nomeRaw) return;
+    if (!nomeRaw) if (returnPage === "/scarichi") {
+      localStorage.removeItem("scaricoReturnPage");
+      window.location.href = `/scarichi`; 
+     } else return;
 
     const nome = nomeRaw.trim();
+    if (!nome) if (returnPage === "/scarichi") {
+      localStorage.removeItem("scaricoReturnPage");
+      window.location.href = `/scarich`; 
+     } else return;
 
     const indirizzo = prompt("Indirizzo (opzionale):") || "";
     const piva_cf = prompt("P.IVA / CF (opzionale):") || "";
 
-    // 🔥 CERCA DIRETTAMENTE SU FIRESTORE (NON SOLO ARRAY LOCALE)
-   const nomeKey = nome.toLowerCase().trim();
+    const nomeKey = nome.toLowerCase().trim();
 
-const existing = fornitori.find(f =>
-  (f.nome || "").toLowerCase().trim() === nomeKey
-);
+    // 🔥 CHECK VERO SU FIRESTORE
+    const snap = await getDocs(collection(db, "fornitori"));
+
+    const existing = snap.docs.find(d =>
+      (d.data().nome || "").toLowerCase().trim() === nomeKey
+    );
 
     let refId;
 
     if (existing) {
-      // 🔥 UPDATE INVECE DI DUPLICARE
       refId = existing.id;
 
       await updateDoc(doc(db, "fornitori", refId), {
@@ -209,16 +303,19 @@ const existing = fornitori.find(f =>
       });
 
       await scriviLog({
+        operationId: createOperationId(),
         pagina: "GestioneControparti",
-        tipo: "Aggiorna CONTROPARTE",
+        evento: "FORNITORE_UPDATE",
+        tipo: "UPDATE",
         collezioneRef: "fornitori",
         documentoId: refId,
-        dati_modificati: { nome, indirizzo, piva_cf },
-  utente: getUtenteReact()
+        before: existing.data(),
+        after: { nome, indirizzo, piva_cf },
+        utente: getUtenteReact(),
+        ripristinabile: true
       });
 
     } else {
-      // 🔥 SOLO QUI CREI NUOVO
       const ref = await addDoc(collection(db, "fornitori"), {
         nome,
         indirizzo,
@@ -227,31 +324,28 @@ const existing = fornitori.find(f =>
 
       refId = ref.id;
 
-      const operationId = createOperationId();
-
-await scriviLog({
-  operationId,
-  pagina: "GestioneControparti",
-  evento: "FORNITORE_UPSERT",
-  tipo: existing ? "UPDATE" : "CREATE",
-  collezioneRef: "fornitori",
-  documentoId: refId,
-  before: existing ? existing : null,
-  after: { nome, indirizzo, piva_cf },
-  utente: getUtenteReact(),
-  ripristinabile: true
-});
+      await scriviLog({
+        operationId: createOperationId(),
+        pagina: "GestioneControparti",
+        evento: "FORNITORE_CREATE",
+        tipo: "CREATE",
+        collezioneRef: "fornitori",
+        documentoId: refId,
+        before: null,
+        after: { nome, indirizzo, piva_cf },
+        utente: getUtenteReact(),
+        ripristinabile: true
+      });
     }
-
-    localStorage.setItem("nuovoFornitore", nome);
 
     await loadData();
 
-    const returnPage = localStorage.getItem("scaricoReturnPage");
+    localStorage.setItem("nuovoFornitore", nome);
 
+    // 🔥 NAVIGAZIONE PULITA
     if (returnPage === "/scarichi") {
       localStorage.removeItem("scaricoReturnPage");
-      window.location.href = returnPage + "?newFornitore=" + encodeURIComponent(nome);
+      window.location.href = `/scarichi?newFornitore=${encodeURIComponent(nome)}`;
     } else {
       localStorage.removeItem("scaricoReturnPage");
       alert(`Controparte "${nome}" salvata correttamente`);
@@ -532,6 +626,9 @@ if (sortConfig.key) {
         </td>
 
         <td>
+        <button onClick={() => safeRenameControparte(f)}>
+  ✏️ Rename
+</button>
           <button onClick={() => modificaFornitore(f)}>
             Modifica
           </button>

@@ -3,9 +3,8 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const DettagliLog = () => {
-  const navigate = useNavigate();
-  const { state } = useLocation();
-  const log = state?.log;
+const navigate = useNavigate();
+const log = useLocation().state?.log;
 
   if (!log) {
     return (
