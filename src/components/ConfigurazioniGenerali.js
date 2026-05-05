@@ -1,6 +1,6 @@
 // src/components/ConfigurazioniGenerali.js
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
@@ -17,14 +17,7 @@ const ConfigurazioniGenerali = ({ logout }) => {
 const [mailRecupero, setMailRecupero] = useState(""); // nuova
 
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-  // --- Controllo admin ---
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) navigate("/login");
-    // Qui eventualmente controllo ruolo admin se vuoi
-  }, []);
-
-  // --- Carica dati esistenti ---
+ 
  useEffect(() => {
   const fetchConfig = async () => {
     try {

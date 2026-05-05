@@ -20,7 +20,20 @@ import autoTable from "jspdf-autotable";
 import { loadConfigAzienda, getDataOraStampa, PdfHeader } from "../utils/dateUtils";
 
 const GestioneListini = () => {
-const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
+let currentUser = {};
+
+try {
+   const raw = sessionStorage.getItem("utenteLoggato");
+
+  if (!raw || raw === "undefined" || raw === "null") {
+    currentUser = {};
+  } else {
+    currentUser = JSON.parse(raw);
+  }
+} catch (e) {
+  console.warn("⚠️ utenteLoggato non valido:", sessionStorage.getItem("utenteLoggato"));
+  currentUser = {};
+}
   const [listini, setListini] = useState([]);
   const [fornitori, setFornitori] = useState([]);
   //const [configAzienda, setConfigAzienda] = useState(null);
@@ -49,14 +62,7 @@ const [modificaPercentuale, setModificaPercentuale] = useState(0);
 const [modificaAzione, setModificaAzione] = useState("AUMENTA");
   const navigate = useNavigate();
 const [tipoFiltroListino, setTipoFiltroListino] = useState("SCARICO");
-  const codiciCER = [
-    "CALDAIETTE","CARTER MEC.","CARTER MIS.","CAVI CAB.","CAVI RESA",
-    "CERCHI","GRAN.98%","INOX","OTTONE G.","OTTONE M.","PIOMBO",
-    "PROFILO M.","PROFILO P.","RAD.AL.CU.M.","RAD.AL.CU.P.",
-    "RAME I","RAME II","RAME III","SEMIDOLCE","STAGNATO","VASELLAME"
-  ];
-
-const materialiDinamici = codiciCER;
+ 
   // =============================
   // NAV
   // =============================
@@ -79,7 +85,21 @@ const materialiDinamici = codiciCER;
       setErrori([e.message]);
     }
   };
+const materialiDinamici = React.useMemo(() => {
+  const set = new Set();
 
+  listini.forEach(l => {
+    Object.keys(l.prezzi || {}).forEach(k => {
+      if (k && k.trim()) {
+        set.add(k.trim());
+      }
+    });
+  });
+
+  return Array.from(set).sort((a, b) =>
+    a.localeCompare(b, "it", { numeric: true })
+  );
+}, [listini]);
   const loadFornitori = async () => {
     try {
       const snap = await getDocs(collection(db, "fornitori"));
@@ -281,74 +301,110 @@ timestamp: new Date()
   // CREA LISTINO
   // =============================
 const creaNuovoListino = async () => {
-  if (!nuovoListino || !listinoDaCopiare) {
-    alert("Compila tutti i campi");
-    return;
-  }
-
-  const origine = listini.find(l => l.id === listinoDaCopiare);
-  if (!origine) {
-    alert("Listino origine non trovato");
-    return;
-  }
-
-  const prezziModificati = {};
-
-  Object.entries(origine.prezzi || {}).forEach(([codice, valore]) => {
-    const vendita = Number(valore?.vendita) || 0;
-    const acquisto = Number(valore?.acquisto) || 0;
-
-    let nuovaVendita = vendita;
-    let nuovoAcquisto = acquisto;
-
-    if (modificaPercentuale > 0) {
-      if (modificaAzione === "AUMENTA") {
-        nuovaVendita *= (1 + modificaPercentuale / 100);
-        nuovoAcquisto *= (1 + modificaPercentuale / 100);
-      } else {
-        nuovaVendita *= (1 - modificaPercentuale / 100);
-        nuovoAcquisto *= (1 - modificaPercentuale / 100);
-      }
-    }
-
-    prezziModificati[codice] = {
-      vendita: parseFloat(nuovaVendita.toFixed(2)),
-      acquisto: parseFloat(nuovoAcquisto.toFixed(2))
-    };
-  });
-
-  const copia = { 
-    nome: nuovoListino, 
-    prezzi: prezziModificati, 
-    predefFornitori: [],
-    tipoListino: nuovoTipoListino || "SCARICO"
-  };
+  console.log("🚀 START creaNuovoListino");
 
   try {
+
+    console.log("➡️ input:", { nuovoListino, listinoDaCopiare });
+
+    if (!nuovoListino || !listinoDaCopiare) {
+      console.log("❌ campi mancanti");
+      alert("Compila tutti i campi");
+      return;
+    }
+    const nomePulito = nuovoListino.trim().toLowerCase();
+
+const esiste = listini.some(l =>
+  (l.nome || "").trim().toLowerCase() === nomePulito
+);
+
+if (esiste) {
+  console.log("❌ listino duplicato:", nuovoListino);
+  alert("Esiste già un listino con questo nome");
+  return;
+}
+
+    const origine = listini.find(l => l.id === listinoDaCopiare);
+    console.log("➡️ origine:", origine);
+
+    if (!origine) {
+      console.log("❌ origine non trovata");
+      alert("Listino origine non trovato");
+      return;
+    }
+
+    const prezziModificati = {};
+
+    console.log("➡️ origine.prezzi:", origine.prezzi);
+
+    Object.entries(origine.prezzi || {}).forEach(([codice, valore]) => {
+      console.log("➡️ ciclo:", codice, valore);
+
+      const vendita = Number(valore?.vendita) || 0;
+      const acquisto = Number(valore?.acquisto) || 0;
+
+      let nuovaVendita = vendita;
+      let nuovoAcquisto = acquisto;
+
+      if (modificaPercentuale > 0) {
+        if (modificaAzione === "AUMENTA") {
+          nuovaVendita *= (1 + modificaPercentuale / 100);
+          nuovoAcquisto *= (1 + modificaPercentuale / 100);
+        } else {
+          nuovaVendita *= (1 - modificaPercentuale / 100);
+          nuovoAcquisto *= (1 - modificaPercentuale / 100);
+        }
+      }
+
+      prezziModificati[codice] = {
+        vendita: parseFloat(nuovaVendita.toFixed(2)),
+        acquisto: parseFloat(nuovoAcquisto.toFixed(2))
+      };
+    });
+
+    console.log("➡️ prezziModificati:", prezziModificati);
+
+    const copia = { 
+      nome: nuovoListino, 
+      prezzi: prezziModificati, 
+      predefFornitori: [],
+      tipoListino: nuovoTipoListino || "SCARICO"
+    };
+
+    console.log("➡️ copia finale:", copia);
+
     const docRef = await addDoc(collection(db, "listini"), copia);
 
-    await scriviLog({
+    console.log("✅ doc creato:", docRef.id);
+
+    console.log("➡️ scriviLog START");
+
+   await scriviLog({
       evento: "CREAZIONE_LISTINO",
-tipo: "CREAZIONE_LISTINO",
-pagina: "gestione-listini",
-collezioneRef: "listini",
-documentoId: docRef.id,
-dati_originali: null,
-dati_modificati: { id: docRef.id, ...copia },
-utente: currentUser?.username || currentUser?.email || "sconosciuto",
-timestamp: new Date()
+      tipo: "CREAZIONE_LISTINO",
+      pagina: "gestione-listini",
+      collezioneRef: "listini",
+      documentoId: docRef.id,
+      dati_originali: null,
+      dati_modificati: { id: docRef.id, ...copia },
+      utente: currentUser?.username || currentUser?.email || "sconosciuto",
+      timestamp: new Date()
     });
+
+    console.log("✅ scriviLog OK");
 
     setShowCreaForm(false);
     setNuovoListino("");
     setModificaPercentuale(0);
 
-    loadListini();
+    await loadListini();
 
     alert("Listino creato con successo");
 
   } catch (e) {
-    setErrori(prev => [...prev, e.message]);
+    console.error("💥 ERRORE REALE:", e);
+    console.error("💥 STACK:", e.stack);
+    alert("Errore: " + e.message);
   }
 };
 

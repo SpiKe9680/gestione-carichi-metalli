@@ -5,15 +5,36 @@ import { db } from "../firebase";
    SNAPSHOT (SAFE)
 ========================= */
 export const createSnapshot = (docData) => {
-  return JSON.parse(JSON.stringify(docData, (key, value) => {
-    if (value?.toDate) {
-      return {
-        __type: "timestamp",
-        value: value.toDate().toISOString()
-      };
-    }
-    return value;
-  }));
+  try {
+    if (!docData) return null;
+
+    const json = JSON.stringify(docData, (key, value) => {
+      // 🔥 fix timestamp firestore
+      if (value?.toDate) {
+        return {
+          __type: "timestamp",
+          value: value.toDate().toISOString()
+        };
+      }
+
+      // 🔥 evita undefined
+      if (value === undefined) return null;
+
+      // 🔥 evita funzioni / robe strane
+      if (typeof value === "function") return null;
+
+      return value;
+    });
+
+    if (!json) return null;
+
+    return JSON.parse(json);
+
+  } catch (e) {
+    console.error("💥 SNAPSHOT ROTTO:", docData);
+    console.error("💥 ERRORE:", e);
+    return null;
+  }
 };
 
 /* =========================

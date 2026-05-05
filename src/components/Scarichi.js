@@ -1363,7 +1363,7 @@ onChange={(e) => {
     localStorage.setItem("scarico_temp_data", dataScaricoStr || "");
     localStorage.setItem("scarico_temp_ora", oraStr || "");
     localStorage.setItem("scarico_temp_usaOra", usaOra ? "1" : "0");
-
+localStorage.setItem("fornitore_prefill_nome", "");
     navigate("/fornitori?openNew=true");  }}    
      style={{ marginLeft: "10px" }}  >+ {tipoMovimento === "carico" ? "Nuovo Destinatario" : "Nuovo Fornitore"}  </button>
 </div>

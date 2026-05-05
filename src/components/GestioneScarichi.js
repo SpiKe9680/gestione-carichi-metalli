@@ -2,13 +2,13 @@
 // src/components/GestioneScarichi.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import { addDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, serverTimestamp } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PdfHeader } from "../utils/dateUtils";
@@ -28,6 +28,8 @@ const [dal, setDal] = useState(null);   // oggetto Date
 const [al, setAl] = useState(null);     // oggetto Date
 const [sortConfig, setSortConfig] = useState({ key: "data", direction: "desc" });
 const [tipoMovimento, setTipoMovimento] = useState("tutti");
+const [listinoApplicato, setListinoApplicato] = useState("tutti");
+
   const [tutti, setTutti] = useState(false);
   const [filtroFornitore, setFiltroFornitore] = useState("tutti");
   const [filtroListino, setFiltroListino] = useState("tutti");
@@ -40,13 +42,24 @@ const [filtroDestinatario, setFiltroDestinatario] = useState("tutti");
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
   const [numeroFIR, setNumeroFIR] = useState({});
   const [listini, setListini] = useState({});
+ const listiniDisponibiliNomi = Object.entries(listini || {})
+  .filter(([nome, l]) => {
+    if (tipoMovimento === "tutti") return false;
+    return l?.tipo === tipoMovimento;
+  })
+  .map(([nome]) => nome);
 const [filtroCER, setFiltroCER] = useState("tutti");
 const [cerDisponibili, setCerDisponibili] = useState([]);
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
 const [config, setConfig] = useState({});
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-
+const normalizeDate = (d) => {
+  if (!d) return null;
+  if (d instanceof Date) return d;
+  if (d?.toDate) return d.toDate();
+  return new Date(d);
+};
   const getLabelFornDest = () => {
   if (tipoMovimento === "carico") return "Smaltitori";
   if (tipoMovimento === "scarico") return "Fornitori";
@@ -98,12 +111,7 @@ const fetchMovimenti = async () => {
     const scarichiSnap = await getDocs(collection(db, "scarichi"));
     const carichiSnap = await getDocs(collection(db, "carichi"));
 
-    const parseData = (data) => {
-      if (!data) return new Date("1970-01-01");
-      if (data.toDate) return data.toDate();
-      if (data instanceof Date) return data;
-      return new Date("1970-01-01");
-    };
+    const parseData = normalizeDate;
 
     const parseDoc = (d, tipo) => {
       const data = d.data();
@@ -159,21 +167,28 @@ useEffect(() => {
 const loadListini = async () => {
   try {
     const snap = await getDocs(collection(db, "listini"));
+
     const mapListini = {};
+
     snap.docs.forEach(d => {
       const data = d.data();
-      mapListini[data.nome] = data.prezzi || {};  // prezzi per materiale
+
+      mapListini[data.nome] = {
+        prezzi: data.prezzi,
+        tipoListino: data.tipoListino
+      };
     });
+
     setListini(mapListini);
+
   } catch (e) {
-    console.error("Errore load listini:", e);
+    console.error(e);
   }
 };
-
 useEffect(() => {
   const set = new Set();
 
-  filteredScarichi.forEach(s => {
+  scarichi.forEach(s => {
     (s.cer || []).forEach(cer => {
       const val = cer.codiceCER || cer.cer || cer.codice;
       if (val) set.add(val);
@@ -181,7 +196,7 @@ useEffect(() => {
   });
 
   setCerDisponibili([...set].sort());
-}, [filteredScarichi]);
+}, [scarichi]);
 
 
   useEffect(() => { loadListini(); }, []);
@@ -284,25 +299,19 @@ useEffect(() => {
 
   // --- FIR ---
   if (filtroFIR.trim() !== "") {
-    const fir = filtroFIR.toLowerCase();
-    dati = dati.filter(s =>
-      s.cer.some(cer =>
-        (cer.fir || "").toLowerCase().includes(fir)
-      )
-    );
+    const fir = filtroFIR.toLowerCase().trim();
+
+dati = dati.filter(s =>
+  (s.cer || []).some(cer =>
+    (cer.fir || "").toLowerCase().trim().includes(fir)
+  )
+);
   }
 
   // --- TIPO MOVIMENTO ---
-  if (tipoMovimento === "scarico") {
-    dati = dati.filter(
-      s => s.tipo === "scarico" || s.cer.some(c => c.tipo === "scarico")
-    );
-  } else if (tipoMovimento === "carico") {
-    dati = dati.filter(
-      s => s.tipo === "carico" || s.cer.some(c => c.tipo === "carico")
-    );
-  }
-
+ if (tipoMovimento !== "tutti") {
+  dati = dati.filter(s => s.tipo === tipoMovimento);
+}
   setFilteredScarichi(dati);
 }, [
   scarichi,
@@ -317,34 +326,23 @@ useEffect(() => {
   filtroCER
 ]);
 
-
-
-
 useEffect(() => {
-  if (!filteredScarichi.length) {
-    setFornitoriDisponibili([]);
-    setListiniDisponibili([]);
-    setUtentiDisponibili([]);
-    return;
-  }
+  const source = scarichi || [];
 
- setFornitoriDisponibili(
-  [...new Set(
-    filteredScarichi.map(s => s.fornitore || "sconosciuto")
-  )].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }))
-);
+  setFornitoriDisponibili(
+    [...new Set(source.map(s => s.fornitore || "sconosciuto"))]
+      .sort((a,b)=>a.localeCompare(b,"it"))
+  );
 
   setListiniDisponibili(
-    [...new Set(filteredScarichi.map(s => s.listino || "sconosciuto"))]
+    [...new Set(source.map(s => s.listino || "sconosciuto"))]
   );
 
   setUtentiDisponibili(
-  [...new Set(
-    filteredScarichi.map(s => s.utente || "sconosciuto")
-  )].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }))
-);
-
-}, [filteredScarichi]);
+    [...new Set(source.map(s => s.utente || "sconosciuto"))]
+      .sort((a,b)=>a.localeCompare(b,"it"))
+  );
+}, [scarichi]);
 
   // --- SCARICHI PER GIORNO ---
 // --- SCARICHI PER GIORNO ---
@@ -565,8 +563,9 @@ const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   // Calcolo FIR per giorno (opzionale se vuoi mostrare/controllare)
 const firPerGiorno = {};
 filteredScarichi.forEach(s => {
-  if (!s.data?.toDate) return;
-  const giornoIT = formatDataIT(s.data.toDate());
+ const dataObj = normalizeDate(s.data);
+if (!dataObj) return;
+const giornoIT = formatDataIT(dataObj);
   if (!firPerGiorno[giornoIT]) firPerGiorno[giornoIT] = [];
   s.cer.forEach(cer => {
     if(cer.numeroFIR) firPerGiorno[giornoIT].push(cer.numeroFIR);
@@ -612,7 +611,59 @@ goBack={() => {
 />
   );
 }
+const applyListino = async () => {
+  if (tipoMovimento !== "scarico") return;
+  if (listinoApplicato === "tutti") return;
 
+  const listino = listini[listinoApplicato];
+  if (!listino || listino.tipoListino !== "SCARICO") return;
+
+  if (!window.confirm("Applicare il listino agli scarichi filtrati?")) return;
+
+  try {
+
+    for (const m of filteredScarichi) {
+
+      if (m.tipo !== "scarico") continue;
+
+      const ref = doc(db, "scarichi", m.id);
+
+      const nuoviScarichi = (m.cer || []).map(blocco => {
+
+        const nuoveRighe = (blocco.righe || []).map(r => {
+
+          const prezzi = listino.prezzi?.[r.materiale];
+          if (!prezzi) return r;
+
+          return {
+            ...r,
+            prezzoAcquisto: prezzi.acquisto ?? r.prezzoAcquisto,
+            prezzoKg: prezzi.acquisto ?? r.prezzoKg
+          };
+        });
+
+        return {
+          ...blocco,
+          righe: nuoveRighe
+        };
+      });
+
+      await updateDoc(ref, {
+        scarico: nuoviScarichi, // 🔥 QUESTO È GIUSTO (NON cer)
+        listino: listinoApplicato,
+        lastUpdate: new Date()
+      });
+    }
+
+    await fetchMovimenti();
+
+    alert("✅ Listino SCARICO applicato correttamente");
+
+  } catch (err) {
+    console.error("Errore applyListino:", err);
+    alert("❌ Errore applicazione listino");
+  }
+};
 
 const handleStampa = async () => {
   const movimenti = filteredScarichi;
@@ -980,7 +1031,9 @@ const resetFiltri = () => {
   setFiltroUtente("tutti");
   setFiltroFIR("");
   setTipoMovimento("tutti");
-
+setFirSearch("");
+setFiltroFIR("");
+setFiltroCER("tutti");
   setTutti(false);
 
   const today = new Date();
@@ -1077,8 +1130,8 @@ const resetFiltri = () => {
   <DatePicker
     selected={al}
     onChange={(date) => setAl(date)}
-    minDate={dal || minDataDB || new Date(2000,0,1)}
-    maxDate={maxDataDB || new Date()}
+    minDate={dal instanceof Date ? dal : minDataDB || new Date(2000,0,1)}
+    maxDate={al instanceof Date ? al : maxDataDB || new Date()}
     dateFormat="dd/MM/yyyy"
     placeholderText="gg/mm/yyyy"
   />
@@ -1140,7 +1193,32 @@ const resetFiltri = () => {
 
       
       </div>
+<div style={{ marginTop: "15px", marginBottom: "10px", display: "flex", gap: "10px", alignItems: "center" }}>
+  
+  <label>
+    📊 Applica listino:
+    <select
+  value={listinoApplicato}
+  onChange={(e) => setListinoApplicato(e.target.value)}
+  disabled={tipoMovimento === "tutti"}
+>
+      <option value="tutti">Nessuno</option>
+      {Object.keys(listini)
+  .filter(nome => listini[nome]?.tipoListino === "SCARICO")
+  .map(nome => (
+    <option key={nome} value={nome}>{nome}</option>
+))}
+    </select>
+  </label>
 
+  <button
+  onClick={() => applyListino()}
+  disabled={tipoMovimento === "tutti" || listinoApplicato === "tutti"}
+>
+    ⚡ Applica
+  </button>
+
+</div>
       {/* TABELLA */}
 <table className="tabella-scarichi" style={{marginTop:"16px"}}>
   <thead>

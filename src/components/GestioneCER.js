@@ -66,12 +66,6 @@ const getUtenteReact = () => {
     setScarichi(dati);
 
     if(dati.length){
-      const safeDate = (d) => {
-  if (!d) return null;
-  if (typeof d.toDate === "function") return d.toDate();
-  if (d instanceof Date) return d;
-  return new Date(d);
-};
 
 const dates = dati
   .map(s => safeDate(s.data))
@@ -226,6 +220,171 @@ useEffect(() => {
   }
 }, [nome, categoria, codiceCER, descrizione, prezzoDefault, formVisible, editingId, initialFormState]);
 
+
+const syncListiniConMateriali = async () => {
+  try {
+    const normalize = (name = "") =>
+      name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    const materialiSnap = await getDocs(collection(db, "materiali"));
+    const listiniSnap = await getDocs(collection(db, "listini"));
+
+    const materialiList = materialiSnap.docs.map(d => d.data());
+    const listini = listiniSnap.docs;
+
+    let materialiAggiuntiTotali = 0;
+
+    for (const l of listini) {
+      const listino = l.data();
+      const ref = doc(db, "listini", l.id);
+
+      const prezzi = listino.prezzi || {};
+
+      const esistentiNormalizzati = new Set(
+        Object.keys(prezzi).map(normalize)
+      );
+
+      let aggiuntiInQuestoListino = 0;
+
+      for (const m of materialiList) {
+        const key = normalize(m.nome);
+
+        if (!esistentiNormalizzati.has(key)) {
+          prezzi[m.nome] = {
+            acquisto: m.prezzoAcquistoDefault || 0,
+            vendita: m.prezzoVenditaDefault || 0
+          };
+
+          esistentiNormalizzati.add(key);
+          aggiuntiInQuestoListino++;
+        }
+      }
+
+      if (aggiuntiInQuestoListino > 0) {
+        materialiAggiuntiTotali += aggiuntiInQuestoListino;
+        await updateDoc(ref, { prezzi });
+      }
+    }
+
+    let msg = "";
+
+    if (materialiAggiuntiTotali === 0) {
+      msg = "Nessun listino aggiornato, tutti i materiali sono già presenti.";
+    } else {
+      msg = `${materialiAggiuntiTotali} materiali aggiunti nei listini.`;
+    }
+
+    const conferma = window.confirm(
+      msg + "\n\nVuoi procedere con la pulizia dei listini?"
+    );
+
+    if (!conferma) {
+      setMessage(msg + " (pulizia annullata)");
+      return;
+    }
+
+    // 🧹 PULIZIA LISTINI
+    let totalMerge = 0;
+
+    for (const l of listiniSnap.docs) {
+      const listino = l.data();
+      const ref = doc(db, "listini", l.id);
+
+      const prezzi = listino.prezzi || {};
+      const mapNormalizzati = new Map();
+
+      for (const [nome, valori] of Object.entries(prezzi)) {
+        const key = normalize(nome);
+
+        if (!mapNormalizzati.has(key)) {
+          mapNormalizzati.set(key, {
+            nomeOriginale: nome,
+            data: valori
+          });
+        } else {
+          totalMerge++;
+        }
+      }
+
+      const cleaned = {};
+      for (const [, v] of mapNormalizzati.entries()) {
+        cleaned[v.nomeOriginale] = v.data;
+      }
+
+      await updateDoc(ref, { prezzi: cleaned });
+    }
+
+    alert(
+      msg +
+      "\n\nPulizia completata: " +
+      totalMerge +
+      " duplicati gestiti."
+    );
+
+    setMessage("Sync + pulizia listini completati");
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore sync/pulizia listini");
+  }
+};
+const puliziaListini = async () => {
+  try {
+    const listiniSnap = await getDocs(collection(db, "listini"));
+
+    const normalize = (name = "") =>
+      name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    let totalMerge = 0;
+
+    for (const l of listiniSnap.docs) {
+      const listino = l.data();
+      const ref = doc(db, "listini", l.id);
+
+      const prezzi = listino.prezzi || {};
+
+      const mapNormalizzati = new Map();
+
+      // 🔁 1. COSTRUISCO MAPPA NORMALIZZATA (MERGE DUPLICATI)
+      for (const [nome, valori] of Object.entries(prezzi)) {
+        const key = normalize(nome);
+
+        if (!mapNormalizzati.has(key)) {
+          mapNormalizzati.set(key, {
+            nomeOriginale: nome,
+            data: valori
+          });
+        } else {
+          // se duplicato → tengo il primo ma posso decidere merge intelligente
+          totalMerge++;
+        }
+      }
+
+      // 🔁 2. RICOSTRUISCO OGGETTO PULITO
+      const cleanedPrezzi = {};
+      for (const [, value] of mapNormalizzati.entries()) {
+        cleanedPrezzi[value.nomeOriginale] = value.data;
+      }
+
+      await updateDoc(ref, {
+        prezzi: cleanedPrezzi
+      });
+    }
+
+    if (totalMerge === 0) {
+      alert("Nessun duplicato trovato. Listini già puliti.");
+      setMessage("Listini già normalizzati");
+    } else {
+      alert(`Pulizia completata. Rimossi/accorpati ${totalMerge} duplicati.`);
+      setMessage("Pulizia listini completata");
+    }
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore pulizia listini");
+  }
+};
+
 const safeDate = (d) => {
   if (!d) return null;
 
@@ -291,11 +450,6 @@ const handleEdit = (m) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // ---------------- PREPARO MAPPA LISTINI ----------------
-  const listiniMap = Object.fromEntries(listini.map(l => [l.nome, l]));
-
-  // ---------------- FILTRAGGIO ----------------
- // ---------------- FILTRAGGIO MATERIALI DINAMICO ----------------
 const materialiFiltrati = materiali
   .filter(m => (filtroMateriale==="Tutti" || m.nome===filtroMateriale) && (filtroCER==="Tutti" || m.codiceCER===filtroCER))
   .map(m => {
@@ -325,7 +479,10 @@ const movimentiMateriale = movimenti
   .flatMap(mov =>
     (mov.scarico || mov.carico || []).flatMap(blocco =>
       (blocco.righe || [])
-        .filter(r => r.materiale === m.nome)
+        .filter(r => 
+  r.materiale === m.nome &&
+  r.codiceCER === m.CER
+)
         .map(r => {
           let prezzoKg = 0;
           let prezzoTotale = 0;
@@ -529,6 +686,9 @@ const cerDropdown = [
       
       <div style={{marginBottom:15}}>
         <button onClick={handleStampa}>🖨️ Stampa PDF</button>
+        <button onClick={syncListiniConMateriali}>
+  🔄 Aggiorna listini con nuovi materiali
+</button>
       </div>
       {message && <p style={{color:"green"}}>{message}</p>}
 
