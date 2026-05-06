@@ -220,21 +220,21 @@ useEffect(() => {
   return (
     <div style={{ padding: 20, maxWidth: 400, margin: "0 auto" }}>
    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-  <h2 style={{ margin: 0 }}>Login</h2>
+  
   {logoBase64 && (
     <img
       src={`data:image/png;base64,${logoBase64}`}
       alt="logo"
-      style={{ height: 190 }}
+      style={{ height: 160 }}
     />
-  )}
+  )}<h2 style={{ margin: 0 }}>Accesso Utente</h2>
 </div>
 
       {message && <p style={{ color: "red" }}>{message}</p>}
 
       {/* LOGIN */}
       <input
-        placeholder="Username o email"
+        placeholder="Nome utente o email"
         value={inputUsername}
         onChange={e => setInputUsername(e.target.value)}
         style={{ width: "100%", marginBottom: 10, padding: 8 }}
@@ -312,7 +312,7 @@ useEffect(() => {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Nuova Password"
             value={newPassword}
             onChange={e => setNewPassword(e.target.value)}
           />
