@@ -476,37 +476,31 @@ const movimentiMateriale = movimenti
     if (filtroTipoMovimento === "CARICO") return mov.tipo === "carico";
     return true; // TUTTI
   })
-  .flatMap(mov =>
-    (mov.scarico || mov.carico || []).flatMap(blocco =>
-      (blocco.righe || [])
-        .filter(r => 
-  r.materiale === m.nome &&
-  r.codiceCER === m.CER
+ .flatMap(mov =>
+  (mov.scarico || mov.carico || []).flatMap(blocco =>
+    (blocco.righe || [])
+.filter(r =>
+  String(blocco.cer || "").trim().toUpperCase() === String(m.codiceCER || "").trim().toUpperCase()
 )
-        .map(r => {
-          let prezzoKg = 0;
-          let prezzoTotale = 0;
+.map(r => {
+  const isCarico = Array.isArray(mov.carico);
 
-          if (mov.tipo === "scarico") {
-            prezzoKg = r.prezzoAcquisto || 0;
-            prezzoTotale = prezzoKg * (r.peso || 0);
-          }
+  const prezzoKg = isCarico
+    ? (r.prezzoVendita ?? r.prezzoAcquisto ?? 0)
+    : (r.prezzoAcquisto ?? 0);
 
-          if (mov.tipo === "carico") {
-            prezzoKg = r.prezzoVendita || 0;
-            prezzoTotale = prezzoKg * (r.peso || 0);
-          }
+  const prezzoTotale = prezzoKg * (r.peso || 0);
 
-          return {
-            ...r,
-            data: mov.data,
-            listino: mov.listino,
-            fornitore: mov.fornitore,
-            tipo: mov.tipo,
-            prezzoKg,
-            prezzoTotale
-          };
-        })
+  return {
+    ...r,
+    data: mov.data,
+    listino: mov.listino,
+    fornitore: mov.fornitore,
+    tipo: isCarico ? "carico" : "scarico",
+    prezzoKg,
+    prezzoTotale
+  };
+})
     )
   );
 

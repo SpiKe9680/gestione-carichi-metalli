@@ -1378,30 +1378,17 @@ onChange={async (e) => {
 
   setUploadingImages(true);
 
+  // mantieni file per upload vero
   setFotoFile(prev => [...prev, ...files]);
 
-  salvaInCodaImmagini({
-    files,
-    utenteId: getLogUser(),
-    docTempId: "draft_" + getLogUser()
-  });
-
-  const fileToBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-  const previews = await Promise.all(files.map(fileToBase64));
-
+  // 🔥 SOLO PREVIEW LEGGERO (NO BASE64)
+  const previews = files.map(file => URL.createObjectURL(file));
   setPreviewFoto(prev => [...prev, ...previews]);
 
   setTimeout(() => {
     setUploadingImages(false);
     setDirty(true);
-  }, 600);
+  }, 300);
 }}
 />
 {previewFoto.length > 0 && (
