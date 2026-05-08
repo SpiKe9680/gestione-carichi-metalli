@@ -11,7 +11,7 @@ if (!currentUser) return null;
   return (
     <div className="admin-dashboard-container">
       <div className="admin-header">
-        <h2>Gestione Carico Scarico Metalli</h2> 
+        <h2>Movimentazione Metalli</h2> 
         
         {/* 🔹 Mostra username o email, mai auth.currentUser */}
         <button onClick={logout}>

@@ -15,13 +15,19 @@ import { scriviLog } from "../utils/log";
 
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-
+    const formatDataSafe = (d) => {
+  if (!d) return "";
+  if (typeof d.toDate === "function") return d.toDate().toLocaleString("it-IT");
+  if (d instanceof Date) return d.toLocaleString("it-IT");
+  return new Date(d).toLocaleString("it-IT");
+};
 const GestioneCER = () => {
   const navigate = useNavigate();
 const [filtroTipoMovimento, setFiltroTipoMovimento] = useState("TUTTI"); // SCARICO | CARICO | TUTTI
   const [materiali, setMateriali] = useState([]);
   const [scarichi, setScarichi] = useState([]);
   const [listini, setListini] = useState([]);
+
 const [prezzoDefault, setPrezzoDefault] = useState("");
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -392,6 +398,13 @@ const safeDate = (d) => {
     return d.toDate();
   }
 
+  const formatDataSafe = (d) => {
+  if (!d) return "";
+  if (typeof d.toDate === "function") return d.toDate().toLocaleString("it-IT");
+  if (d instanceof Date) return d.toLocaleString("it-IT");
+  return new Date(d).toLocaleString("it-IT");
+};
+
   if (d instanceof Date) {
     return d;
   }
@@ -449,6 +462,8 @@ const handleEdit = (m) => {
   const toggleDettagli = (id) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+
 
 const materialiFiltrati = materiali
   .filter(m =>
@@ -926,7 +941,7 @@ const TableMovimenti = ({ dati, tipo }) => (
     <tbody>
       {dati.map((r, idx) => (
         <tr key={idx}>
-          <td>{r.data?.toDate().toLocaleString("it-IT")}</td>
+          <td>{formatDataSafe(r.data)}</td>
           <td>{r.fornitore}</td>
           <td>{r.listino}</td>
           <td>{r.prezzoKg.toFixed(2)}</td>
