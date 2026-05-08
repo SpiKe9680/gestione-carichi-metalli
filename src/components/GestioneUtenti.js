@@ -152,6 +152,39 @@ setConfirmPassword("");
   }
 };
 
+const handleResetPassword = async (u) => {
+  if (!window.confirm(`Reset password per ${u.username || u.email}?`)) return;
+
+  try {
+    const updatedUser = {
+      ...u,
+      password: "12345"
+    };
+
+    await setDoc(doc(db, "utenti", u.uid), updatedUser);
+
+    await scriviLog({
+      pagina: "gestione-utenti",
+      azione: "RESET_PASSWORD",
+      collezioneRef: "utenti",
+      documentoId: u.uid,
+
+      dati_originali: { password: "***" },
+      dati_modificati: { password: "12345" },
+
+      meta: { tipo: "UTENTE" },
+      ripristinabile: true
+    });
+
+    setMessage(`Password di ${u.username || u.email} resettata a 12345`);
+    fetchUsers();
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore reset password");
+  }
+};
+
 useEffect(() => {
   const fetchAdminEmail = async () => {
     try {
@@ -442,12 +475,12 @@ if (sortConfig.key) {
           Elimina
         </button>
 
-        {/* <button
-          onClick={e => { e.stopPropagation(); handleRipristina(u.log); }}
-          style={{ backgroundColor: "#4caf50", color: "white" }}
-        >
-          Ripristina
-        </button> */}
+        <button
+  onClick={e => { e.stopPropagation(); handleResetPassword(u); }}
+  style={{ backgroundColor: "#ff9800", color: "white" }}
+>
+  Reset Password
+</button>
       </td>
     </tr>
   ))}
