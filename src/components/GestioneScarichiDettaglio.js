@@ -79,7 +79,7 @@ const [filtroTipo, setFiltroTipo] = useState("tutti");
 
   const giornoParsed = parseData(giornoSelezionato);
   const dataLabel = giornoParsed ? giornoParsed.toLocaleDateString("it-IT") : "Data non valida";
-const getLabelFornDest = () => tipoMovimento === "scarico" ? "Fornitore" : "Destinatario";
+const getLabelFornDest = () => "Controparte";
   const loadListini = async () => {
     try {
       const snap = await getDocs(collection(db, "listini"));
@@ -512,7 +512,7 @@ const handlePrint = async (movimentoId = null, tipo) => {
     const dataObj = docData.data?.toDate ? docData.data.toDate() : new Date();
     pdf.setFontSize(14);
     pdf.text(`Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`, 10, startY - 20);
-    const label = tipo === "carico" ? "Destinatario:" : "Fornitore:";
+    const label = tipo === "carico" ? "Controparte:" : "Controparte:";
     pdf.setFontSize(12);
     pdf.text(`${label} ${docData.fornitore || "-"}`, 10, startY -12);
     pdf.text(`Data e Ora: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`, 10, startY -6);
@@ -1416,7 +1416,10 @@ setCurrentPageScarichi(1);}} style={{marginLeft:5}}>
       {editor && (
         <div ref={editorRef} style={{marginTop:20, border:"1px solid #ccc", padding:10, background:"#f9f9f9"}}>
          <h3>
-  Modifica riga ({editor?.tipo === "carico" ? "Carico" : "Scarico"})
+   Modifica riga{" "}
+  <span style={{ fontWeight: "normal", fontSize: 14, color: "#666" }}>
+    ({editor?.tipo?.toUpperCase() || "MOVIMENTO"} - {editor?.cer || "CER"} - {editor?.materiale || "Materiale"})
+  </span>
 </h3>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
  <label> Data:
