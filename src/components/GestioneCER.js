@@ -451,72 +451,119 @@ const handleEdit = (m) => {
   };
 
 const materialiFiltrati = materiali
-  .filter(m => (filtroMateriale==="Tutti" || m.nome===filtroMateriale) && (filtroCER==="Tutti" || m.codiceCER===filtroCER))
+  .filter(m =>
+    (filtroMateriale === "Tutti" || m.nome === filtroMateriale) &&
+    (filtroCER === "Tutti" || m.codiceCER === filtroCER)
+  )
   .map(m => {
     const start = dal;
     const end = al ? new Date(al) : null;
-    if(end) end.setHours(23,59,59,999);
+    if (end) end.setHours(23, 59, 59, 999);
 
-    // unisco scarichi e carichi in un unico array
-    let movimenti = [
-      ...scarichi.map(s => ({ ...s, tipo: "scarico" })),
-      ...carichi.map(c => ({ ...c, tipo: "carico" }))
-    ];
+    const movimentiBase = [
+  ...scarichi.map(s => ({ ...s, tipo: "scarico" })),
+  ...carichi.map(c => ({ ...c, tipo: "carico" }))
+];
 
-    // filtro per date se il checkbox 'tutti' non è selezionato
-    movimenti = movimenti.filter(mov => {
-      const dataM = mov.data?.toDate?.();
-      return !(!tutti && start && end) || (dataM && dataM >= start && dataM <= end);
+const movimenti = movimentiBase.filter(mov => {
+  const data = safeDate(mov.data);
+  if (!data) return false;
+
+  if (tutti) return true;
+  if (!start || !end) return true;
+
+  return data >= start && data <= end;
+});
+
+    // 🔥 ESTRAZIONE DETTAGLI COMPLETA (FIX DEFINITIVO)
+    const movimentiMateriale = movimenti.flatMap(mov => {
+const blocchi =
+  mov.tipo === "carico"
+    ? (Array.isArray(mov.carico) ? mov.carico : [])
+    : (Array.isArray(mov.scarico) ? mov.scarico : []);
+      return blocchi.flatMap(blocco => {
+        const righe = blocco.righe || [];
+
+        return righe
+          .filter(r => {
+            const norm = s => String(s || "").trim().toUpperCase();
+
+            const cerMatch =
+              norm(blocco.cer) === norm(m.codiceCER);
+
+            const nomeMatch =
+              norm(r.materiale || r.nome) === norm(m.nome);
+
+            return cerMatch && nomeMatch;
+          })
+          .map(r => {
+            const isCarico = mov.tipo === "carico";
+
+            const prezzoKg = isCarico
+              ? (r.prezzoVendita ?? r.prezzoAcquisto ?? 0)
+              : (r.prezzoAcquisto ?? 0);
+
+            const peso = r.peso || 0;
+
+            return {
+              ...r,
+              data: mov.data,
+              listino: mov.listino,
+              fornitore: mov.fornitore,
+              tipo: mov.tipo,
+              prezzoKg,
+              prezzoTotale: prezzoKg * peso,
+              peso
+            };
+          });
+      });
     });
+console.log("MATERIALE:", m.nome);
+console.log("SCARICHI:", movimentiMateriale.filter(r => r.tipo === "scarico").length);
+console.log("CARICHI:", movimentiMateriale.filter(r => r.tipo === "carico").length);
+    // 🔥 ORDINE CORRETTO
+    movimentiMateriale.sort(
+      (a, b) =>
+        (safeDate(a.data)?.getTime?.() || 0) -
+        (safeDate(b.data)?.getTime?.() || 0)
+    );
 
-    // FILTRAGGIO E CALCOLO DETTAGLIO
-const movimentiMateriale = movimenti
-  .filter(mov => {
-    if (filtroTipoMovimento === "SCARICO") return mov.tipo === "scarico";
-    if (filtroTipoMovimento === "CARICO") return mov.tipo === "carico";
-    return true; // TUTTI
-  })
- .flatMap(mov =>
-  (mov.scarico || mov.carico || []).flatMap(blocco =>
-    (blocco.righe || [])
-.filter(r =>
-  String(blocco.cer || "").trim().toUpperCase() === String(m.codiceCER || "").trim().toUpperCase()
-)
-.map(r => {
-  const isCarico = Array.isArray(mov.carico);
+    // 🔥 CONTEGGI REALI
+   // 🔥 SCARICHI (lasciamo invariato)
+const nrScarichi = movimentiMateriale.filter(r => r.tipo === "scarico").length;
+const nrCarichi = movimentiMateriale.filter(r => r.tipo === "carico").length;
+const nrMovimenti = movimentiMateriale.length;
+    const dataPrimoMovimento = nrMovimenti
+      ? formatDataIT(safeDate(movimentiMateriale[0].data))
+      : "";
 
-  const prezzoKg = isCarico
-    ? (r.prezzoVendita ?? r.prezzoAcquisto ?? 0)
-    : (r.prezzoAcquisto ?? 0);
+    const dataUltimoMovimento = nrMovimenti
+      ? formatDataIT(safeDate(movimentiMateriale[nrMovimenti - 1].data))
+      : "";
 
-  const prezzoTotale = prezzoKg * (r.peso || 0);
+    const dataPrimoScarico = movimentiMateriale.find(r => r.tipo === "scarico")
+      ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "scarico").data))
+      : "";
 
-  return {
-    ...r,
-    data: mov.data,
-    listino: mov.listino,
-    fornitore: mov.fornitore,
-    tipo: isCarico ? "carico" : "scarico",
-    prezzoKg,
-    prezzoTotale
-  };
-})
-    )
-  );
+    const dataUltimoScarico = [...movimentiMateriale]
+      .reverse()
+      .find(r => r.tipo === "scarico")
+      ? formatDataIT(
+          safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "scarico").data)
+        )
+      : "";
 
-    movimentiMateriale.sort((a,b) => (a.data?.toDate?.() || new Date(0)) - (b.data?.toDate?.() || new Date(0)));
+    const dataPrimoCarico = movimentiMateriale.find(r => r.tipo === "carico")
+      ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "carico").data))
+      : "";
 
-    // Calcolo i numeri dinamici in base al filtroTipoMovimento
-    const nrScarichi = movimentiMateriale.filter(r => r.tipo === "scarico").length;
-    const nrCarichi = movimentiMateriale.filter(r => r.tipo === "carico").length;
-    const nrMovimenti = movimentiMateriale.length;
-
-    const dataPrimoScarico = movimentiMateriale.find(r => r.tipo === "scarico") ? formatDataIT(movimentiMateriale.find(r => r.tipo === "scarico").data.toDate()) : "";
-    const dataUltimoScarico = [...movimentiMateriale].reverse().find(r => r.tipo === "scarico") ? formatDataIT([...movimentiMateriale].reverse().find(r => r.tipo === "scarico").data.toDate()) : "";
-    const dataPrimoCarico = movimentiMateriale.find(r => r.tipo === "carico") ? formatDataIT(movimentiMateriale.find(r => r.tipo === "carico").data.toDate()) : "";
-    const dataUltimoCarico = [...movimentiMateriale].reverse().find(r => r.tipo === "carico") ? formatDataIT([...movimentiMateriale].reverse().find(r => r.tipo === "carico").data.toDate()) : "";
-    const dataPrimoMovimento = nrMovimenti ? formatDataIT(safeDate( movimentiMateriale[0].data.toDate())) : "";
-    const dataUltimoMovimento = nrMovimenti ? formatDataIT(movimentiMateriale[nrMovimenti-1].data.toDate()) : "";
+    const dataUltimoCarico = [...movimentiMateriale]
+      .reverse()
+      .find(r => r.tipo === "carico")
+      ? formatDataIT(
+          safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "carico").data)
+        )
+      : "";
 
     return {
       ...m,
@@ -532,7 +579,7 @@ const movimentiMateriale = movimenti
       scarichiDettaglio: movimentiMateriale
     };
   })
-  .sort((a,b) => {
+  .sort((a, b) => {
     const v1 = a[sortField] || "";
     const v2 = b[sortField] || "";
     return sortAsc ? v1.localeCompare(v2) : v2.localeCompare(v1);
@@ -801,9 +848,29 @@ const cerDropdown = [
                 <td>{m.categoria}</td>
                 <td>{m.codiceCER}</td>
                 <td>{m.descrizione}</td>
-                <td>{m.nrScarichi}</td>
-                <td>{m.dataPrimoScarico}</td>
-                <td>{m.dataUltimoScarico}</td>
+                <td>
+  {filtroTipoMovimento === "SCARICO"
+    ? m.nrScarichi
+    : filtroTipoMovimento === "CARICO"
+    ? m.nrCarichi
+    : m.nrMovimenti}
+</td>
+
+<td>
+  {filtroTipoMovimento === "SCARICO"
+    ? m.dataPrimoScarico
+    : filtroTipoMovimento === "CARICO"
+    ? m.dataPrimoCarico
+    : m.dataPrimoMovimento}
+</td>
+
+<td>
+  {filtroTipoMovimento === "SCARICO"
+    ? m.dataUltimoScarico
+    : filtroTipoMovimento === "CARICO"
+    ? m.dataUltimoCarico
+    : m.dataUltimoMovimento}
+</td>
                 <td>
                   <button onClick={()=>handleEdit(m)}>Modifica</button>
                   {m.nrScarichi>0 && (
