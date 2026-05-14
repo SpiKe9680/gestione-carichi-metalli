@@ -343,7 +343,71 @@ useEffect(() => {
       .sort((a,b)=>a.localeCompare(b,"it"))
   );
 }, [scarichi]);
+const estimateResults = () => {
+  if (!scarichi?.length) return 0;
 
+  let dati = [...scarichi];
+
+  const norm = (v) =>
+    (v ?? "").toString().trim().toLowerCase();
+
+  if (filtroCER !== "tutti") {
+    const cerFiltro = norm(filtroCER);
+    dati = dati.filter(s =>
+      (s.cer || []).some(cer => {
+        const val = cer.codiceCER || cer.cer || cer.codice || "";
+        return norm(val) === cerFiltro;
+      })
+    );
+  }
+
+  if (!tutti && dal && al) {
+    let endDate = new Date(al);
+    endDate.setHours(23,59,59,999);
+
+    let startDate = new Date(dal);
+    startDate.setHours(0,0,0,0);
+
+    dati = dati.filter(s => {
+      if (!s.data) return false;
+      const d = s.data instanceof Date ? s.data : new Date(s.data);
+      return d >= startDate && d <= endDate;
+    });
+  }
+
+  if (filtroFornitore !== "tutti") {
+    dati = dati.filter(s => s.fornitore === filtroFornitore);
+  }
+
+  if (filtroListino !== "tutti") {
+    dati = dati.filter(s => s.listino === filtroListino);
+  }
+
+  if (filtroUtente !== "tutti") {
+    dati = dati.filter(s => (s.utente || "sconosciuto") === filtroUtente);
+  }
+
+  if (filtroFIR.trim() !== "") {
+    const fir = filtroFIR.toLowerCase().trim();
+    dati = dati.filter(s =>
+      (s.cer || []).some(cer =>
+        (cer.fir || "").toLowerCase().includes(fir)
+      )
+    );
+  }
+
+  if (tipoMovimento !== "tutti") {
+    dati = dati.filter(s => s.tipo === tipoMovimento);
+  }
+
+  return dati.length;
+};
+
+const getTrafficLight = (count) => {
+  if (count <= 1000) return "green";
+  if (count <= 2000) return "yellow";
+  return "red";
+};
   // --- SCARICHI PER GIORNO ---
 // --- SCARICHI PER GIORNO ---
 // --- SCARICHI PER GIORNO ---
@@ -1046,6 +1110,8 @@ setFiltroCER("tutti");
   setDal(minDate);
   setAl(maxDate);
 };
+const estimated = estimateResults();
+const traffic = getTrafficLight(estimated);
 
   return (
     <div className="gestione-scarichi-container">
@@ -1106,7 +1172,27 @@ setFiltroCER("tutti");
         <button onClick={resetFiltri} style={{marginLeft:"12px"}}>🔄 Reset filtri</button>
 
         <label style={{display:"flex",alignItems:"center"}}>
-          <input type="checkbox" checked={tutti} onChange={e=>setTutti(e.target.checked)} />
+          <input
+  type="checkbox"
+  checked={tutti}
+  onChange={(e) => {
+    const checked = e.target.checked;
+
+    const estimated = estimateResults();
+
+    if (checked && estimated > 2000) {
+      const ok = window.confirm(
+        "⚠️ Attenzione: questa ricerca restituirà circa " +
+        estimated +
+        " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
+      );
+
+      if (!ok) return;
+    }
+
+    setTutti(checked);
+  }}
+/>
           Disabilita filtro date
         </label>
 
@@ -1193,6 +1279,7 @@ setFiltroCER("tutti");
 
       
       </div>
+
 <div style={{ marginTop: "15px", marginBottom: "10px", display: "flex", gap: "10px", alignItems: "center" }}>
   
   <label>
@@ -1218,6 +1305,24 @@ setFiltroCER("tutti");
     ⚡ Applica
   </button>
 
+</div>
+{/* SEMAFORO RISULTATI */}
+<div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+  <span>Risultati stimati:</span>
+
+  <span style={{
+    width: 12,
+    height: 12,
+    borderRadius: "50%",
+    backgroundColor:
+      traffic === "green"
+        ? "green"
+        : traffic === "yellow"
+        ? "orange"
+        : "red"
+  }} />
+
+  <strong>{estimated}</strong>
 </div>
       {/* TABELLA */}
 <table className="tabella-scarichi" style={{marginTop:"16px"}}>

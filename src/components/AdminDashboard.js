@@ -54,6 +54,12 @@ if (!currentUser) return null;
         >
           Configurazione Generale
         </button>
+        <button 
+          onClick={() => navigate("/MovimentiFinanziari")}
+          style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
+        >
+          Movimenti Finanziari
+        </button>
       </div>
     </div>
   );

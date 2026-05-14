@@ -33,6 +33,11 @@ const requestSort = (key) => {
   });
 };
 
+const [showMergeUI, setShowMergeUI] = useState(false);
+const [merge1, setMerge1] = useState("");
+const [merge2, setMerge2] = useState("");
+
+const mergeInvalid = !merge1 || !merge2 || merge1 === merge2;
 const safeDate = (d) => {
   if (!d) return null;
 
@@ -150,6 +155,155 @@ const safeRenameControparte = async (fornitore) => {
     alert("❌ Operazione fallita, nessuna modifica applicata");
   }
 };
+
+const eseguiFusioneControparti = async (tipo) => {
+  try {
+    if (!merge1 || !merge2) {
+      alert("Seleziona entrambe le controparti");
+      return;
+    }
+
+    if (merge1 === merge2) {
+       alert("❌ Hai selezionato la stessa controparte");
+      return;
+    }
+
+    let nomeFinale = "";
+
+    // 🔥 SCELTA NOME FINALE
+    if (tipo === 1) nomeFinale = merge1;
+    if (tipo === 2) nomeFinale = merge2;
+
+    if (tipo === 3) {
+      const nuovoNomeRaw = prompt("Inserisci il nuovo nome:");
+      if (!nuovoNomeRaw) return;
+
+      nomeFinale = nuovoNomeRaw.trim();
+      if (!nomeFinale) return;
+
+      // 🔥 CHECK ESISTENZA
+      const snap = await getDocs(collection(db, "fornitori"));
+      const exists = snap.docs.find(
+        d => (d.data().nome || "").toLowerCase().trim() === nomeFinale.toLowerCase()
+      );
+
+      if (exists) {
+        alert("❌ Nome già esistente");
+        return;
+      }
+
+      // 🔥 CREA NUOVA CONTROPARTE
+      await addDoc(collection(db, "fornitori"), {
+        nome: nomeFinale,
+        indirizzo: "",
+        piva_cf: ""
+      });
+    }
+
+    const confirm = window.confirm(
+      `Fusione:\n\n${merge1} + ${merge2} ➜ ${nomeFinale}\n\nProcedere?`
+    );
+
+    if (!confirm) return;
+
+    const operationId = createOperationId();
+
+    let updatedCarichi = 0;
+    let updatedScarichi = 0;
+    let deleted = 0;
+
+    const batch = writeBatch(db);
+
+    // 🔥 CARICHI (merge1)
+    const car1 = await getDocs(
+      query(collection(db, "carichi"), where("fornitore", "==", merge1))
+    );
+
+    car1.forEach(d => {
+      batch.update(doc(db, "carichi", d.id), { fornitore: nomeFinale });
+      updatedCarichi++;
+    });
+
+    // 🔥 CARICHI (merge2)
+    const car2 = await getDocs(
+      query(collection(db, "carichi"), where("fornitore", "==", merge2))
+    );
+
+    car2.forEach(d => {
+      batch.update(doc(db, "carichi", d.id), { fornitore: nomeFinale });
+      updatedCarichi++;
+    });
+
+    // 🔥 SCARICHI (merge1)
+    const scar1 = await getDocs(
+      query(collection(db, "scarichi"), where("fornitore", "==", merge1))
+    );
+
+    scar1.forEach(d => {
+      batch.update(doc(db, "scarichi", d.id), { fornitore: nomeFinale });
+      updatedScarichi++;
+    });
+
+    // 🔥 SCARICHI (merge2)
+    const scar2 = await getDocs(
+      query(collection(db, "scarichi"), where("fornitore", "==", merge2))
+    );
+
+    scar2.forEach(d => {
+      batch.update(doc(db, "scarichi", d.id), { fornitore: nomeFinale });
+      updatedScarichi++;
+    });
+
+    // 🔥 CANCELLA VECCHIE CONTROPARTI
+    const fornSnap = await getDocs(collection(db, "fornitori"));
+
+    fornSnap.forEach(f => {
+      const nome = f.data().nome;
+
+      if (nome === merge1 || nome === merge2) {
+        // NON cancellare se è il nome finale
+        if (nome !== nomeFinale) {
+          batch.delete(doc(db, "fornitori", f.id));
+          deleted++;
+        }
+      }
+    });
+
+    await batch.commit();
+
+    // 🔥 LOG
+    await scriviLog({
+      operationId,
+      pagina: "GestioneControparti",
+      evento: "MERGE_CONTROPARTI",
+      tipo: "UPDATE",
+      collezioneRef: "fornitori",
+      documentoId: "merge",
+      before: { merge1, merge2 },
+      after: { nomeFinale },
+      extra: {
+        carichiAggiornati: updatedCarichi,
+        scarichiAggiornati: updatedScarichi,
+        eliminati: deleted
+      },
+      utente: getUtenteReact(),
+      ripristinabile: false
+    });
+
+    alert(`✅ Fusione completata`);
+
+    setMerge1("");
+    setMerge2("");
+    setShowMergeUI(false);
+
+    await loadData();
+
+  } catch (e) {
+    console.error(e);
+    alert("❌ Errore fusione");
+  }
+};
+
   const [dal, setDal] = useState(null);
   const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
@@ -180,15 +334,18 @@ validScarichi.sort(
   (a, b) => (a.data?.seconds || 0) - (b.data?.seconds || 0)
 );
 
+const oggi = new Date();
+oggi.setHours(23, 59, 59, 999);
+
 if (validScarichi.length) {
-  setMinDataDB(safeDate(validScarichi[0].data));
-setMinDataDB(safeDate(validScarichi[0].data));
-setMaxDataDB(safeDate(validScarichi[validScarichi.length - 1].data));
+  const min = safeDate(validScarichi[0].data);
+
+  setMinDataDB(min);
+  setMaxDataDB(oggi); // 🔥 FORZATO A OGGI SEMPRE
 } else {
   setMinDataDB(null);
-  setMaxDataDB(null);
+  setMaxDataDB(oggi); // 🔥 comunque oggi, mai sporco
 }
-
     } catch (e) { setErrori([e.message]); }
   };
 
@@ -544,6 +701,70 @@ if (sortConfig.key) {
 
      <h2>Gestione Controparti</h2>
      <button onClick={aggiungiFornitore} style={{marginBottom:15}}>➕ Aggiungi Controparte</button>
+      
+      <button onClick={() => setShowMergeUI(!showMergeUI)} style={{marginLeft:10}}>
+  🔀 Fusione Societaria
+</button>
+
+{showMergeUI && (
+  <div style={{border:"1px solid #ccc", padding:15, marginTop:15}}>
+    
+    <h4>Fusione Controparti</h4>
+
+    <select value={merge1} onChange={e => setMerge1(e.target.value)}>
+      <option value="">Seleziona Controparte 1</option>
+      {[...fornitori]
+  .sort((a, b) =>
+    (a.nome || "").localeCompare(b.nome || "", "it", { sensitivity: "base" })
+  )
+  .map(f => (
+    <option key={f.id} value={f.nome}>{f.nome}</option>
+))}
+    </select>
+
+    <select value={merge2} onChange={e => setMerge2(e.target.value)} style={{marginLeft:10}}>
+      <option value="">Seleziona Controparte 2</option>
+      {[...fornitori]
+  .sort((a, b) =>
+    (a.nome || "").localeCompare(b.nome || "", "it", { sensitivity: "base" })
+  )
+  .map(f => (
+    <option key={f.id} value={f.nome}>{f.nome}</option>
+))}
+    </select>
+{merge1 && merge2 && merge1 === merge2 && (
+  <div style={{color:"red", marginTop:5}}>
+    ⚠️ Hai selezionato la stessa controparte
+  </div>
+)}
+    <div style={{marginTop:10}}>
+      <button 
+  onClick={() => eseguiFusioneControparti(1)}
+  disabled={mergeInvalid}
+>
+  Fondi mantenendo nome 1
+</button>
+
+<button 
+  onClick={() => eseguiFusioneControparti(2)} 
+  style={{marginLeft:5}}
+  disabled={mergeInvalid}
+>
+  Fondi mantenendo nome 2
+</button>
+
+<button 
+  onClick={() => eseguiFusioneControparti(3)} 
+  style={{marginLeft:5}}
+  disabled={mergeInvalid}
+>
+  Nuovo nome
+</button>
+    </div>
+
+  </div>
+)}
+      
       {/* FILTRI */}
       <div style={{marginBottom:15}}>
         <label style={{display:"flex",alignItems:"center"}}>

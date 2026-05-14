@@ -25,6 +25,7 @@ const handleGoToDashboard = () => {
   if (goToDashboard) goToDashboard();
   else navigate("/admin");
 };
+const [note, setNote] = useState("");
 const [snapshotIniziale, setSnapshotIniziale] = useState(null);
   const [firExists, setFirExists] = useState(false);
 const [firCheckLoading, setFirCheckLoading] = useState(false);
@@ -78,7 +79,50 @@ const [docIdOriginale, setDocIdOriginale] = useState(null);
     const yyyy = date.getFullYear();
     return `${gg} ${mese} ${yyyy}`;
   };
+const checkFirExists = async (value) => {
+  if (isEditing) return;
+  if (!value?.trim()) {
+    setFirExists(false);
+    return;
+  }
 
+  setFirCheckLoading(true);
+
+  try {
+    const fir = value.trim().toUpperCase();
+
+    let exists = false;
+
+    const checkDocs = (docs) => {
+      for (const snap of docs) {
+        const data = snap.data();
+        const blocchi = data.scarico || data.carico || [];
+
+        for (const c of blocchi) {
+          if ((c.fir || "").toUpperCase() !== fir) continue;
+          if (docIdOriginale && snap.id === docIdOriginale) continue;
+
+          exists = true;
+          return;
+        }
+      }
+    };
+
+    const [scarichiSnap, carichiSnap] = await Promise.all([
+      getDocs(collection(db, "scarichi")),
+      getDocs(collection(db, "carichi")),
+    ]);
+
+    checkDocs(scarichiSnap.docs);
+    if (!exists) checkDocs(carichiSnap.docs);
+
+    setFirExists(exists);
+  } catch (err) {
+    console.error("Errore FIR check:", err);
+  } finally {
+    setFirCheckLoading(false);
+  }
+};
   const formattaOra24 = (date) => {
   if (!date) return "";
 
@@ -168,58 +212,8 @@ await setDoc(
 useEffect(() => {
   if (isEditing) {
     setFirExists(false);
-    return;
   }
-
-  if (!firCer?.trim()) {
-    setFirExists(false);
-    return;
-  }
-
-  const timeout = setTimeout(async () => {
-    setFirCheckLoading(true);
-
-    try {
-      const fir = firCer.trim().toUpperCase();
-
-      let exists = false;
-
-      const checkDocs = (docs) => {
-        for (const snap of docs) {
-          const data = snap.data();
-
-          const blocchi = data.scarico || data.carico || [];
-
-          for (const c of blocchi) {
-            if ((c.fir || "").toUpperCase() !== fir) continue;
-
-            // 🔥 FIX FONDAMENTALE: ignora documento corrente in edit
-            if (docIdOriginale && snap.id === docIdOriginale) continue;
-
-            exists = true;
-            return;
-          }
-        }
-      };
-
-      const [scarichiSnap, carichiSnap] = await Promise.all([
-        getDocs(collection(db, "scarichi")),
-        getDocs(collection(db, "carichi")),
-      ]);
-
-      checkDocs(scarichiSnap.docs);
-      if (!exists) checkDocs(carichiSnap.docs);
-
-      setFirExists(exists);
-    } catch (err) {
-      console.error("Errore FIR check:", err);
-    } finally {
-      setFirCheckLoading(false);
-    }
-  }, 300);
-
-  return () => clearTimeout(timeout);
-}, [firCer, docIdOriginale, isEditing]);
+}, [isEditing]);
 
 useEffect(() => {
   console.log("🟡 EDIT MODE:", {
@@ -384,7 +378,7 @@ const salvaBozza = async () => {
       fotoURL: (previewFoto || []).filter(
         p => typeof p === "string" && !p.startsWith("blob:")
       ),
-
+note: note || "",
       inModifica: true,
       updatedAt: serverTimestamp()
     };
@@ -472,7 +466,7 @@ useEffect(() => {
             : [];
 
           setPreviewFoto(foto);
-
+setNote(d.note || "");
           setDocIdOriginale(d.docIdOriginale || null);
 
           // 🔥 FIX DATA/ORA BOZZA
@@ -529,7 +523,30 @@ useEffect(() => {
 }, [previewFoto]);
 useEffect(() => {
   const nuovoFornitore = localStorage.getItem("nuovoFornitore");
+if (nuovoFornitore) {
+  const utente = getLogUser();
 
+  if (utente) {
+    deleteDoc(doc(db, "scarichi_draft", utente))
+      .then(() => {
+        console.log("🧹 Draft eliminata dopo creazione fornitore");
+      })
+      .catch(err => {
+        console.warn("Errore delete draft:", err);
+      });
+  }
+
+  // 🔥 RESET HARD STATO (fondamentale)
+  setScarico([]);
+  setSelectedCer("");
+  setSelectedMateriale("");
+  setPeso("");
+  setCalo("");
+  setFirCer("");
+  setPreviewFoto([]);
+  setFotoFile([]);
+  setNote("");
+}
   const savedData = localStorage.getItem("scarico_temp_data");
   const savedOra = localStorage.getItem("scarico_temp_ora");
   const savedUsaOra = localStorage.getItem("scarico_temp_usaOra");
@@ -822,7 +839,7 @@ const handlePrint = async (movimentoId = null, tipo) => {
     }
     const { pdf, startY } = await PdfHeader();
     pdf.setFontSize(16);
-
+    let y = startY + 26;
     const dataObj = docData.data?.toDate
       ? docData.data.toDate()
       : new Date();
@@ -848,8 +865,27 @@ const handlePrint = async (movimentoId = null, tipo) => {
     );
 
     pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
+if (docData.note && docData.note.trim() !== "") {
+  const noteLines = pdf.splitTextToSize(docData.note, 180);
 
-    let y = startY + 26;
+  const noteBlockHeight = noteLines.length * 5 + 10;
+
+  // se non c'è spazio sufficiente → nuova pagina
+  if (y + noteBlockHeight > 280) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setFontSize(12);
+  pdf.text("Note:", 10, y);
+  y += 6;
+
+  pdf.setFontSize(10);
+  pdf.text(noteLines, 10, y);
+
+  y += noteLines.length * 5 + 10;
+}
+
 
     // ---------------- TABELLE CER ----------------
     const righe = docData.carico || docData.scarico || [];
@@ -1076,7 +1112,7 @@ const handleSave = async () => {
             : new Date()),
 
       fotoURL: fotoURLs,
-
+      note: note || "",
       lastUpdate: new Date()
     };
 
@@ -1210,7 +1246,8 @@ const listinoBloccato = selectedFornitore !== "";
       </div>
       <div>
         <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-          <label>            Data:            <DatePicker
+          <label>            Data:            
+            <DatePicker
               selected={dataScaricoStr ? parseDataOra(dataScaricoStr, oraStr) : new Date()}
               onChange={(date) => {          setDirty(true);        setDataScaricoStr(formattaDataItaliana(date));
                 if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {                  const now = new Date();
@@ -1433,6 +1470,18 @@ onChange={async (e) => {
 )}
           </>
         )}
+        <div style={{ marginTop: "12px" }}>
+  <label>Note:</label>
+  <textarea
+    value={note}
+    onChange={(e) => {
+      setNote(e.target.value);
+      setDirty(true);
+    }}
+    rows={3}
+    style={{ width: "100%" }}
+  />
+</div>
           {/* --- PULSANTE SALVA SCARICO FINALE --- */}
 <div style={{ marginTop: "20px", textAlign: "center" }}>
 <button
@@ -1473,13 +1522,14 @@ onChange={async (e) => {
 ))}
           </select>
           <label>F.I.R (CER)/DDT:</label>
-        <input
-          type="text"
-          value={firCer}
-          onChange={(e) => setFirCer(e.target.value.toUpperCase())}
-          placeholder="Numero formulario"
-          style={{ textTransform: "uppercase" }}
-        />
+       <input
+  type="text"
+  value={firCer}
+  onChange={(e) => setFirCer(e.target.value.toUpperCase())}
+  onBlur={() => checkFirExists(firCer)}
+  placeholder="Numero formulario"
+  style={{ textTransform: "uppercase" }}
+/>
         {firExists && (
   <p style={{ color: "red", fontWeight: "bold" }}>
     il FIR immesso {firCer} è già presente a sistema, impossibile continuare

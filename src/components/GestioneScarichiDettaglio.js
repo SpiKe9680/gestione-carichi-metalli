@@ -510,6 +510,7 @@ const handlePrint = async (movimentoId = null, tipo) => {
     }
     const { pdf, startY } = await PdfHeader();
     const dataObj = docData.data?.toDate ? docData.data.toDate() : new Date();
+    let y = startY + 30;
     pdf.setFontSize(14);
     pdf.text(`Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`, 10, startY - 20);
     const label = tipo === "carico" ? "Controparte:" : "Controparte:";
@@ -517,7 +518,27 @@ const handlePrint = async (movimentoId = null, tipo) => {
     pdf.text(`${label} ${docData.fornitore || "-"}`, 10, startY -12);
     pdf.text(`Data e Ora: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`, 10, startY -6);
     pdf.text(`Listino: ${docData.listino || "-"}`, 10, startY );
-    let y = startY + 10;
+if (docData.note && docData.note.trim() !== "") {
+  const noteLines = pdf.splitTextToSize(docData.note, 180);
+
+  const noteBlockHeight = noteLines.length * 5 + 10;
+
+  // se non c'è spazio sufficiente → nuova pagina
+  if (y + noteBlockHeight > 280) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setFontSize(12);
+  pdf.text("Note:", 10, y);
+  y += 6;
+
+  pdf.setFontSize(10);
+  pdf.text(noteLines, 10, y);
+
+  y += noteLines.length * 5 + 10;
+}
+    
     const righeMovimento = Array.isArray(docData[tipo === "carico" ? "carico" : "scarico"])
       ? docData[tipo === "carico" ? "carico" : "scarico"]
       : [];
@@ -705,35 +726,90 @@ const eliminaRiga = async (riga) => {
     if (!snap.exists()) return;
 
     const dati = snap.data();
+    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
 
-    const field = Array.isArray(dati.scarico)
-      ? "scarico"
-      : "carico";
+    const movimenti = dati[field] || [];
+
+    const cerTarget = movimenti[riga.cerIndex];
+    if (!cerTarget) return;
+
+    const confermaTesto = cerTarget.righe?.length === 1
+      ? "⚠️ Questo è l’ULTIMO CER dello scarico. Eliminando questo CER verrà cancellato INTERAMENTE lo scarico. Continuare?"
+      : "Confermi eliminazione del CER selezionato?";
+
+    const ok = window.confirm(confermaTesto);
+    if (!ok) return;
 
     const before = structuredClone(dati);
-    const updated = structuredClone(dati);
 
-    const movimenti = updated[field];
+    // 🔥 rimuovo riga CER
+    const updatedMovimenti = movimenti
+      .map((cerObj, cIdx) => {
+        if (cIdx !== riga.cerIndex) return cerObj;
 
-    const cer = movimenti?.[riga.cerIndex];
-    if (!cer) return;
+        const nuoveRighe = (cerObj.righe || []).filter(
+          (_, rIdx) => rIdx !== riga.rIndex
+        );
 
-    // 🔥 sicurezza extra: verifica FIR + CER + indice riga
-    const nuovaRighe = (cer.righe || []).filter((_, idx) => idx !== riga.rIndex);
+        return {
+          ...cerObj,
+          righe: nuoveRighe
+        };
+      })
+      .filter(cerObj => cerObj.righe && cerObj.righe.length > 0);
 
-    updated[field][riga.cerIndex] = {
-      ...cer,
-      righe: nuovaRighe
-    };
+    // 🔥 CASO 1: lo scarico è rimasto senza CER → elimina documento
+    if (updatedMovimenti.length === 0) {
+      const confermaFinale = window.confirm(
+        "🚨 ATTENZIONE: questo era l’ULTIMO CER dello scarico.\n\nEliminando continuerai a cancellare DEFINITIVAMENTE tutto lo scarico.\nProcedere?"
+      );
 
-    // 🔥 elimina CER solo se VUOTO
-    if (nuovaRighe.length === 0) {
-      updated[field].splice(riga.cerIndex, 1);
+      if (!confermaFinale) return;
+
+      await deleteDoc(ref);
+
+      await scriviLog({
+        pagina: "gestione-scarichi-dettaglio",
+        evento: "ELIMINA_INTERO_SCARICO",
+        riferimento: {
+          collezione,
+          documentoId: riga.docId
+        },
+        before,
+        after: null,
+        utente: getUtenteReact(),
+        ripristinabile: false
+      });
+
+      alert("🗑 Scarico eliminato completamente");
     }
 
-    await setDoc(ref, updated);
+    // 🔥 CASO 2: rimangono altri CER → update normale
+    else {
+      await updateDoc(ref, {
+        [field]: updatedMovimenti,
+        lastUpdate: new Date()
+      });
 
-    // 🔥 CLEAN UI
+      await scriviLog({
+        pagina: "gestione-scarichi-dettaglio",
+        evento: `ELIMINA_CER_${riga.tipo?.toUpperCase()}`,
+        riferimento: {
+          collezione,
+          documentoId: riga.docId,
+          cerIndex: riga.cerIndex,
+          rIndex: riga.rIndex
+        },
+        before,
+        after: { ...dati, [field]: updatedMovimenti },
+        utente: getUtenteReact(),
+        ripristinabile: true
+      });
+
+      alert("🗑 CER eliminato con successo");
+    }
+
+    // reset UI
     setEditor(null);
     setOriginalEditor(null);
     setSelectedIndex(null);
@@ -741,23 +817,9 @@ const eliminaRiga = async (riga) => {
     await reloadDati();
     setRefresh(p => p + 1);
 
-    await scriviLog({
-      pagina: "gestione-scarichi-dettaglio",
-      evento: `ELIMINA_RIGA_${riga.tipo?.toUpperCase()}`,
-      riferimento: {
-        collezione,
-        documentoId: riga.docId,
-        cerIndex: riga.cerIndex,
-        rIndex: riga.rIndex
-      },
-      before,
-      after: updated,
-      utente: getUtenteReact(),
-      ripristinabile: true
-    });
-
   } catch (e) {
     console.error("Errore eliminaRiga:", e);
+    alert("Errore durante eliminazione");
   }
 };
 const reloadDati = async () => {
@@ -828,34 +890,29 @@ const salvaDraftScarico = async (riga) => {
       cerIndex: riga.cerIndex
     };
 
-    await setDoc(draftRef, {
-      [field]: fullCopy, // 🔥 SEMPRE COMPLETO
+  await setDoc(draftRef, {
+  [field]: fullCopy,
+  fornitore: snapshot.fornitore || "",
+  listino: snapshot.listino || "",
+  tipoMovimento: riga.tipo || "scarico",
+  selected: selectedPointer,
 
-      fornitore: snapshot.fornitore || "",
-      listino: snapshot.listino || "",
+  data: snapshot.data?.toDate?.() || new Date(),
+  dataScaricoStr: snapshot.dataScaricoStr || "",
+  oraStr: riga.ora || "",
 
-      tipoMovimento: riga.tipo || "scarico",
+  fotoURL: Array.isArray(snapshot.fotoURL) ? snapshot.fotoURL : [],
 
-      // 🔥 SOLO POINTER, NON STRUTTURA
-      selected: selectedPointer,
+  // 🔥 FIX MANCANTE
+  note: snapshot.note || "",
 
-      data: snapshot.data?.toDate?.() || new Date(),
-      dataScaricoStr: snapshot.dataScaricoStr || "",
-
-      oraStr: riga.ora || "",
-
-      fotoURL: Array.isArray(snapshot.fotoURL) ? snapshot.fotoURL : [],
-
-      inModifica: true,
-
-      docIdOriginale: riga.docId,
-      originalFir: riga.fir,
-
-      utente: utenteNome,
-
-      updatedAt: serverTimestamp(),
-      source: "gestione_scarichi_dettaglio"
-    }, { merge: true });
+  inModifica: true,
+  docIdOriginale: riga.docId,
+  originalFir: riga.fir,
+  utente: utenteNome,
+  updatedAt: serverTimestamp(),
+  source: "gestione_scarichi_dettaglio"
+}, { merge: true });
 
   } catch (e) {
     console.error("Errore salvaDraftScarico:", e);
