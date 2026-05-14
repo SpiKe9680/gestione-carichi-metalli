@@ -15,6 +15,8 @@ import GestioneCER from "./components/GestioneCER";
 import GestioneLog from "./components/GestioneLog";
 import DettagliLog from "./components/DettagliLog";
 import ConfigurazioniGenerali from "./components/ConfigurazioniGenerali";
+import MovimentiFinanziari from "./components/MovimentiFinanziari";
+import MovimentiGiorno from "./components/MovimentiGiorno";
 
 const getUser = () => {
   try {
@@ -107,6 +109,17 @@ const App = () => {
 
         <Route path="/configurazioni-generali"
           element={<AdminRoute><ConfigurazioniGenerali /></AdminRoute>} />
+<Route
+  path="/MovimentiFinanziari"
+  element={
+    <ProtectedRoute>
+      <MovimentiFinanziari />
+    </ProtectedRoute>
+  }
+/>
+
+<Route path="/movimenti-giorno"
+          element={<AdminRoute><MovimentiGiorno /></AdminRoute>} />
 
         {/* FALLBACK */}
         <Route

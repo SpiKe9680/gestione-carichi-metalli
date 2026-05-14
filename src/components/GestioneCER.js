@@ -1,6 +1,7 @@
 // src/pages/GestioneCER.js
 import React, { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
+import { deleteDoc } from "firebase/firestore";
 import {
   collection,
   getDocs,
@@ -27,7 +28,10 @@ const [filtroTipoMovimento, setFiltroTipoMovimento] = useState("TUTTI"); // SCAR
   const [materiali, setMateriali] = useState([]);
   const [scarichi, setScarichi] = useState([]);
   const [listini, setListini] = useState([]);
-
+const [mergeMode, setMergeMode] = useState(false);
+const [mergeCER, setMergeCER] = useState("");
+const [mergeMatSX, setMergeMatSX] = useState("");
+const [mergeMatDX, setMergeMatDX] = useState("");
 const [prezzoDefault, setPrezzoDefault] = useState("");
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -435,6 +439,33 @@ const handlePulsantePrincipale = () => {
     }
   }
 };
+
+const getCountMateriale = (nome, cer) => {
+  const check = (v) => String(v || "").trim().toUpperCase();
+  let count = 0;
+
+  scarichi.forEach(s => {
+    if (s.codiceCER !== cer) return;
+
+    (s.scarico || []).forEach(b => {
+      (b.righe || []).forEach(r => {
+        if (check(r.materiale) === check(nome)) count++;
+      });
+    });
+  });
+
+  carichi.forEach(c => {
+    if (c.codiceCER !== cer) return;
+
+    (c.carico || []).forEach(b => {
+      (b.righe || []).forEach(r => {
+        if (check(r.materiale) === check(nome)) count++;
+      });
+    });
+  });
+
+  return count;
+};
   // ---------------- EDIT + SCROLL ----------------
 // EDIT
 const handleEdit = (m) => {
@@ -457,7 +488,128 @@ const handleEdit = (m) => {
   setFormVisible(true);        // apre il form
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
+const countMovimentiDX = (materialeDX, cer) => {
+  const norm = (v) => String(v || "").trim().toUpperCase();
 
+  let count = 0;
+
+  // SCARICHI
+  scarichi.forEach((s) => {
+    (s.scarico || []).forEach((blocco) => {
+      if (norm(blocco.cer) !== norm(cer)) return;
+
+      (blocco.righe || []).forEach((r) => {
+        if (norm(r.materiale) === norm(materialeDX)) {
+          count++;
+        }
+      });
+    });
+  });
+
+  // CARICHI
+  carichi.forEach((c) => {
+    (c.carico || []).forEach((blocco) => {
+      if (norm(blocco.cer) !== norm(cer)) return;
+
+      (blocco.righe || []).forEach((r) => {
+        if (norm(r.materiale) === norm(materialeDX)) {
+          count++;
+        }
+      });
+    });
+  });
+
+  return count;
+};
+const handleMergeMateriali = async () => {
+  if (!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX) {
+    alert("Selezioni non valide");
+    return;
+  }
+
+  try {
+    // 🔎 PREVIEW CONTEGGIO
+   let count = countMovimentiDX(mergeMatDX, mergeCER);
+
+    const checkMatch = (nome) =>
+      String(nome || "").trim().toUpperCase();
+  
+    const conferma = window.confirm(
+      `Verranno modificati ${count} movimenti.\n\nContinuare?`
+    );
+
+    if (!conferma) return;
+
+    // 🔁 UPDATE SCARICHI
+    for (const s of scarichi) {
+      let modified = false;
+
+      const nuoviBlocchi = (s.scarico || []).map(b => {
+        const nuoveRighe = (b.righe || []).map(r => {
+          if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
+            modified = true;
+            return { ...r, materiale: mergeMatSX };
+          }
+          return r;
+        });
+        return { ...b, righe: nuoveRighe };
+      });
+
+      if (modified) {
+        await updateDoc(doc(db, "scarichi", s.id), {
+          scarico: nuoviBlocchi
+        });
+      }
+    }
+
+    // 🔁 UPDATE CARICHI
+    for (const c of carichi) {
+      let modified = false;
+
+      const nuoviBlocchi = (c.carico || []).map(b => {
+        const nuoveRighe = (b.righe || []).map(r => {
+          if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
+            modified = true;
+            return { ...r, materiale: mergeMatSX };
+          }
+          return r;
+        });
+        return { ...b, righe: nuoveRighe };
+      });
+
+      if (modified) {
+        await updateDoc(doc(db, "carichi", c.id), {
+          carico: nuoviBlocchi
+        });
+      }
+    }
+
+    const matDX = materiali.find(m => m.nome === mergeMatDX);
+
+if (matDX) {
+  await updateDoc(doc(db, "materiali", matDX.idDoc), {
+    attivo: false
+  });
+
+  // 🔥 RIMOZIONE COMPLETA DAL DATABASE LOGICA (opzionale ma consigliata)
+  // se vuoi proprio eliminarlo:
+  await deleteDoc(doc(db, "materiali", matDX.idDoc));
+}
+
+    alert("Merge completato");
+
+    await fetchMateriali();
+    await fetchScarichi();
+    await fetchCarichi();
+
+    setMergeMatSX("");
+    setMergeMatDX("");
+
+  } catch (err) {
+    console.error(err);
+    alert("Errore merge");
+  }
+};
   // ---------------- TOGGLE DETTAGLI ----------------
   const toggleDettagli = (id) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
@@ -614,6 +766,7 @@ const intestazioni = () => {
 };
 
 
+
 const handleStampa = async () => {
   if (!materialiFiltrati || materialiFiltrati.length === 0) {
     alert("Nessun dato da stampare");
@@ -630,9 +783,8 @@ const handleStampa = async () => {
 
   pdf.setFontSize(16);
   pdf.text("Gestione Codici CER", 14, y);
-  y -= 30;
+  y += 10;
 
-  // 🔥 FILTRI
   const formatData = (d) => {
     if (!d) return "";
     return `${String(d.getDate()).padStart(2, "0")}/${String(
@@ -641,67 +793,74 @@ const handleStampa = async () => {
   };
 
   if (!tutti) {
-    const label = `Dal ${formatData(dal) || "..."} Al ${formatData(al) || "..."}`;
     pdf.setFontSize(11);
-    pdf.text(label, 14, y);
+    pdf.text(
+      `Dal ${formatData(dal) || "..."} al ${formatData(al) || "..."}`,
+      14,
+      y
+    );
     y += 7;
   }
 
-  pdf.setFontSize(11);
   pdf.text(`Tipo Movimento: ${filtroTipoMovimento}`, 14, y);
   y += 10;
 
-  // 🔥 INTESTAZIONI DINAMICHE
-  let head = [];
-  if (filtroTipoMovimento === "SCARICO") {
-    head = [["Nome", "Categoria", "CER", "Nr Scarichi", "Primo", "Ultimo"]];
-  } else if (filtroTipoMovimento === "CARICO") {
-    head = [["Nome", "Categoria", "CER", "Nr Carichi", "Primo", "Ultimo"]];
-  } else {
-    head = [["Nome", "Categoria", "CER", "Nr Mov", "Primo", "Ultimo"]];
-  }
+  materialiFiltrati.forEach((m, index) => {
+    const movimenti = (m.scarichiDettaglio || []).filter((r) => {
+      if (filtroTipoMovimento === "TUTTI") return true;
+      return r.tipo.toUpperCase() === filtroTipoMovimento;
+    });
 
-  // 🔥 DATI
-  const body = materialiFiltrati.map((m) => {
-    if (filtroTipoMovimento === "SCARICO") {
-      return [
-        m.nome,
-        m.categoria,
-        m.codiceCER,
-        m.nrScarichi,
-        m.dataPrimoScarico,
-        m.dataUltimoScarico,
-      ];
+    // 🔴 TITOLO MATERIALE
+    pdf.setFontSize(12);
+    pdf.text(
+      `${m.nome} | ${m.categoria} | CER: ${m.codiceCER}`,
+      14,
+      y
+    );
+    y += 6;
+
+    if (movimenti.length === 0) {
+      pdf.setFontSize(9);
+      pdf.text("Nessun movimento", 14, y);
+      y += 8;
+      return;
     }
 
-    if (filtroTipoMovimento === "CARICO") {
-      return [
-        m.nome,
-        m.categoria,
-        m.codiceCER,
-        m.nrCarichi,
-        m.dataPrimoCarico,
-        m.dataUltimoCarico,
-      ];
+    const body = movimenti.map((r) => [
+      r.tipo,
+      formatDataIT(safeDate(r.data)),
+      r.fornitore || "-",
+      r.listino || "-",
+      (r.prezzoKg || 0).toFixed(2),
+      r.peso || 0,
+      (r.prezzoTotale || 0).toFixed(2)
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      head: [[
+        "Tipo",
+        "Data",
+        "Controparte",
+        "Listino",
+        "€/kg",
+        "Kg",
+        "Totale €"
+      ]],
+      body,
+      theme: "grid",
+      styles: { fontSize: 8 },
+      margin: { left: 14, right: 14 }
+    });
+
+    y = pdf.lastAutoTable.finalY + 10;
+
+    // 🔴 spazio tra materiali + gestione pagina
+    if (y > 270 && index < materialiFiltrati.length - 1) {
+      pdf.addPage();
+      y = 20;
     }
-
-    return [
-      m.nome,
-      m.categoria,
-      m.codiceCER,
-      m.nrMovimenti,
-      m.dataPrimoMovimento,
-      m.dataUltimoMovimento,
-    ];
-  });
-
-  autoTable(pdf, {
-    startY: y,
-    head,
-    body,
-    theme: "grid",
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [230, 230, 230] },
   });
 
   pdf.save("gestione_cer.pdf");
@@ -777,8 +936,66 @@ const cerDropdown = [
   <button onClick={handlePulsantePrincipale}>
     {buttonLabel}
   </button>
-</div>
 
+<button onClick={() => setMergeMode(!mergeMode)}>
+  🔀 Merge Materiali
+</button></div>{mergeMode && (
+  <div style={{ marginBottom: 20, padding: 10, border: "1px solid #ccc" }}>
+    
+    {/* CER */}
+    <select
+      value={mergeCER}
+      onChange={(e) => {
+        setMergeCER(e.target.value);
+        setMergeMatSX("");
+        setMergeMatDX("");
+      }}
+    >
+      <option value="">Seleziona CER</option>
+      {[...new Set(materiali.map(m => m.codiceCER))]
+        .sort((a,b)=>a.localeCompare(b))
+        .map(c => <option key={c}>{c}</option>)
+      }
+    </select>
+
+    {/* MATERIALI */}
+    <select
+      disabled={!mergeCER}
+      value={mergeMatSX}
+      onChange={e => setMergeMatSX(e.target.value)}
+    >
+      <option value="">Materiale finale (SX)</option>
+      {materiali
+        .filter(m => m.codiceCER === mergeCER)
+        .sort((a,b)=>a.nome.localeCompare(b.nome))
+        .map(m => <option key={m.idDoc}> {m.nome}</option>)
+      }
+    </select>
+
+    <select
+      disabled={!mergeCER}
+      value={mergeMatDX}
+      onChange={e => setMergeMatDX(e.target.value)}
+    >
+      <option value="">Materiale da fondere (DX)</option>
+      {materiali
+        .filter(m => m.codiceCER === mergeCER)
+        .sort((a,b)=>a.nome.localeCompare(b.nome))
+        .map(m => <option key={m.idDoc}> {m.nome}</option>)
+      }
+    </select>
+
+    {/* BOTTONE */}
+    <button
+      disabled={!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX}
+      onClick={handleMergeMateriali}
+      style={{ marginLeft: 10 }}
+    >
+      ✅ Conferma Merge
+    </button>
+
+  </div>
+)}
 
 
       <div style={{margin:"20px 0", display:"flex", gap:"12px", alignItems:"center"}}>
@@ -888,11 +1105,18 @@ const cerDropdown = [
 </td>
                 <td>
                   <button onClick={()=>handleEdit(m)}>Modifica</button>
-                  {m.nrScarichi>0 && (
-                    <button style={{marginLeft:5}} onClick={()=>toggleDettagli(m.idDoc)}>
-                      {expandedRows[m.idDoc] ? "Chiudi" : "Dettagli"}
-                    </button>
-                  )}
+                {(
+  (filtroTipoMovimento === "SCARICO" && m.nrScarichi > 0) ||
+  (filtroTipoMovimento === "CARICO" && m.nrCarichi > 0) ||
+  (filtroTipoMovimento === "TUTTI" && m.nrMovimenti > 0)
+) && (
+  <button
+    style={{ marginLeft: 5 }}
+    onClick={() => toggleDettagli(m.idDoc)}
+  >
+    {expandedRows[m.idDoc] ? "Chiudi" : "Dettagli"}
+  </button>
+)}
                 </td>
               </tr>
 
