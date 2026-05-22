@@ -2,13 +2,12 @@
 // src/components/GestioneScarichi.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, getDoc, addDoc, setDoc,deleteDoc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import { addDoc, serverTimestamp } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PdfHeader } from "../utils/dateUtils";
@@ -24,23 +23,35 @@ const GestioneScarichi = () => {
 const [filtroFIR, setFiltroFIR] = useState(""); // filtro dropdown FIR
 const [firDisponibili, setFirDisponibili] = useState([]); // lista FIR disponibili per il filtro
 const [firSearch, setFirSearch] = useState(""); // testo digitato per FIR
+
 const [dal, setDal] = useState(null);   // oggetto Date
 const [al, setAl] = useState(null);     // oggetto Date
 const [sortConfig, setSortConfig] = useState({ key: "data", direction: "desc" });
 const [tipoMovimento, setTipoMovimento] = useState("tutti");
 const [listinoApplicato, setListinoApplicato] = useState("tutti");
-
+const [modalProspetto, setModalProspetto] = useState(null);
   const [tutti, setTutti] = useState(false);
   const [filtroFornitore, setFiltroFornitore] = useState("tutti");
   const [filtroListino, setFiltroListino] = useState("tutti");
   const [filtroUtente, setFiltroUtente] = useState("tutti");
   const [giornoSelezionato, setGiornoSelezionato] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const forceModalRefresh = () => {
+  setReloadKey(prev => prev + 1);
+};
+  const money = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  const [prospettoRighe, setProspettoRighe] = useState([]);
 const [filtroDestinatario, setFiltroDestinatario] = useState("tutti");
   const [fornitoriDisponibili, setFornitoriDisponibili] = useState([]);
   const [listiniDisponibili, setListiniDisponibili] = useState([]);
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
-  const [numeroFIR, setNumeroFIR] = useState({});
+  const [modalTipo, setModalTipo] = useState(null); 
+// "prospetto" | "fattura"
+const round2 = (n) => {
+  const num = Number(n) || 0;
+  return Number(num.toFixed(2));
+};
+const [modalData, setModalData] = useState(null);
   const [listini, setListini] = useState({});
  const listiniDisponibiliNomi = Object.entries(listini || {})
   .filter(([nome, l]) => {
@@ -79,11 +90,6 @@ const requestSort = (key) => {
   if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
   setSortConfig({ key, direction });
 };
-
-
-
-
-
   const parseItalianDate = (value, endOfDay=false) => {
     if (!value) return null;
     const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -96,58 +102,357 @@ const requestSort = (key) => {
     if (endOfDay) date.setHours(23,59,59,999);
     return date;
   };
-
-  // --- INIT DAL/AL ---
-  useEffect(() => {
+useEffect(() => {
   const today = new Date();
   const primo = new Date(today.getFullYear(), today.getMonth(), 1);
   setDal(primo);
   setAl(today);
 }, []);
-
-
 const fetchMovimenti = async () => {
   try {
     const scarichiSnap = await getDocs(collection(db, "scarichi"));
     const carichiSnap = await getDocs(collection(db, "carichi"));
-
     const parseData = normalizeDate;
+const parseDoc = (d, tipo) => {
+  const data = d.data();
 
-    const parseDoc = (d, tipo) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        cer: Array.isArray(data[tipo]) ? data[tipo] : [],
-        data: parseData(data.data),
-        fornitore: data.fornitore || "sconosciuto",
-        listino: data.listino || "sconosciuto",
-        utente: data.utente || "sconosciuto",
-        tipo: tipo
-      };
-    };
+  const movimenti = Array.isArray(data[tipo]) ? data[tipo] : [];
 
+  return {
+    id: d.id,
+    data: parseData(data.data),
+    fornitore: data.fornitore || "sconosciuto",
+    listino: data.listino || "sconosciuto",
+    utente: data.utente || "sconosciuto",
+    tipo,
+
+    // 🔥 QUI NON PERDI PIÙ FIR/CER
+    cer: movimenti.map(m => ({
+      fir: m.fir || "-",
+      cer: m.cer || m.codiceCER || "-",
+      righe: m.righe || []
+    }))
+  };
+};
     const scarichi = scarichiSnap.docs.map(d => parseDoc(d, "scarico"));
     const carichi = carichiSnap.docs.map(d => parseDoc(d, "carico"));
-
     const tuttiMovimenti = [...scarichi, ...carichi];
     tuttiMovimenti.sort((a,b) => b.data - a.data);
-
     setScarichi(tuttiMovimenti);
-
     if (tuttiMovimenti.length) {
-      const ordinati = [...tuttiMovimenti].sort((a,b) => a.data - b.data);
-      setMinDataDB(ordinati[0].data);
-      setMaxDataDB(ordinati[ordinati.length-1].data);
-    }
+     const ordinati = [...tuttiMovimenti].sort((a,b) => a.data - b.data);
 
+const oggi = new Date();
+oggi.setHours(23, 59, 59, 999);
+
+setMinDataDB(ordinati[0]?.data || null);
+setMaxDataDB(oggi);
+    }
   } catch (err) {
     console.error("Errore caricamento movimenti:", err);
   }
 };
-const refreshScarichi = async () => {
-  await fetchMovimenti();
+const validaEPreparaProspetto = async (movimentiIds) => {
+  const collections = ["prospettiFattura", "fattureCarichi"];
+
+  const conflittiPagati = [];
+  const daEliminare = [];
+
+  for (const col of collections) {
+    const snap = await getDocs(collection(db, col));
+
+    snap.docs.forEach((d) => {
+      const p = d.data();
+
+      const ids = p.movimentiIds || p.scarichiIds || [];
+      if (!Array.isArray(ids)) return;
+
+      const overlap = ids.filter((id) => movimentiIds.includes(id));
+      if (overlap.length === 0) return;
+
+      if (p.DataPagamento) {
+        conflittiPagati.push({
+          id: d.id,
+          collection: col,
+          fornitore: p.fornitore,
+          dataPagamento: p.DataPagamento,
+          overlap,
+        });
+      } else {
+        daEliminare.push({ id: d.id, collection: col });
+      }
+    });
+  }
+
+  if (conflittiPagati.length > 0) {
+    const msg = conflittiPagati
+      .map(
+        (c) =>
+          `Fornitore: ${c.fornitore} - Pagato il: ${
+            c.dataPagamento?.toDate?.()?.toLocaleDateString("it-IT") ||
+            c.dataPagamento ||
+            "N/D"
+          }`
+      )
+      .join("\n");
+
+    throw new Error("SCARICO_GIA_PAGATO\n\n" + msg);
+  }
+
+  for (const d of daEliminare) {
+    await deleteDoc(doc(db, d.collection, d.id));
+  }
+
+  return true;
+};
+const handleSalvaDocumento = async () => {
+  try {
+    console.log("🟡 START SALVATAGGIO MODAL:", modalData);
+
+    if (!modalData) {
+      alert("❌ Dati modal mancanti");
+      return;
+    }
+
+    const tipo = modalTipo === "prospetto" ? "prospetto" : "fattura";
+
+    const collectionName =
+      tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
+
+    const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
+
+    if (!movimentiIds.length) {
+      alert("❌ Nessun movimento selezionato");
+      return;
+    }
+
+    console.log("🟡 IDS:", movimentiIds);
+
+    // 🔥 VALIDAZIONE UNIFICATA (carichi + scarichi)
+    try {
+      await validaEPreparaProspetto(movimentiIds);
+    } catch (e) {
+      console.error("❌ ERRORE VALIDAZIONE:", e);
+      alert(
+        e.message?.includes("SCARICO_GIA_PAGATO")
+          ? "❌ Uno o più movimenti sono già pagati"
+          : "❌ Errore validazione prospetto"
+      );
+      return;
+    }
+
+    // 🔥 CALCOLO TOTALE
+    let totale = 0;
+
+    (modalData.blocchi || []).forEach((b) => {
+      (b.righe || []).forEach((r) => {
+       const kg = money(r.netto);
+        const prezzo = money(r.prezzo);
+
+totale = round2(totale + round2(kg * prezzo));
+      });
+    });
+
+    const payload = {
+      tipo,
+      cliente: modalData.cliente || "",
+      totale,
+      movimentiIds,
+      blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),
+      dataCreazione: new Date().toISOString(),
+      DataPagamento: null,
+    };
+
+    // 🔥 ID STABILE
+    const docId = movimentiIds.slice().sort().join("-");
+
+    console.log("🟡 DOC ID:", docId);
+
+    // 🔥 PULIZIA FINALE SICURA
+    const snap = await getDocs(collection(db, collectionName));
+
+    const daEliminare = [];
+
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      const ids = data.movimentiIds || [];
+
+      const overlap = ids.some((id) => movimentiIds.includes(id));
+
+      if (overlap) {
+        daEliminare.push(d.id);
+      }
+    });
+
+    for (const id of daEliminare) {
+      console.log("🧹 ELIMINO PROSPETTO CONFLITTUALE:", id);
+      await deleteDoc(doc(db, collectionName, id));
+    }
+
+    await setDoc(doc(db, collectionName, docId), payload, { merge: true });
+
+    console.log("🟢 SALVATO OK:", docId);
+
+    alert("✅ Documento salvato correttamente");
+    setModalData(null);
+  } catch (err) {
+    console.error("❌ ERRORE SALVATAGGIO:", err);
+    alert("❌ Errore salvataggio (controlla console)");
+  }
+};
+const salvaProspettoUnificato = async (modalData, tipo) => {
+  const scarichiIds = modalData.movimentiIds || [];
+
+  if (!scarichiIds.length) {
+    throw new Error("Nessun movimento selezionato");
+  }
+
+  // 🔥 1. pulizia centrale
+  await validaEPreparaProspetto(scarichiIds);
+
+ let totale = 0;
+
+(modalData.blocchi || []).forEach(b => {
+  (b.righe || []).forEach(r => {
+   const kg = money(r.netto);
+    const prezzo = money(r.prezzo);
+
+    totale += round2(kg * prezzo);
+  });
+});
+
+totale = round2(totale);
+
+  // 🔥 3. scrittura unica
+  const collectionName =
+    tipo === "prospetto" ? "prospetti" : "fattureCarichi";
+
+  return addDoc(collection(db, collectionName), {
+    tipo,
+    cliente: modalData.cliente,
+    totale,
+    movimentiIds: scarichiIds,
+    blocchi: modalData.blocchi,
+    dataCreazione: new Date().toISOString(),
+    DataPagamento: null
+  });
 };
 
+const handleStampaDocumento = async () => {
+  const isFattura = modalTipo === "fattura";
+
+  const snap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
+  const config = snap.exists() ? snap.data() : {};
+
+  const win = window.open("", "_blank");
+
+  // 🔥 USA SEMPRE DATI FRESCHI DALLO STATE
+  const movimenti = scarichi.filter(m =>
+    modalData.movimentiIds.includes(m.id)
+  );
+
+  let totale = 0;
+
+  const htmlHeader = `
+  <html>
+  <head>
+    <title>${isFattura ? "FATTURA" : "PROSPETTO FATTURA"}</title>
+    <style>
+      body { font-family: Arial; padding: 25px; color:#000; }
+      .header { display:flex; justify-content:space-between; margin-bottom:20px; }
+      .azienda { font-size:12px; line-height:1.4; }
+      .titolo { text-align:right; }
+      .titolo h1 { margin:0; font-size:20px; }
+      .cliente { margin:15px 0; font-size:14px; }
+      table { width:100%; border-collapse:collapse; margin-bottom:15px; }
+      th, td { border:1px solid #000; padding:6px; font-size:12px; }
+      th { background:#eee; }
+      .fir { background:#ddd; font-weight:bold; }
+      .totale { text-align:right; font-size:18px; margin-top:20px; }
+    </style>
+  </head>
+  <body>
+
+    <div class="header">
+      <div class="azienda">
+        ${config.logoBase64 ? `
+          <img src="data:image/png;base64,${config.logoBase64}" style="width:120px;margin-bottom:10px;" />
+        ` : ""}
+        <div><b>${config.ragioneSociale || ""}</b></div>
+        <div>${config.indirizzo || ""}</div>
+        <div>${config.capCitta || ""}</div>
+        <div>P.IVA: ${config.piva || ""}</div>
+      </div>
+
+      <div class="titolo">
+        <h1>${isFattura ? "FATTURA CARICHI" : "PROSPETTO FATTURA"}</h1>
+        <div>${new Date().toLocaleDateString("it-IT")}</div>
+      </div>
+    </div>
+
+    <div class="cliente">
+      <b>Cliente:</b> ${modalData.cliente}
+    </div>
+  `;
+
+  let body = "";
+
+  movimenti.forEach(m => {
+    (m.cer || []).forEach(c => {
+      const fir = c.fir || "-";
+      const cer = c.cer || "-";
+
+      body += `
+        <table>
+          <tr class="fir">
+            <td colspan="4">FIR: ${fir} | CER: ${cer}</td>
+          </tr>
+          <tr>
+            <th>Materiale</th>
+            <th>Kg</th>
+            <th>Prezzo</th>
+            <th>Totale</th>
+          </tr>
+      `;
+
+      (c.righe || []).forEach(r => {
+        const kg = Number(r.netto || 0);
+
+        // 🔥 QUESTO È IL PUNTO CRITICO
+        const prezzo =
+          isFattura
+            ? Number(r.prezzoVendita || 0)
+            : Number(r.prezzoAcquisto || 0);
+
+        const tot = kg * prezzo;
+        totale += tot;
+
+        body += `
+          <tr>
+            <td>${r.materiale || "-"}</td>
+            <td>${kg.toFixed(2)}</td>
+            <td>${prezzo.toFixed(2)}</td>
+            <td>${tot.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      body += `</table>`;
+    });
+  });
+
+  body += `
+    <div class="totale">
+      <b>TOTALE: € ${totale.toFixed(2)}</b>
+    </div>
+  </body>
+  </html>
+  `;
+
+  win.document.write(htmlHeader + body);
+  win.document.close();
+  win.print();
+};
 useEffect(() => {
   if (location.state?.refresh) {
     fetchMovimenti(); // ricarica i dati correttamente
@@ -155,51 +460,37 @@ useEffect(() => {
     navigate(location.pathname, { replace: true, state: {} });
   }
 }, [location.state]);
-
-
 useEffect(() => {
   fetchMovimenti();
 }, [reloadKey]);
-
-
-
   // --- LOAD LISTINI (FIX NUOVO DB) ---
 const loadListini = async () => {
   try {
     const snap = await getDocs(collection(db, "listini"));
-
     const mapListini = {};
-
     snap.docs.forEach(d => {
       const data = d.data();
-
       mapListini[data.nome] = {
         prezzi: data.prezzi,
         tipoListino: data.tipoListino
       };
     });
-
     setListini(mapListini);
-
   } catch (e) {
     console.error(e);
   }
 };
 useEffect(() => {
   const set = new Set();
-
   scarichi.forEach(s => {
     (s.cer || []).forEach(cer => {
       const val = cer.codiceCER || cer.cer || cer.codice;
       if (val) set.add(val);
     });
   });
-
   setCerDisponibili([...set].sort());
 }, [scarichi]);
-
-
-  useEffect(() => { loadListini(); }, []);
+ useEffect(() => { loadListini(); }, []);
 useEffect(() => {
   const firSet = new Set();
   filteredScarichi.forEach(s => {
@@ -210,21 +501,14 @@ useEffect(() => {
   const firArray = Array.from(firSet).sort(); // ordine crescente
   setFirDisponibili(firArray);
 }, [filteredScarichi]);
-  // --- QUERY STRING: selezione listino/fornitore/utente e disabilita date quando presente ---
   useEffect(() => {
-    // aspetta che dati e dropdown siano popolati
     if (scarichi.length === 0) return;
-    // Notare: listiniDisponibili/fornitoriDisponibili/utentiDisponibili possono essere vuoti per alcuni dataset,
-    // quindi non blocchiamo brutalmente; però preferiamo applicare filtri solo se esistono (per evitare valori fantasma)
     const params = new URLSearchParams(location.search);
     const f = params.get("fornitore");
     const l = params.get("listino");
     const u = params.get("utente");
-
     let hasQueryFilter = false;
-
     if (f) {
-      // se il fornitore esiste tra quelli disponibili lo selezioniamo, altrimenti comunque lo impostiamo (se vuoi forzare solo esistenti, usare includes)
       if (fornitoriDisponibili.length === 0 || fornitoriDisponibili.includes(f)) {
         setFiltroFornitore(f);
         hasQueryFilter = true;
@@ -242,32 +526,20 @@ useEffect(() => {
         hasQueryFilter = true;
       }
     }
-
     if (hasQueryFilter) {
-      // se viene passato almeno un filtro via query string vogliamo *vedere quei risultati*
-      // quindi disabilitiamo il filtro date (tutti = true)
       setTutti(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scarichi, listiniDisponibili, fornitoriDisponibili, utentiDisponibili, location.search]);
-
-
-
 useEffect(() => {
   if (!scarichi.length) return;
-
   let dati = [...scarichi];
-
   const norm = (v) =>
     (v ?? "")
       .toString()
       .trim()
       .toLowerCase();
-
-  // --- FILTRO CER ---
   if (filtroCER !== "tutti") {
     const cerFiltro = norm(filtroCER);
-
     dati = dati.filter(s =>
       (s.cer || []).some(cer => {
         const val =
@@ -276,68 +548,42 @@ useEffect(() => {
       })
     );
   }
-
-  // --- FILTRO DATE ---
   if (!tutti && dal && al) {
     let endDate = new Date(al);
     endDate.setHours(23, 59, 59, 999);
     dati = dati.filter(s => s.data >= dal && s.data <= endDate);
   }
-
-  // --- FILTRI BASE ---
   if (filtroFornitore !== "tutti") {
     dati = dati.filter(s => s.fornitore === filtroFornitore);
   }
-
   if (filtroListino !== "tutti") {
     dati = dati.filter(s => s.listino === filtroListino);
   }
-
   if (filtroUtente !== "tutti") {
     dati = dati.filter(s => (s.utente || "sconosciuto") === filtroUtente);
   }
-
-  // --- FIR ---
   if (filtroFIR.trim() !== "") {
     const fir = filtroFIR.toLowerCase().trim();
-
 dati = dati.filter(s =>
   (s.cer || []).some(cer =>
     (cer.fir || "").toLowerCase().trim().includes(fir)
   )
 );
   }
-
-  // --- TIPO MOVIMENTO ---
  if (tipoMovimento !== "tutti") {
   dati = dati.filter(s => s.tipo === tipoMovimento);
 }
   setFilteredScarichi(dati);
-}, [
-  scarichi,
-  dal,
-  al,
-  tutti,
-  filtroFornitore,
-  filtroListino,
-  filtroUtente,
-  filtroFIR,
-  tipoMovimento,
-  filtroCER
-]);
-
+}, [  scarichi,  dal,  al,  tutti,  filtroFornitore,  filtroListino,  filtroUtente,  filtroFIR,  tipoMovimento,  filtroCER]);
 useEffect(() => {
   const source = scarichi || [];
-
   setFornitoriDisponibili(
     [...new Set(source.map(s => s.fornitore || "sconosciuto"))]
       .sort((a,b)=>a.localeCompare(b,"it"))
   );
-
   setListiniDisponibili(
     [...new Set(source.map(s => s.listino || "sconosciuto"))]
   );
-
   setUtentiDisponibili(
     [...new Set(source.map(s => s.utente || "sconosciuto"))]
       .sort((a,b)=>a.localeCompare(b,"it"))
@@ -345,12 +591,9 @@ useEffect(() => {
 }, [scarichi]);
 const estimateResults = () => {
   if (!scarichi?.length) return 0;
-
   let dati = [...scarichi];
-
   const norm = (v) =>
     (v ?? "").toString().trim().toLowerCase();
-
   if (filtroCER !== "tutti") {
     const cerFiltro = norm(filtroCER);
     dati = dati.filter(s =>
@@ -360,33 +603,26 @@ const estimateResults = () => {
       })
     );
   }
-
   if (!tutti && dal && al) {
     let endDate = new Date(al);
     endDate.setHours(23,59,59,999);
-
     let startDate = new Date(dal);
     startDate.setHours(0,0,0,0);
-
     dati = dati.filter(s => {
       if (!s.data) return false;
       const d = s.data instanceof Date ? s.data : new Date(s.data);
       return d >= startDate && d <= endDate;
     });
   }
-
   if (filtroFornitore !== "tutti") {
     dati = dati.filter(s => s.fornitore === filtroFornitore);
   }
-
   if (filtroListino !== "tutti") {
     dati = dati.filter(s => s.listino === filtroListino);
   }
-
   if (filtroUtente !== "tutti") {
     dati = dati.filter(s => (s.utente || "sconosciuto") === filtroUtente);
   }
-
   if (filtroFIR.trim() !== "") {
     const fir = filtroFIR.toLowerCase().trim();
     dati = dati.filter(s =>
@@ -395,22 +631,16 @@ const estimateResults = () => {
       )
     );
   }
-
   if (tipoMovimento !== "tutti") {
     dati = dati.filter(s => s.tipo === tipoMovimento);
   }
-
   return dati.length;
 };
-
 const getTrafficLight = (count) => {
   if (count <= 1000) return "green";
   if (count <= 2000) return "yellow";
   return "red";
 };
-  // --- SCARICHI PER GIORNO ---
-// --- SCARICHI PER GIORNO ---
-// --- SCARICHI PER GIORNO ---
 const scarichiPerGiorno = {};
 filteredScarichi.forEach(s => {
   if (!s.data) return;  // basta verificare s.data
@@ -423,158 +653,65 @@ const getConfigAzienda = async () => {
   if (!snap.exists()) return null;
   return snap.data();
 };
-const stampaProspettoFatturaScarichi = async (
-  righe,
-  fornitore = "",
-  configurazione = {}
-) => {
-   const config = await getConfigAzienda();
-
-    const pdf = new jsPDF();
-    let y = 10;
-
-   // ---------------- LOGO + HEADER ----------------
-    if (config?.logoBase64) {
-      pdf.addImage(
-        `data:image/png;base64,${config.logoBase64}`,
-        "PNG",
-        10,
-        5,
-        40,
-        20
-      );
-    }
-
-    pdf.setFontSize(11);
-
-    pdf.text(config?.ragioneSociale || "", 60, 10);
-    pdf.text(config?.indirizzo || "", 60, 16);
-    pdf.text(config?.capCitta || "", 60, 22);
-    pdf.text(`P.IVA: ${config?.piva || "-"}`, 60, 28);
-
-    y = 40;
-
-    // ---------------- TITOLO ----------------
-    pdf.setFontSize(14);
-    pdf.text("PROSPETTO FATTURA SCARICHI", 10, y);
-    y += 8;
-
+const stampaProspettoFatturaScarichi = async (righe, fornitore = "") => {
+  const config = await getConfigAzienda();
+  const pdf = new jsPDF();
+  let y = 10;
+  if (config?.logoBase64) {
+    pdf.addImage(      `data:image/png;base64,${config.logoBase64}`,      "PNG",      10,      5,      40,      20    );
+  }
   pdf.setFontSize(11);
-  pdf.text(`Fornitore: ${fornitore || "-"}`, 10, y);
+  pdf.text(config?.ragioneSociale || "", 60, 10);
+  pdf.text(config?.indirizzo || "", 60, 16);
+  pdf.text(config?.capCitta || "", 60, 22);
+  pdf.text(`P.IVA: ${config?.piva || "-"}`, 60, 28);
+  y = 42;
+  pdf.setFontSize(14);
+  pdf.text("PROSPETTO FATTURA SCARICHI", 10, y);
   y += 8;
-
-  // ---------------- COLONNE ----------------
-  const head = [["Data", "FIR", "Materiale", "Peso(kg)", "Calo(kg)", "Netto(kg)", "€/Kg", "Totale €"]];
-
-  // ---------------- RIGHE ----------------
+  pdf.setFontSize(11);
+  pdf.text(`Cliente: ${fornitore || "-"}`, 10, y);
+  y += 10;
+  const head = [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]];
   let totale = 0;
-
   const body = righe.map(r => {
-    const rigaTot = (r.netto || 0) * (r.prezzoKg || 0);
-    totale += rigaTot;
-
-    return [
-      r.giorno || "",
-      r.fir || "",
-      r.materiale || "",
-      Number(r.peso || 0).toFixed(2),
-      Number(r.calo || 0).toFixed(2),
-      Number(r.netto || 0).toFixed(2),
-      Number(r.prezzoKg || 0).toFixed(2),
-      rigaTot.toFixed(2)
-    ];
+   const tot = money(r.netto * r.prezzoKg);
+totale += round2(tot);
+    return [      r.fir || "-",      r.cer || "-",      r.materiale || "-",      Number(r.netto || 0).toFixed(2),      Number(r.prezzoKg || 0).toFixed(2),      tot.toFixed(2),];
   });
-
-  // ---------------- TABELLA ----------------
-  autoTable(pdf, {
-    startY: y,
-    head,
-    body,
-    theme: "grid",
-    styles: { fontSize: 9 },
-    margin: { left: 10 }
-  });
-
-  // ---------------- TOTALE ----------------
+  autoTable(pdf, {    startY: y,    head,    body,    theme: "grid",    styles: { fontSize: 9 }  });
   const finalY = pdf.lastAutoTable.finalY || y;
-
   pdf.setFontSize(12);
-  pdf.text(`TOTALE PROSPETTO: € ${totale.toFixed(2)}`, 10, finalY + 10);
-
-  // ---------------- SAVE SICURO ----------------
-  const safeName = (fornitore || "fornitore")
-    .replace(/[^a-z0-9]/gi, "_")
-    .toLowerCase();
-
-  pdf.save(`prospetto_${safeName}.pdf`);
+  totale = round2(totale);
+  pdf.text(`TOTALE: € ${totale.toFixed(2)}`, 10, finalY + 10);
+  pdf.save(`prospetto_${(fornitore || "cliente").replace(/[^a-z0-9]/gi, "_")}.pdf`);
 };
-
-
-// --- SCARICHI PER GIORNO CORRETTO CON DETTAGLI MATERIALI ---
 const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
-
   const safe = (v) => Number(v) || 0;
-
- const tuttiCer = movimentiDelGiorno.flatMap(s => {
-  const controparte = s.fornitore || s.destinatario || "sconosciuto";
-
-  return (s.cer || []).map(cer => ({
-    ...cer,
-    tipo: cer.tipo ?? s.tipo,
-    listino: s.listino,
-    fir: cer.fir || "",
-
-    controparte,
-
-    righe: cer.righe || [{
-      netto: safe(cer.netto),
-      prezzoAcquisto: safe(cer.prezzoAcquisto),
-      prezzoVendita: safe(cer.prezzoVendita),
-      materiale: cer.materiale
-    }]
-  }));
-});
-
+const tuttiCer = movimentiDelGiorno.flatMap(s =>
+  (s.cer || []).map(cer => ({    fir: cer.fir || "-",    cer: cer.cer || cer.codiceCER || "-",    tipo: cer.tipo ?? s.tipo,    listino: s.listino,
+    righe: (cer.righe || []).map(r => ({      ...r,      fir: cer.fir || "-",      cer: cer.cer || cer.codiceCER || "-",      materiale: r.materiale,      netto: r.netto || 0,      prezzoAcquisto: r.prezzoAcquisto || 0,      prezzoVendita: r.prezzoVendita || 0,    }))
+  }))
+);
   const nrMovimentiScarico = tuttiCer.filter(c => c.tipo === "scarico").length;
   const nrMovimentiCarico = tuttiCer.filter(c => c.tipo === "carico").length;
   const nrFIR = tuttiCer.map(c => c.fir).filter(Boolean).length;
-
   const pesoScarichi = tuttiCer
     .filter(c => c.tipo === "scarico")
     .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
-
   const pesoCarichi = tuttiCer
     .filter(c => c.tipo === "carico")
     .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
-
-  // 🔥 COSTI = SOLO SCARICHI (prezzo acquisto)
   const costiTotali = tuttiCer
     .filter(c => c.tipo === "scarico")
-    .reduce((tot, c) =>
-      tot + c.righe.reduce((s, r) =>
-        s + safe(r.prezzoAcquisto) * safe(r.netto), 0
-      )
-    , 0);
-
-  // 🔥 RICAVI = SOLO CARICHI (prezzo vendita)
+    .reduce((tot, c) =>      tot + c.righe.reduce((s, r) =>        s + safe(r.prezzoAcquisto) * safe(r.netto), 0      )    , 0);
   const ricaviTotali = tuttiCer
     .filter(c => c.tipo === "carico")
-    .reduce((tot, c) =>
-      tot + c.righe.reduce((s, r) =>
-        s + safe(r.prezzoVendita) * safe(r.netto), 0
-      )
-    , 0);
-
-const utentiDelGiorno = [...new Set(
-  movimentiDelGiorno.map(s =>
-    `${s.fornitore || s.destinatario || "sconosciuto"} / ${s.utente || "Sconosciuto"}`
-  )
-)].join("; ");
-
+    .reduce((tot, c) =>      tot + c.righe.reduce((s, r) =>        s + safe(r.prezzoVendita) * safe(r.netto), 0      )    , 0);
+const utentiDelGiorno = [...new Set(  movimentiDelGiorno.map(s =>    `${s.fornitore || s.destinatario || "sconosciuto"} / ${s.utente || "Sconosciuto"}`  ))].join("; ");
   let backgroundColor = "";
   let textColor = "#000";
-
   if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
     backgroundColor = "#326c9f";
     textColor = "#fff";
@@ -583,24 +720,8 @@ const utentiDelGiorno = [...new Set(
   } else {
     backgroundColor = "#FFECB3";
   }
-
-  return {
-    giornoIT,
-    nrMovimentiScarico,
-    nrMovimentiCarico,
-    nrFIR,
-    pesoScarichi,
-    pesoCarichi,
-    costiTotali,
-    ricaviTotali,
-    utenti: utentiDelGiorno,
-    backgroundColor,
-    textColor,
-    dettagliScarichi: tuttiCer.filter(c => c.tipo === "scarico"),
-    dettagliCarichi: tuttiCer.filter(c => c.tipo === "carico"),
-  };
+  return {    giornoIT,    nrMovimentiScarico,    nrMovimentiCarico,    nrFIR,    pesoScarichi,    pesoCarichi,    costiTotali,    ricaviTotali,    utenti: utentiDelGiorno,    backgroundColor,    textColor,    dettagliScarichi: tuttiCer.filter(c => c.tipo === "scarico"),    dettagliCarichi: tuttiCer.filter(c => c.tipo === "carico"),};
 });
-
 const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   if (sortConfig.key === "data") {
     const [ggA, mmA, yyyyA] = a.giornoIT.split("/").map(Number);
@@ -623,8 +744,6 @@ const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   }
   return 0;
 });
-
-  // Calcolo FIR per giorno (opzionale se vuoi mostrare/controllare)
 const firPerGiorno = {};
 filteredScarichi.forEach(s => {
  const dataObj = normalizeDate(s.data);
@@ -635,20 +754,11 @@ const giornoIT = formatDataIT(dataObj);
     if(cer.numeroFIR) firPerGiorno[giornoIT].push(cer.numeroFIR);
   });
 });
-
-//console.log("📌 giornoSelezionato:", giornoSelezionato);
-//console.log("📌 filteredScarichi:", filteredScarichi);
-//const scarichiDelGiorno = filteredScarichi.filter(s => formatDataIT(s.data) === giornoSelezionato.giorno);
-//console.log("📌 scarichiDelGiorno:", scarichiDelGiorno);
-
 if (giornoSelezionato) {
-  // PRIMA: filtravamo filteredScarichi che poteva essere vuoto
-  // ORA: prendiamo direttamente dallo scarichi originali
   const scarichiDelGiorno = scarichi.filter(s => {
     const dataObj = s.data instanceof Date ? s.data : (s.data?.toDate ? s.data.toDate() : new Date("1970-01-01"));
     return formatDataIT(dataObj) === giornoSelezionato.giorno;
   });
-
   return (
     <GestioneScarichiDettaglio
   giornoSelezionato={giornoSelezionato.giorno}
@@ -676,68 +786,60 @@ goBack={() => {
   );
 }
 const applyListino = async () => {
-  if (tipoMovimento !== "scarico") return;
   if (listinoApplicato === "tutti") return;
-
   const listino = listini[listinoApplicato];
-  if (!listino || listino.tipoListino !== "SCARICO") return;
-
-  if (!window.confirm("Applicare il listino agli scarichi filtrati?")) return;
-
+  if (!listino) return;
+  const tipo = tipoMovimento; // 🔥 scarico o carico
+  if (!window.confirm(`Applicare il listino ${tipo.toUpperCase()} ai dati filtrati?`)) return;
   try {
-
     for (const m of filteredScarichi) {
-
-      if (m.tipo !== "scarico") continue;
-
-      const ref = doc(db, "scarichi", m.id);
-
-      const nuoviScarichi = (m.cer || []).map(blocco => {
-
+      if (m.tipo !== tipo) continue;
+      const collectionName = tipo === "scarico" ? "scarichi" : "carichi";
+      const ref = doc(db, collectionName, m.id);
+      const nuoviBlocchi = (m.cer || []).map(blocco => {
         const nuoveRighe = (blocco.righe || []).map(r => {
-
           const prezzi = listino.prezzi?.[r.materiale];
           if (!prezzi) return r;
-
           return {
             ...r,
-            prezzoAcquisto: prezzi.acquisto ?? r.prezzoAcquisto,
-            prezzoKg: prezzi.acquisto ?? r.prezzoKg
+            prezzoAcquisto: tipo === "scarico"
+              ? (prezzi.acquisto ?? r.prezzoAcquisto)
+              : r.prezzoAcquisto,
+
+            prezzoVendita: tipo === "carico"
+              ? (prezzi.vendita ?? r.prezzoVendita)
+              : r.prezzoVendita
           };
         });
-
         return {
           ...blocco,
           righe: nuoveRighe
         };
       });
-
       await updateDoc(ref, {
-        scarico: nuoviScarichi, // 🔥 QUESTO È GIUSTO (NON cer)
+        [tipo]: nuoviBlocchi, // 🔥 dinamico
         listino: listinoApplicato,
         lastUpdate: new Date()
       });
     }
+await fetchMovimenti();
 
-    await fetchMovimenti();
+// 🔥 aggiorna solo UI + cache modale
+forceModalRefresh();
 
-    alert("✅ Listino SCARICO applicato correttamente");
-
+//alert(`✅ Listino ${tipo.toUpperCase()} applicato`);
   } catch (err) {
-    console.error("Errore applyListino:", err);
+    console.error(err);
     alert("❌ Errore applicazione listino");
   }
 };
 
 const handleStampa = async () => {
   const movimenti = filteredScarichi;
-
   if (!movimenti || !Array.isArray(movimenti)) return;
-
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
-
   const formatDate = (date) => {
     const d =
       date instanceof Date
@@ -747,7 +849,6 @@ const handleStampa = async () => {
         : new Date(date);
     return d.toLocaleDateString("it-IT");
   };
-
   const formatHour = (date) => {
     const d =
       date instanceof Date
@@ -760,34 +861,25 @@ const handleStampa = async () => {
       minute: "2-digit",
     });
   };
-
   const safe = (v) => Number(v) || 0;
-
   const getUtente = (m) => m.utente || m.email || "sconosciuto";
-
   const gruppi = {};
-
   let totaleScarichi = 0;
   let totaleCarichi = 0;
   let totalePesoScarichi = 0;
   let totalePesoCarichi = 0;
   let totaleCosti = 0;
   let totaleRicavi = 0;
-
   movimenti.forEach((s) => {
     if (!s.data) return;
-
     const dataObj =
       s.data instanceof Date
         ? s.data
         : s.data?.toDate
         ? s.data.toDate()
         : null;
-
     if (!dataObj) return;
-
     const giorno = formatDate(dataObj);
-
     if (!gruppi[giorno]) {
       gruppi[giorno] = {
         scarichi: 0,
@@ -801,14 +893,11 @@ const handleStampa = async () => {
         dettagli: [],
       };
     }
-
     const g = gruppi[giorno];
     const utente = getUtente(s);
     const controparte = s.fornitore || s.destinatario || "sconosciuto";
-
     (s.cer || []).forEach((cer) => {
       const tipo = cer.tipo ?? s.tipo;
-
       const righe =
         cer.righe || [
           {
@@ -817,22 +906,19 @@ const handleStampa = async () => {
             prezzoVendita: safe(cer.prezzoVendita),
           },
         ];
-
       const peso = righe.reduce((t, r) => t + safe(r.netto), 0);
-      const costo = righe.reduce(
-        (t, r) => t + safe(r.prezzoAcquisto) * safe(r.netto),
-        0
-      );
-      const ricavo = righe.reduce(
-        (t, r) => t + safe(r.prezzoVendita) * safe(r.netto),
-        0
-      );
-
+   const costo = righe.reduce(
+  (t, r) => t + round2(round2(r.prezzoAcquisto) * round2(r.netto)),
+  0
+);
+const ricavo = righe.reduce(
+  (t, r) => t + round2(round2(r.prezzoVendita) * round2(r.netto)),
+  0
+);
       if (tipo === "scarico") {
         g.scarichi++;
         g.pesoScarichi += peso;
         g.costi += costo;
-
         totaleScarichi++;
         totalePesoScarichi += peso;
         totaleCosti += costo;
@@ -840,232 +926,67 @@ const handleStampa = async () => {
         g.carichi++;
         g.pesoCarichi += peso;
         g.ricavi += ricavo;
-
         totaleCarichi++;
         totalePesoCarichi += peso;
         totaleRicavi += ricavo;
       }
-
       if (cer.fir) g.firSet.add(cer.fir);
       g.utenti.add(utente);
-
-      g.dettagli.push({
-        ora: formatHour(dataObj),
-        controparte,
-        fir: cer.fir || "-",
-        peso,
-        costo,
-        ricavo,
-        utente,
-        tipo,
-      });
-    });
+      g.dettagli.push({        ora: formatHour(dataObj),        controparte,        fir: cer.fir || "-",        peso,        costo,        ricavo,        utente,        tipo,      });    });
   });
-
   const { pdf, startY } = await PdfHeader();
-
   let y = startY-30;
-
   pdf.setFontSize(14);
   pdf.text("Report Movimenti", 14, y);
   y += 8;
-
   Object.keys(gruppi)
     .sort((a, b) => new Date(b.split("/").reverse().join("-")) - new Date(a.split("/").reverse().join("-")))
     .forEach((giorno) => {
       const g = gruppi[giorno];
-
       pdf.setFontSize(12);
       pdf.text(`Giorno: ${giorno}`, 14, y);
       y += 4;
-
       autoTable(pdf, {
         startY: y,
         head: [
           ["Ora", "Movimento", "FIR", "Peso", "Costi", "Ricavi", "Utente"],
         ],
-        body: g.dettagli.map((d) => [
-          d.ora,
-          d.controparte,
-          d.fir,
-          d.peso.toFixed(2),
-          d.tipo === "scarico" ? d.costo.toFixed(2) : "",
-          d.tipo === "carico" ? d.ricavo.toFixed(2) : "",
-          d.utente,
-        ]),
-        theme: "grid",
-        styles: { fontSize: 9 },
-      });
-
+        body: g.dettagli.map((d) => [          d.ora,          d.controparte,          d.fir,          d.peso.toFixed(2),          d.tipo === "scarico" ? d.costo.toFixed(2) : "",          d.tipo === "carico" ? d.ricavo.toFixed(2) : "",          d.utente,        ]),        theme: "grid",        styles: { fontSize: 9 },      });
       y = pdf.lastAutoTable.finalY + 5;
-
-      pdf.text(
-        `Totale giorno: ${g.scarichi}/${g.carichi} | FIR: ${g.firSet.size}`,
-        14,
-        y
-      );
-
+      pdf.text(        `Totale giorno: ${g.scarichi}/${g.carichi} | FIR: ${g.firSet.size}`,        14,        y      );
       y += 10;
-
-      if (y > 260) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
-
+      if (y > 260) {        pdf.addPage();        y = 20;      }    });
   const utile = totaleRicavi - totaleCosti;
-
   pdf.addPage();
   pdf.setFontSize(14);
   pdf.text("Totali Complessivi", 14, 20);
-
   autoTable(pdf, {
     startY: 30,
     head: [["Movimenti", "Peso S", "Peso C", "Costi", "Ricavi", "Utile"]],
-    body: [
-      [
-        `${totaleScarichi}/${totaleCarichi}`,
-        totalePesoScarichi.toFixed(2),
-        totalePesoCarichi.toFixed(2),
-        totaleCosti.toFixed(2),
-        totaleRicavi.toFixed(2),
-        utile.toFixed(2),
-      ],
-    ],
-  });
-
+    body: [      [        `${totaleScarichi}/${totaleCarichi}`,        totalePesoScarichi.toFixed(2),        totalePesoCarichi.toFixed(2),        totaleCosti.toFixed(2),        totaleRicavi.toFixed(2),        utile.toFixed(2),      ],    ],  });
   pdf.save("movimenti.pdf");
 };
-const handleEmettiFattura = async () => {
-  try {
-    if (filtroFornitore === "tutti") return;
-
-    const movimenti = filteredScarichi.filter(
-      m => m.fornitore === filtroFornitore && m.tipo === "carico"
-    );
-
-    if (!movimenti.length) return;
-
-    // 🔢 calcolo totali
-    let totaleKg = 0;
-    let totaleImporto = 0;
-
-    movimenti.forEach(m => {
-      (m.cer || []).forEach(c => {
-        (c.righe || []).forEach(r => {
-          totaleKg += Number(r.netto || 0);
-          totaleImporto += Number(r.prezzoVendita || 0) * Number(r.netto || 0);
-        });
-      });
-    });
-
-    const idFattura = `FATT-${new Date().getFullYear()}-${Date.now()}`;
-
-    // 1️⃣ CREA DOC FIRESTORE
-    const ref = await addDoc(collection(db, "fatture"), {
-      id: idFattura,
-      tipo: "carico",
-      fornitore: filtroFornitore,
-      data: serverTimestamp(),
-      movimenti,
-      totaleKg,
-      totaleImporto,
-      stato: "in_generazione",
-      createdAt: serverTimestamp(),
-      createdBy: auth.currentUser?.email || "unknown"
-    });
-
-    // 2️⃣ GENERAZIONE PDF (placeholder ora)
-    const html = buildFatturaHTML(movimenti, idFattura, totaleKg, totaleImporto);
-
-    const blob = new Blob([html], { type: "text/html" });
-
-    // ⚠️ qui poi lo sostituiamo con PDF vero (jsPDF o Cloud Function)
-    const url = URL.createObjectURL(blob);
-
-    // 3️⃣ UPDATE DOC CON URL
-    await updateDoc(doc(db, "fatture", ref.id), {
-      pdfURL: url,
-      stato: "emessa"
-    });
-
-    // 4️⃣ LOG
-  
-
-    alert("Fattura emessa con successo");
-  } catch (err) {
-    console.error("Errore emissione fattura:", err);
-  }
+const confermaSalvataggioProspetto = async () => {
+  setModalProspetto(false);
+ await salvaProspettoUnificato(modalData, modalTipo === "prospetto" ? "prospetto" : "fattura");
 };
-
-const buildFatturaHTML = (movimenti, id, kg, importo) => {
-  return `
-  <html>
-  <body>
-    <h1>FATTURA ${id}</h1>
-    <h3>Fornitore: ${filtroFornitore}</h3>
-
-    <table border="1" width="100%">
-      <tr>
-        <th>Data</th>
-        <th>FIR</th>
-        <th>Kg</th>
-        <th>Prezzo</th>
-      </tr>
-
-      ${movimenti.map(m => `
-        <tr>
-          <td>${m.data?.toDate ? m.data.toDate().toLocaleDateString() : ""}</td>
-          <td>${(m.cer || []).map(c => c.fir).join(", ")}</td>
-          <td>${(m.cer || []).reduce((t,c)=>t+(c.righe||[]).reduce((s,r)=>s+Number(r.netto||0),0),0)}</td>
-          <td>---</td>
-        </tr>
-      `).join("")}
-
-    </table>
-
-    <h3>Totale Kg: ${kg}</h3>
-    <h3>Totale €: ${importo.toFixed(2)}</h3>
-  </body>
-  </html>
-  `;
-};
-
-const handleProspetto = () => {
-  if (!righeOrdinate?.length) return;
-
+const stampaSoloProspetto = () => {
+  setModalProspetto(false);
   const righe = [];
-
   righeOrdinate.forEach(g => {
-    // troviamo i movimenti reali di quel giorno
     const movimentiDelGiorno = filteredScarichi.filter(s => {
       const dataObj =
         s.data instanceof Date
           ? s.data
           : s.data?.toDate?.() || null;
-
       if (!dataObj) return false;
-
-      const giornoIT = dataObj.toLocaleDateString("it-IT");
-      return giornoIT === g.giornoIT;
+      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;
     });
-
     movimentiDelGiorno.forEach(m => {
       if (m.tipo !== "scarico") return;
-
-      const dataObj =
-        m.data instanceof Date
-          ? m.data
-          : m.data?.toDate?.() || null;
-
-      const giorno = dataObj
-        ? dataObj.toLocaleDateString("it-IT")
-        : "";
-
       (m.cer || []).forEach(c => {
         (c.righe || []).forEach(r => {
           righe.push({
-            giorno,
             fir: c.fir || "",
             materiale: r.materiale || "",
             peso: Number(r.peso || 0),
@@ -1078,17 +999,12 @@ const handleProspetto = () => {
       });
     });
   });
-
-  console.log("📑 PROSPETTO (ORDINE IDENTICO GRIGLIA):", righe);
-
   const fornitoreFinale =
     filtroFornitore && filtroFornitore !== "tutti"
       ? filtroFornitore
       : righe[0]?.fornitore || "";
-
   stampaProspettoFatturaScarichi(righe, fornitoreFinale);
 };
-
 const resetFiltri = () => {
   setFiltroFornitore("tutti");
   setFiltroListino("tutti");
@@ -1099,20 +1015,15 @@ setFirSearch("");
 setFiltroFIR("");
 setFiltroCER("tutti");
   setTutti(false);
-
   const today = new Date();
   const primo = new Date(today.getFullYear(), today.getMonth(), 1);
-
   const minDate = minDataDB ?? primo;
   const maxDate = maxDataDB ?? today;
-
-  // ✅ QUI LA FIX: passiamo Date, NON stringhe
   setDal(minDate);
   setAl(maxDate);
 };
 const estimated = estimateResults();
 const traffic = getTrafficLight(estimated);
-
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -1121,29 +1032,71 @@ const traffic = getTrafficLight(estimated);
   🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
 </button>
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
-        <button
-  disabled={tipoMovimento !== "scarico" || filtroFornitore === "tutti"}
+<button
+  disabled={filtroFornitore === "tutti"}
   style={{
     marginLeft: 10,
-    opacity: (tipoMovimento !== "scarico" || filtroFornitore === "tutti") ? 0.4 : 1,
-    cursor: (tipoMovimento !== "scarico" || filtroFornitore === "tutti") ? "not-allowed" : "pointer"
+    opacity: filtroFornitore === "tutti" ? 0.4 : 1,
+    cursor: filtroFornitore === "tutti" ? "not-allowed" : "pointer"
   }}
-  onClick={() => {
-    if (tipoMovimento === "carico") {
-      handleEmettiFattura();
-    } else if (tipoMovimento === "scarico") {
-      handleProspetto();
-    }
-  }}
+onClick={() => {
+  if (filtroFornitore === "tutti") return;
+
+  const movimenti = filteredScarichi.filter(
+    m => m.fornitore === filtroFornitore &&
+         m.tipo === tipoMovimento
+  );
+
+  if (!movimenti.length) {
+    alert("Nessun dato");
+    return;
+  }
+
+  const blocchi = [];
+  let totale = 0;
+
+  movimenti.forEach(m => {
+    (m.cer || []).forEach(c => {
+      const righe = (c.righe || []).map(r => {
+        const netto = Number(r.netto || 0);
+
+        const prezzo =
+          tipoMovimento === "scarico"
+            ? Number(r.prezzoAcquisto || 0)
+            : Number(r.prezzoVendita || 0);
+
+        const tot = money( netto * prezzo);
+        totale += tot;
+
+        return {
+          materiale: r.materiale,
+          netto,
+          prezzo,
+          totale: tot
+        };
+      });
+
+      blocchi.push({
+        fir: c.fir || m.fir || "N/D",
+        data: m.data,
+        cer: c.cer || c.codiceCER || "-",
+        righe
+      });
+    });
+  });
+
+  setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
+
+  setModalData({
+    cliente: filtroFornitore,
+    blocchi,
+    movimentiIds: movimenti.map(m => m.id)
+  });
+}}
 >
-  {tipoMovimento === "carico"
-    ? "📄 Emetti Fattura"
-    : tipoMovimento === "scarico"
-    ? "📑 Prospetto Fattura"
-    : ""}
+  {tipoMovimento === "carico"    ? "📄 Emetti Fattura"    : tipoMovimento === "scarico"    ? "📑 Prospetto Fattura"    : ""}
 </button>
       </div>
-
       <h2>Gestione Carichi / Scarichi</h2>
 <div style={{
   display: "flex",
@@ -1156,47 +1109,35 @@ const traffic = getTrafficLight(estimated);
     <div style={{width:"15px",height:"15px",background:"#FFECB3",border:"1px solid #ccc"}}></div>
     <span>Scarichi</span>
   </div>
-
   <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
     <div style={{width:"15px",height:"15px",background:"#C8E6C9",border:"1px solid #ccc"}}></div>
     <span>Carichi</span>
   </div>
-
   <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
     <div style={{width:"15px",height:"15px",background:"#326c9f",border:"1px solid #ccc"}}></div>
     <span>Misti (Carico + Scarico)</span>
   </div>
 </div>
-      {/* FILTRI */}
       <div className="filtri">
         <button onClick={resetFiltri} style={{marginLeft:"12px"}}>🔄 Reset filtri</button>
-
         <label style={{display:"flex",alignItems:"center"}}>
           <input
   type="checkbox"
   checked={tutti}
   onChange={(e) => {
     const checked = e.target.checked;
-
     const estimated = estimateResults();
-
     if (checked && estimated > 2000) {
       const ok = window.confirm(
         "⚠️ Attenzione: questa ricerca restituirà circa " +
         estimated +
         " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
       );
-
       if (!ok) return;
     }
-
     setTutti(checked);
   }}
-/>
-          Disabilita filtro date
-        </label>
-
-       
+/>   Disabilita filtro date        </label>
        {!tutti && (
   <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
     <label>
@@ -1205,25 +1146,21 @@ const traffic = getTrafficLight(estimated);
     selected={dal}
     onChange={(date) => setDal(date)}
     minDate={minDataDB || new Date(2000,0,1)}
-    maxDate={al || maxDataDB || new Date()}
+    maxDate={maxDataDB || new Date()}
     dateFormat="dd/MM/yyyy"
     placeholderText="gg/mm/yyyy"
   />
 </label>
-
-<label>
-  Al:
-  <DatePicker
+<label>  Al:  <DatePicker
     selected={al}
     onChange={(date) => setAl(date)}
     minDate={dal instanceof Date ? dal : minDataDB || new Date(2000,0,1)}
-    maxDate={al instanceof Date ? al : maxDataDB || new Date()}
+   maxDate={maxDataDB || new Date()}
     dateFormat="dd/MM/yyyy"
     placeholderText="gg/mm/yyyy"
   />
 </label>
-<label style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-  FIR/DDT:
+<label style={{ display: "flex", alignItems: "center", gap: "4px" }}>  FIR/DDT:
   <input
     type="text"
     placeholder="Scrivi per filtrare..."
@@ -1232,8 +1169,7 @@ const traffic = getTrafficLight(estimated);
     style={{ padding: "4px 6px", width: "150px" }}
   />
 </label>
- <label style={{ marginLeft: "12px" }}>
-          Codice CER:
+ <label style={{ marginLeft: "12px" }}>          Codice CER:
           <select value={filtroCER} onChange={e => setFiltroCER(e.target.value)}>
             <option value="tutti">Tutti</option>
             {cerDisponibili.map(c => (
@@ -1243,7 +1179,6 @@ const traffic = getTrafficLight(estimated);
         </label>
   </div>
 )}
-
         <label style={{marginLeft:"12px"}}>
          {getLabelFornDest()}:
           <select value={filtroFornitore} onChange={e => setFiltroFornitore(e.target.value)}>
@@ -1251,7 +1186,6 @@ const traffic = getTrafficLight(estimated);
             {fornitoriDisponibili.map(f => <option key={f}>{f}</option>)}
           </select>
         </label>
-
         <label style={{marginLeft:"12px"}}>
           Listino:
           <select value={filtroListino} onChange={e => setFiltroListino(e.target.value)}>
@@ -1259,7 +1193,6 @@ const traffic = getTrafficLight(estimated);
             {listiniDisponibili.map(l => <option key={l}>{l}</option>)}
           </select>
         </label>
-
         <label style={{marginLeft:"12px"}}>
           Utente:
           <select value={filtroUtente} onChange={e => setFiltroUtente(e.target.value)}>
@@ -1267,49 +1200,18 @@ const traffic = getTrafficLight(estimated);
             {utentiDisponibili.map(u => <option key={u}>{u}</option>)}
           </select>
         </label>
-
-        <label style={{marginLeft:"12px"}}>
-  Tipo:
+        <label style={{marginLeft:"12px"}}>  Tipo:
   <select value={tipoMovimento} onChange={e => setTipoMovimento(e.target.value)}>
     <option value="tutti">Tutti</option>
     <option value="scarico">Scarico</option>
     <option value="carico">Carico</option>
   </select>
 </label>
-
-      
       </div>
 
-<div style={{ marginTop: "15px", marginBottom: "10px", display: "flex", gap: "10px", alignItems: "center" }}>
-  
-  <label>
-    📊 Applica listino:
-    <select
-  value={listinoApplicato}
-  onChange={(e) => setListinoApplicato(e.target.value)}
-  disabled={tipoMovimento === "tutti"}
->
-      <option value="tutti">Nessuno</option>
-      {Object.keys(listini)
-  .filter(nome => listini[nome]?.tipoListino === "SCARICO")
-  .map(nome => (
-    <option key={nome} value={nome}>{nome}</option>
-))}
-    </select>
-  </label>
-
-  <button
-  onClick={() => applyListino()}
-  disabled={tipoMovimento === "tutti" || listinoApplicato === "tutti"}
->
-    ⚡ Applica
-  </button>
-
-</div>
 {/* SEMAFORO RISULTATI */}
 <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
-  <span>Risultati stimati:</span>
-
+  <span>Movimenti:</span>
   <span style={{
     width: 12,
     height: 12,
@@ -1321,7 +1223,6 @@ const traffic = getTrafficLight(estimated);
         ? "orange"
         : "red"
   }} />
-
   <strong>{estimated}</strong>
 </div>
       {/* TABELLA */}
@@ -1379,8 +1280,227 @@ const traffic = getTrafficLight(estimated);
     ))}
   </tbody>
 </table>
+{modalProspetto && (
+  <div style={{
+    position: "fixed",
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  }}>
+    <div style={{
+      background: "white",
+      padding: 20,
+      borderRadius: 10,
+      width: "80%",
+      maxHeight: "80vh",
+      overflow: "auto"
+    }}>
+      <h3>Prospetto Fattura</h3>
+      <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
+        <thead>
+          <tr>
+            <th>FIR</th>
+            <th>CER</th>
+            <th>Materiale</th>
+            <th>Kg</th>
+            <th>Calo</th>
+            <th>Netto</th>
+            <th>€/Kg</th>
+            <th>Totale</th>
+          </tr>
+        </thead>
+        <tbody>
+{prospettoRighe.map((r, i) => {
+  const netto = round2(r.netto);
+ const prezzo = money(r.prezzo);
+
+
+  const tot = money(netto * prezzo);
+
+  return (
+    <tr key={i}>
+      <td>{r.fir}</td>
+      <td>{r.cer}</td>
+      <td>{r.materiale}</td>
+      <td>{round2(r.peso)}</td>
+      <td>{round2(r.calo)}</td>
+      <td>{netto}</td>
+      <td>{prezzo}</td>
+      <td>{tot.toFixed(2)}</td>
+    </tr>
+  );
+})}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+        <button onClick={stampaSoloProspetto}>🖨 Stampa</button>
+        <button onClick={confermaSalvataggioProspetto}>💾 Salva</button>
+        <button onClick={() => setModalProspetto(false)}>❌ Chiudi</button>
+      </div>
+    </div>
+  </div>
+)}
+{modalData && (
+  <div key={reloadKey} style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      background: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 99999
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: "white",
+        padding: 20,
+        borderRadius: 10,
+        width: "80%",
+        maxHeight: "80vh",
+        overflowY: "auto",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+      }}
+    >
+      <h2>
+        {modalTipo === "prospetto"
+          ? "📑 Prospetto Fattura"
+          : "📄 Fattura"}
+      </h2>
+      <div style={{
+  marginBottom: "15px",
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  border: "1px solid #ddd",
+  padding: "10px",
+  borderRadius: "6px",
+  background: "#f9f9f9"
+}}>
+
+  <label>
+    📊 Applica listino:
+    <select
+      value={listinoApplicato}
+      onChange={(e) => setListinoApplicato(e.target.value)}
+    >
+      <option value="tutti">Nessuno</option>
+
+      {Object.keys(listini)
+        .filter(nome => {
+          if (modalTipo === "prospetto") {
+            return listini[nome]?.tipoListino === "SCARICO";
+          }
+          if (modalTipo === "fattura") {
+            return listini[nome]?.tipoListino === "CARICO";
+          }
+          return true;
+        })
+        .map(nome => (
+          <option key={nome} value={nome}>
+            {nome}
+          </option>
+        ))}
+    </select>
+  </label>
+
+  <button
+    onClick={() => applyListino()}
+    disabled={listinoApplicato === "tutti"}
+  >
+    ⚡ Applica
+  </button>
+
+</div>
+      <p><b>Cliente:</b> {modalData.cliente}</p>
+      <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
+        <thead>
+          <tr>
+            <th>Materiale</th>
+            <th>Kg</th>
+            <th>Prezzo</th>
+            <th>Totale</th>
+          </tr>
+        </thead>
+        <tbody>
+{scarichi
+  .filter(m => modalData.movimentiIds.includes(m.id))
+  .flatMap(m => m.cer.map(c => ({
+    fir: c.fir || m.fir || "-",
+    cer: c.cer || c.codiceCER || "-",
+    righe: c.righe || []
+  })))
+  .map((b, i) => (
+    <React.Fragment key={i}>
+      <tr>
+        <td colSpan="4" style={{ background: "#eee", fontWeight: "bold" }}>
+          FIR: {b.fir} | CER: {b.cer}
+        </td>
+      </tr>
+
+      {b.righe.map((r, j) => {
+        const prezzo =
+          tipoMovimento === "scarico"
+            ? (r.prezzoAcquisto ?? 0)
+            : (r.prezzoVendita ?? 0);
+
+        const tot = money(r.netto * prezzo);
+
+        return (
+          <tr key={j}>
+            <td>{r.materiale}</td>
+            <td>{r.netto}</td>
+            <td>{prezzo}</td>
+            <td>{tot}</td>
+          </tr>
+        );
+      })}
+    </React.Fragment>
+  ))}
+        </tbody>
+      </table>
+    <h3 style={{ marginTop: 20 }}>
+  Totale: {round2(
+    (scarichi
+      .filter(m => modalData.movimentiIds.includes(m.id))
+      .flatMap(m => m.cer)
+      .flatMap(c => (c.righe || []))
+      .reduce((tot, r) => {
+        const kg = Number(r.netto || 0);
+        const prezzo =
+          tipoMovimento === "scarico"
+            ? Number(r.prezzoAcquisto || 0)
+            : Number(r.prezzoVendita || 0);
+
+        return tot + (kg * prezzo);
+      }, 0)
+    )
+  ).toFixed(2)}
+</h3>
+      <div style={{ marginTop: 20 }}>
+        <button onClick={handleSalvaDocumento}>
+          💾 Salva
+        </button>
+        <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>
+          🖨️ Stampa
+        </button>
+        <button
+          onClick={() => setModalData(null)}
+          style={{ marginLeft: 10 }}
+        >
+          ❌ Chiudi
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
-
 export default GestioneScarichi;

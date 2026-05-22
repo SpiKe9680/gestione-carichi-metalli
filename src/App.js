@@ -17,6 +17,7 @@ import DettagliLog from "./components/DettagliLog";
 import ConfigurazioniGenerali from "./components/ConfigurazioniGenerali";
 import MovimentiFinanziari from "./components/MovimentiFinanziari";
 import MovimentiGiorno from "./components/MovimentiGiorno";
+import AnaMovFin from "./components/AnagraficaMovimentoFinanziario"
 
 const getUser = () => {
   try {
@@ -120,6 +121,8 @@ const App = () => {
 
 <Route path="/movimenti-giorno"
           element={<AdminRoute><MovimentiGiorno /></AdminRoute>} />
+<Route path="/AnaMovFin"
+          element={<AdminRoute><AnaMovFin /></AdminRoute>} />
 
         {/* FALLBACK */}
         <Route
