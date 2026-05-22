@@ -26,6 +26,7 @@ const handleGoToDashboard = () => {
   else navigate("/admin");
 };
 const [note, setNote] = useState("");
+const [firError, setFirError] = useState(false);
 const [snapshotIniziale, setSnapshotIniziale] = useState(null);
   const [firExists, setFirExists] = useState(false);
 const [firCheckLoading, setFirCheckLoading] = useState(false);
@@ -594,7 +595,8 @@ useEffect(() => {
 
   return () => window.removeEventListener("beforeunload", handleBeforeUnload);
 }, [dirty]);
-
+const isFornitorePrivato =
+  (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 const handleAdd = () => {
   if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
 
@@ -1031,20 +1033,41 @@ const handleSave = async () => {
       return;
     }
 
-    if (!selectedFornitore || !selectedListino || !scarico || scarico.length === 0) {
-      alert("Completa fornitore, listino e scarico");
-      return;
-    }
+   if (
+  !selectedFornitore ||
+  !selectedListino ||
+  !scarico ||
+  scarico.length === 0
+) {
+  alert("Completa fornitore, listino e scarico");
+  return;
+}
 
-    const hasImages =
-      (fotoFile && fotoFile.length > 0) ||
-      (previewFoto && previewFoto.some(p => typeof p === "string" && !p.startsWith("blob:")));
+if (
+  selectedFornitore !== "FORNITORE PRIVATO" &&
+  !firCer
+) {
+  setFirError(true);
 
-    if (!hasImages) {
-      alert("Devi caricare almeno un'immagine prima di salvare");
-      return;
-    }
+  setTimeout(() => {
+    const el = document.getElementById("fir-input");
+    if (el) el.focus();
+  }, 0);
 
+  return;
+}
+
+   const isFornitorePrivato =
+  (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
+
+const hasImages =
+  (fotoFile && fotoFile.length > 0) ||
+  (previewFoto && previewFoto.some(p => typeof p === "string" && !p.startsWith("blob:")));
+
+if (!isFornitorePrivato && !hasImages) {
+  alert("Devi caricare almeno un'immagine prima di salvare");
+  return;
+}
     const draftRef = doc(db, "scarichi_draft", utenteNome);
     const draftSnap = await getDoc(draftRef);
 
@@ -1486,10 +1509,10 @@ onChange={async (e) => {
 <div style={{ marginTop: "20px", textAlign: "center" }}>
 <button
   onClick={handleSave}
-  disabled={
+ disabled={
   salvataggioInCorso ||
   firExists ||
-  !firCer ||
+  (!isFornitorePrivato && !firCer) ||
   !listinoValid ||
   !dirty
 }
@@ -1522,13 +1545,32 @@ onChange={async (e) => {
 ))}
           </select>
           <label>F.I.R (CER)/DDT:</label>
-       <input
+<input
+id="fir-input"
+className={firError ? "input-error" : ""}
   type="text"
   value={firCer}
-  onChange={(e) => setFirCer(e.target.value.toUpperCase())}
-  onBlur={() => checkFirExists(firCer)}
-  placeholder="Numero formulario"
-  style={{ textTransform: "uppercase" }}
+  disabled={isFornitorePrivato}
+  onChange={(e) => {
+  setFirCer(e.target.value.toUpperCase());
+  setFirError(false);
+  setDirty(true);
+}}
+  onBlur={() => {
+  if (!isFornitorePrivato) {
+    setFirError(!firCer);
+    checkFirExists(firCer);
+  }
+  }}
+  placeholder={
+    isFornitorePrivato
+      ? "FIR non richiesto per fornitore privato"
+      : "Numero formulario"
+  }
+  style={{
+    textTransform: "uppercase",
+    backgroundColor: isFornitorePrivato ? "#eee" : "white"
+  }}
 />
         {firExists && (
   <p style={{ color: "red", fontWeight: "bold" }}>

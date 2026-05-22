@@ -69,6 +69,23 @@
 
   box-shadow: 0 0 20px rgba(0,0,0,0.4);
 }
+.big-datepicker {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  min-width: 180px;
+}
+.react-datepicker {
+  font-size: 14px;
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__current-month {
+  font-weight: 600;
+}
 
 .log-modal pre {
   background: #111;

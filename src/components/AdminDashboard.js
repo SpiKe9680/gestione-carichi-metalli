@@ -60,6 +60,12 @@ if (!currentUser) return null;
         >
           Movimenti Finanziari
         </button>
+        <button 
+          onClick={() => navigate("/AnaMovFin")}
+          style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
+        >
+          Anagrafica Movimenti Finanziari
+        </button>
       </div>
     </div>
   );

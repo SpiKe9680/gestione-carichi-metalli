@@ -9,19 +9,42 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { it } from "date-fns/locale";
 import { collection, getDocs } from "firebase/firestore";
-
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 const MovimentiFinanziari = () => {
   const navigate = useNavigate();
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
 const [giornoAvviamento, setGiornoAvviamento] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date());
 const [movimenti, setMovimenti] = useState([]);
 useEffect(() => {
   const fetchMovimenti = async () => {
     try {
-      const snap = await getDocs(collection(db, "movimenti"));
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const snap = await getDocs(collection(db, "MovimentoFinanziario"));
+const data = snap.docs.map(d => {
+  const m = d.data();
+
+  let data = null;
+
+if (m.data) {
+  const raw = m.data.toDate
+    ? m.data.toDate()
+    : new Date(m.data);
+
+  data = new Date(
+    raw.getFullYear(),
+    raw.getMonth(),
+    raw.getDate()
+  );
+}
+
+  return {
+    id: d.id,
+    ...m,
+    data
+  };
+});
       setMovimenti(data);
     } catch (err) {
       console.error("Errore caricamento movimenti:", err);
@@ -30,6 +53,19 @@ useEffect(() => {
 
   fetchMovimenti();
 }, []);
+const toDayKey = (date) => {
+  if (!date) return null;
+
+  const d = new Date(date);
+
+  // NORMALIZZAZIONE UTC → giorno puro
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 const formatDateIT = (date) => {
   if (!date) return "";
   return new Date(date).toLocaleDateString("it-IT");
@@ -82,16 +118,14 @@ const formatAvvio = (date) => {
 };
   // -------- DASHBOARD --------
   const goHome = () => navigate("/admin");
-
+const formatEuro = (value) => {
+  return new Intl.NumberFormat("it-IT", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(value) || 0);
+};
   // -------- CALCOLO SETTIMANA --------
-  const getWeek = (date) => {
-    const start = new Date(date);
-
-  // se settimana prima del limite → correggi
-  if (giornoAvviamento && start < giornoAvviamento) {
-    start.setTime(giornoAvviamento.getTime());
-  }
-const getWeek = (date) => {
+ const getWeek = (date) => {
   const start = new Date(date);
 
   if (giornoAvviamento && start < giornoAvviamento) {
@@ -99,7 +133,7 @@ const getWeek = (date) => {
   }
 
   const day = start.getDay() || 7;
-  if (day !== 1) start.setHours(-24 * (day - 1));
+  if (day !== 1) start.setDate(start.getDate() - (day - 1));
 
   const week = [];
 
@@ -107,7 +141,7 @@ const getWeek = (date) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
 
-    const key = d.toISOString().split("T")[0];
+    const key = toDayKey(d);
 
     let spese = 0;
     let introiti = 0;
@@ -115,24 +149,32 @@ const getWeek = (date) => {
     let totaleIntroiti = 0;
 
     movimenti.forEach(m => {
-      if (!m.dataPagamento) return;
+    if (!m.data) return;
 
-      const pag = m.dataPagamento.toDate
-        ? m.dataPagamento.toDate()
-        : new Date(m.dataPagamento);
-
-      const pagKey = pag.toISOString().split("T")[0];
+const pagKey = toDayKey(m.data);
 
       if (pagKey !== key) return;
 
-      if (m.tipo === "scarico") {
+      const importo = Number(m.importo) || 0;
+      const tipo = (m.tipo || "").toUpperCase();
+
+      const isSpesa =
+        tipo === "USCITA" ||
+        tipo === "PROSPETTIFATTURA" ||
+        tipo === "PRIVATI";
+
+      const isIntroito =
+        tipo === "ENTRATA" ||
+        tipo === "FATTURECARICHI";
+
+      if (isSpesa) {
         spese++;
-        totaleSpese += Number(m.importo || 0);
+        totaleSpese += importo;
       }
 
-      if (m.tipo === "carico") {
+      if (isIntroito) {
         introiti++;
-        totaleIntroiti += Number(m.importo || 0);
+        totaleIntroiti += importo;
       }
     });
 
@@ -149,31 +191,12 @@ const getWeek = (date) => {
 
   setWeekDays(week);
 };
-    const day = start.getDay() || 7;
-    if (day !== 1) start.setHours(-24 * (day - 1));
-
-    const week = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-
-      week.push({
-        date: d,
-        giorno: d.toLocaleDateString("it-IT", { weekday: "long" }),
-        dataString: d.toLocaleDateString("it-IT"),
-        spese: 0,
-        introiti: 0,
-        totaleSpese: 0,
-        totaleIntroiti: 0,
-      });
-    }
-
-    setWeekDays(week);
-  };
 
   useEffect(() => {
+  if (movimenti.length > 0) {
     getWeek(currentDate);
-  }, [currentDate]);
+  }
+}, [currentDate, movimenti]);
 
   // -------- NAVIGAZIONE SETTIMANA --------
 
@@ -201,16 +224,60 @@ const goToDetail = (day) => {
   });
 };
 
+
+const handlePrintPDF = async () => {
+  const input = document.getElementById("area-stampa");
+  if (!input) return;
+
+  const canvas = await html2canvas(input, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff"
+  });
+
+  const imgData = canvas.toDataURL("image/png");
+
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4"
+  });
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  const imgWidth = pageWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  let heightLeft = imgHeight;
+  let position = 0;
+
+  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight;
+
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+
+  pdf.save(
+    `Movimenti_Settimana_${new Date().toLocaleDateString("it-IT")}.pdf`
+  );
+};
+
   return (
     <div style={{ padding: "20px" }}>
       {/* NAV */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
         <button onClick={goHome}>🏠 Dashboard</button>
+        <button onClick={handlePrintPDF}>🖨️ Stampa</button>
         <button onClick={handleLogout}>
           🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
         </button>
       </div>
-
+    <div id="area-stampa">
       <h2>Movimenti Finanziari</h2>
 {giornoAvviamento && (
   <div
@@ -243,17 +310,19 @@ const goToDetail = (day) => {
   locale={it}
   minDate={giornoAvviamento || undefined}
   placeholderText="Seleziona data"
+  className="big-datepicker"
 />
         
       </div>
 
       {/* NAV SETTIMANA */}
       <div style={{ display: "flex", gap: "10px", marginBottom: 20 }}>
-        <button onClick={prevWeek}>⬅️</button>
-        <button onClick={nextWeek}>➡️</button>
+        <button onClick={prevWeek} title="Settimana Precedente">⬅️</button>
+        <button onClick={nextWeek} title="Settimana Successiva">➡️</button>
       </div>
 
       {/* TABELLA */}
+  
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #ccc" }}>
@@ -268,27 +337,67 @@ const goToDetail = (day) => {
         </thead>
 
         <tbody>
-          {weekDays.map((d, i) => {
-            const guadagno = d.totaleIntroiti - d.totaleSpese;
+{weekDays.map((d, i) => {
+  const guadagno = d.totaleIntroiti - d.totaleSpese;
 
-            return (
-              <tr
-                key={i}
-                onClick={() => goToDetail(d)}
-                style={{ borderBottom: "1px solid #eee", cursor: "pointer" }}
-              >
+  const rowStyle = {
+    borderBottom: "1px solid #eee",
+    cursor: "pointer",
+    background:
+      guadagno > 0 ? "green" :
+      guadagno < 0 ? "red" :
+      "white",
+    color: guadagno === 0 ? "black" : "white"
+  };
+
+  return (
+          <tr
+  key={i}
+  onClick={() => goToDetail(d)}
+  style={rowStyle}
+>
                 <td>{d.giorno}</td>
                 <td>{d.dataString}</td>
                 <td>{d.spese}</td>
                 <td>{d.introiti}</td>
-                <td>{d.totaleSpese}€</td>
-                <td>{d.totaleIntroiti}€</td>
-                <td>{guadagno}€</td>
+               <td>{formatEuro(d.totaleSpese)}€</td>
+<td>{formatEuro(d.totaleIntroiti)}€</td>
+<td>{formatEuro(guadagno)}€</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      <div style={{ marginTop: 20, padding: 15, borderTop: "2px solid #ccc" }}>
+  {(() => {
+    let totSpese = 0;
+    let totIntroiti = 0;
+
+    weekDays.forEach(d => {
+      totSpese += Number(d.totaleSpese) || 0;
+      totIntroiti += Number(d.totaleIntroiti) || 0;
+    });
+
+    const guadagno = totIntroiti - totSpese;
+
+    const boxStyle = {
+      display: "flex",
+      gap: "20px",
+      fontWeight: "bold",
+      fontSize: "16px"
+    };
+
+    return (
+      <div style={boxStyle}>
+        <div>📉 Spese settimana: {formatEuro(totSpese)}€</div>
+        <div>📈 Incassi settimana: {formatEuro(totIntroiti)}€</div>
+        <div>💰 Guadagno: {formatEuro(guadagno)}€</div>
+      </div>
+    );
+  })()}
+</div>
+    </div>
     </div>
   );
 };
