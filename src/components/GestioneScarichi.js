@@ -126,7 +126,8 @@ const parseDoc = (d, tipo) => {
     utente: data.utente || "sconosciuto",
     tipo,
 
-    // 🔥 QUI NON PERDI PIÙ FIR/CER
+    consuntivato: data.consuntivato === true, // 🔥 AGGIUNTO
+
     cer: movimenti.map(m => ({
       fir: m.fir || "-",
       cer: m.cer || m.codiceCER || "-",
@@ -221,16 +222,30 @@ const handleSalvaDocumento = async () => {
 
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
 
-    if (!movimentiIds.length) {
+const movimentiSelezionati = scarichi.filter(m =>
+  movimentiIds.includes(m.id)
+);
+
+// 🔥 SOLO NON CONSUNTIVATI
+const validi = movimentiSelezionati.filter(m => !m.consuntivato);
+
+if (validi.length === 0) {
+  alert("❌ Tutti i movimenti selezionati sono già consuntivati");
+  return;
+}
+
+const validiIds = validi.map(m => m.id);
+
+    if (!validiIds.length) {
       alert("❌ Nessun movimento selezionato");
       return;
     }
 
-    console.log("🟡 IDS:", movimentiIds);
+    console.log("🟡 IDS:", validiIds);
 
     // 🔥 VALIDAZIONE UNIFICATA (carichi + scarichi)
     try {
-      await validaEPreparaProspetto(movimentiIds);
+      await validaEPreparaProspetto(validiIds);
     } catch (e) {
       console.error("❌ ERRORE VALIDAZIONE:", e);
       alert(
@@ -257,14 +272,14 @@ totale = round2(totale + round2(kg * prezzo));
       tipo,
       cliente: modalData.cliente || "",
       totale,
-      movimentiIds,
+      validiIds,
       blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),
       dataCreazione: new Date().toISOString(),
       DataPagamento: null,
     };
 
     // 🔥 ID STABILE
-    const docId = movimentiIds.slice().sort().join("-");
+    const docId = validiIds.slice().sort().join("-");
 
     console.log("🟡 DOC ID:", docId);
 
@@ -275,9 +290,9 @@ totale = round2(totale + round2(kg * prezzo));
 
     snap.docs.forEach((d) => {
       const data = d.data();
-      const ids = data.movimentiIds || [];
+      const ids = data.validiIds || [];
 
-      const overlap = ids.some((id) => movimentiIds.includes(id));
+      const overlap = ids.some((id) => validiIds.includes(id));
 
       if (overlap) {
         daEliminare.push(d.id);
@@ -688,31 +703,74 @@ totale += round2(tot);
 };
 const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
+
   const safe = (v) => Number(v) || 0;
-const tuttiCer = movimentiDelGiorno.flatMap(s =>
-  (s.cer || []).map(cer => ({    fir: cer.fir || "-",    cer: cer.cer || cer.codiceCER || "-",    tipo: cer.tipo ?? s.tipo,    listino: s.listino,
-    righe: (cer.righe || []).map(r => ({      ...r,      fir: cer.fir || "-",      cer: cer.cer || cer.codiceCER || "-",      materiale: r.materiale,      netto: r.netto || 0,      prezzoAcquisto: r.prezzoAcquisto || 0,      prezzoVendita: r.prezzoVendita || 0,    }))
-  }))
-);
+
+  const tuttiCer = movimentiDelGiorno.flatMap(s =>
+    (s.cer || []).map(cer => ({
+      fir: cer.fir || "-",
+      cer: cer.cer || cer.codiceCER || "-",
+      tipo: cer.tipo ?? s.tipo,
+      listino: s.listino,
+      consuntivato: s.consuntivato === true, // 🔥 AGGIUNTO
+
+      righe: (cer.righe || []).map(r => ({
+        ...r,
+        fir: cer.fir || "-",
+        cer: cer.cer || cer.codiceCER || "-",
+        materiale: r.materiale,
+        netto: r.netto || 0,
+        prezzoAcquisto: r.prezzoAcquisto || 0,
+        prezzoVendita: r.prezzoVendita || 0,
+      }))
+    }))
+  );
+
   const nrMovimentiScarico = tuttiCer.filter(c => c.tipo === "scarico").length;
   const nrMovimentiCarico = tuttiCer.filter(c => c.tipo === "carico").length;
   const nrFIR = tuttiCer.map(c => c.fir).filter(Boolean).length;
+
   const pesoScarichi = tuttiCer
     .filter(c => c.tipo === "scarico")
     .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
+
   const pesoCarichi = tuttiCer
     .filter(c => c.tipo === "carico")
     .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
+
   const costiTotali = tuttiCer
     .filter(c => c.tipo === "scarico")
-    .reduce((tot, c) =>      tot + c.righe.reduce((s, r) =>        s + safe(r.prezzoAcquisto) * safe(r.netto), 0      )    , 0);
+    .reduce((tot, c) =>
+      tot + c.righe.reduce((s, r) =>
+        s + safe(r.prezzoAcquisto) * safe(r.netto), 0
+      )
+    , 0);
+
   const ricaviTotali = tuttiCer
     .filter(c => c.tipo === "carico")
-    .reduce((tot, c) =>      tot + c.righe.reduce((s, r) =>        s + safe(r.prezzoVendita) * safe(r.netto), 0      )    , 0);
-const utentiDelGiorno = [...new Set(  movimentiDelGiorno.map(s =>    `${s.fornitore || s.destinatario || "sconosciuto"} / ${s.utente || "Sconosciuto"}`  ))].join("; ");
+    .reduce((tot, c) =>
+      tot + c.righe.reduce((s, r) =>
+        s + safe(r.prezzoVendita) * safe(r.netto), 0
+      )
+    , 0);
+
+  const utentiDelGiorno = [...new Set(
+    movimentiDelGiorno.map(s =>
+      `${s.fornitore || s.destinatario || "sconosciuto"} / ${s.utente || "Sconosciuto"}`
+    )
+  )].join("; ");
+
+  // 🔥 CONSUNTIVATI LOGIC
+  const totaleMovimenti = movimentiDelGiorno.length;
+  const consuntivati = movimentiDelGiorno.filter(m => m.consuntivato).length;
+  const hasConsuntivati = consuntivati > 0;
+
   let backgroundColor = "";
   let textColor = "#000";
-  if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
+
+  if (hasConsuntivati) {
+    backgroundColor = "#FFF59D"; // GIALLO
+  } else if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
     backgroundColor = "#326c9f";
     textColor = "#fff";
   } else if (nrMovimentiCarico > 0) {
@@ -720,7 +778,25 @@ const utentiDelGiorno = [...new Set(  movimentiDelGiorno.map(s =>    `${s.fornit
   } else {
     backgroundColor = "#FFECB3";
   }
-  return {    giornoIT,    nrMovimentiScarico,    nrMovimentiCarico,    nrFIR,    pesoScarichi,    pesoCarichi,    costiTotali,    ricaviTotali,    utenti: utentiDelGiorno,    backgroundColor,    textColor,    dettagliScarichi: tuttiCer.filter(c => c.tipo === "scarico"),    dettagliCarichi: tuttiCer.filter(c => c.tipo === "carico"),};
+
+  return {
+    giornoIT,
+    nrMovimentiScarico,
+    nrMovimentiCarico,
+    nrFIR,
+    pesoScarichi,
+    pesoCarichi,
+    costiTotali,
+    ricaviTotali,
+    utenti: utentiDelGiorno,
+    backgroundColor,
+    textColor,
+
+    // 🔥 NUOVO
+    tooltip: hasConsuntivati
+      ? `In questo giorno esistono movimenti ${totaleMovimenti}, i già contabilizzati sono ${consuntivati}`
+      : ""
+  };
 });
 const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   if (sortConfig.key === "data") {
@@ -1024,6 +1100,17 @@ setFiltroCER("tutti");
 };
 const estimated = estimateResults();
 const traffic = getTrafficLight(estimated);
+const movimentiSelezionati = scarichi.filter(m =>
+  m.fornitore === filtroFornitore &&
+  m.tipo === tipoMovimento
+);
+
+// 🔥 esiste almeno un movimento NON consuntivato?
+const hasValidi = movimentiSelezionati.some(m => !m.consuntivato);
+
+// 🔥 se non ci sono movimenti o solo consuntivati → blocca
+const bottoneDisabilitato =
+  filtroFornitore === "tutti" || !hasValidi;
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -1033,68 +1120,74 @@ const traffic = getTrafficLight(estimated);
 </button>
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
 <button
-  disabled={filtroFornitore === "tutti"}
+  disabled={bottoneDisabilitato}
   style={{
     marginLeft: 10,
-    opacity: filtroFornitore === "tutti" ? 0.4 : 1,
-    cursor: filtroFornitore === "tutti" ? "not-allowed" : "pointer"
+    opacity: bottoneDisabilitato ? 0.4 : 1,
+    cursor: bottoneDisabilitato ? "not-allowed" : "pointer"
   }}
-onClick={() => {
-  if (filtroFornitore === "tutti") return;
+  onClick={() => {
+    if (bottoneDisabilitato) return;
 
-  const movimenti = filteredScarichi.filter(
-    m => m.fornitore === filtroFornitore &&
-         m.tipo === tipoMovimento
-  );
+    const movimenti = filteredScarichi.filter(
+      m =>
+        m.fornitore === filtroFornitore &&
+        m.tipo === tipoMovimento &&
+        !m.consuntivato // 🔥 sicurezza extra
+    );
 
-  if (!movimenti.length) {
-    alert("Nessun dato");
-    return;
-  }
+    if (!movimenti.length) {
+      alert("❌ Nessun movimento valido (già consuntivato)");
+      return;
+    }
 
-  const blocchi = [];
-  let totale = 0;
+    const blocchi = [];
+    let totale = 0;
 
-  movimenti.forEach(m => {
-    (m.cer || []).forEach(c => {
-      const righe = (c.righe || []).map(r => {
-        const netto = Number(r.netto || 0);
+    movimenti.forEach(m => {
+      (m.cer || []).forEach(c => {
+        const righe = (c.righe || []).map(r => {
+          const netto = Number(r.netto || 0);
 
-        const prezzo =
-          tipoMovimento === "scarico"
-            ? Number(r.prezzoAcquisto || 0)
-            : Number(r.prezzoVendita || 0);
+          const prezzo =
+            tipoMovimento === "scarico"
+              ? Number(r.prezzoAcquisto || 0)
+              : Number(r.prezzoVendita || 0);
 
-        const tot = money( netto * prezzo);
-        totale += tot;
+          const tot = money(netto * prezzo);
+          totale += tot;
 
-        return {
-          materiale: r.materiale,
-          netto,
-          prezzo,
-          totale: tot
-        };
-      });
+          return {
+            materiale: r.materiale,
+            netto,
+            prezzo,
+            totale: tot
+          };
+        });
 
-      blocchi.push({
-        fir: c.fir || m.fir || "N/D",
-        data: m.data,
-        cer: c.cer || c.codiceCER || "-",
-        righe
+        blocchi.push({
+          fir: c.fir || m.fir || "N/D",
+          data: m.data,
+          cer: c.cer || c.codiceCER || "-",
+          righe
+        });
       });
     });
-  });
 
-  setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
+    setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
 
-  setModalData({
-    cliente: filtroFornitore,
-    blocchi,
-    movimentiIds: movimenti.map(m => m.id)
-  });
-}}
+    setModalData({
+      cliente: filtroFornitore,
+      blocchi,
+      movimentiIds: movimenti.map(m => m.id)
+    });
+  }}
 >
-  {tipoMovimento === "carico"    ? "📄 Emetti Fattura"    : tipoMovimento === "scarico"    ? "📑 Prospetto Fattura"    : ""}
+  {tipoMovimento === "carico"
+    ? "📄 Emetti Fattura"
+    : tipoMovimento === "scarico"
+      ? "📑 Prospetto Fattura"
+      : "📄 Documento"}
 </button>
       </div>
       <h2>Gestione Carichi / Scarichi</h2>
