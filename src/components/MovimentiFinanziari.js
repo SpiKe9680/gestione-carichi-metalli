@@ -11,11 +11,15 @@ import { it } from "date-fns/locale";
 import { collection, getDocs } from "firebase/firestore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { useLocation } from "react-router-dom";
 const MovimentiFinanziari = () => {
   const navigate = useNavigate();
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
 const [giornoAvviamento, setGiornoAvviamento] = useState(null);
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const location = useLocation();
+ const [currentDate, setCurrentDate] = useState(
+  location.state?.date ? new Date(location.state.date) : new Date()
+);
   const [selectedDate, setSelectedDate] = useState(new Date());
 const [movimenti, setMovimenti] = useState([]);
 useEffect(() => {
@@ -125,6 +129,7 @@ const formatEuro = (value) => {
   }).format(Number(value) || 0);
 };
   // -------- CALCOLO SETTIMANA --------
+
  const getWeek = (date) => {
   const start = new Date(date);
 
@@ -193,9 +198,9 @@ const pagKey = toDayKey(m.data);
 };
 
   useEffect(() => {
-  if (movimenti.length > 0) {
+ // if (movimenti.length > 0) {
     getWeek(currentDate);
-  }
+  //}
 }, [currentDate, movimenti]);
 
   // -------- NAVIGAZIONE SETTIMANA --------

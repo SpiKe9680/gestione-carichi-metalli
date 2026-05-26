@@ -8,7 +8,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 const MovimentiGiorno = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const routerLocation  = useLocation();
 const [anagraficaMov, setAnagraficaMov] = useState([]);
   const currentUser =
     JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
@@ -27,71 +27,15 @@ const [mapScarichi, setMapScarichi] = useState({});
   // MOCK DATA (poi Firestore)
   // --------------------------
   const [carichiScarichi, setCarichiScarichi] = useState([]);
-    const toDate = (v) => {
+const toDate = (v) => {
   if (!v) return null;
-  if (v.toDate) return v.toDate(); // Firestore timestamp
-  return new Date(v);
+  if (v instanceof Date && !isNaN(v)) return v;
+  if (v?.toDate) return v.toDate();
+  if (v?.seconds) return new Date(v.seconds * 1000);
+
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
 };
-const sameDay = (a, b) => {
-  const da = a?.toDate ? a.toDate() : new Date(a);
-  const db = b?.toDate ? b.toDate() : new Date(b);
-
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  );
-};
-const normalizeMovimenti = (docs) => {
-  const toDate = (v) => {
-    if (!v) return null;
-    if (v?.toDate) return v.toDate();
-    if (v?.seconds) return new Date(v.seconds * 1000);
-    return new Date(v);
-  };
-
-  const out = [];
-
-  docs.forEach(d => {
-
-    (d.carico || []).forEach((c, idx) => {
-      const data = toDate(c.data ?? d.data);
-
-      if (!data || isNaN(data)) return;
-
-      out.push({
-        id: `${d.id}_carico_${idx}`,
-        tipo: "carico",
-        importo: Number(c.totaleCer ?? c.netto ?? 0),
-        data,
-        dataPagamento: toDate(c.dataPagamento ?? d.dataPagamento),
-        fornitore: c.fornitore ?? "",
-        materiale: c.materiale ?? ""
-      });
-    });
-
-    (d.scarico || []).forEach((s, idx) => {
-      const data = toDate(s.data ?? d.data);
-
-      if (!data || isNaN(data)) return;
-
-      out.push({
-        id: `${d.id}_scarico_${idx}`,
-        tipo: "scarico",
-        importo: Number(s.totaleCer ?? s.netto ?? 0),
-        data,
-        dataPagamento: toDate(s.dataPagamento ?? d.dataPagamento),
-        fornitore: s.fornitore ?? "",
-        materiale: s.materiale ?? ""
-      });
-    });
-
-  });
-
-  return out;
-};
-
-
   // --------------------------
   // CONFIG
   // --------------------------
@@ -113,7 +57,6 @@ const normalizeMovimenti = (docs) => {
 
     fetchConfig();
   }, []);
-
 useEffect(() => {
   const fetchAll = async () => {
     try {
@@ -205,9 +148,10 @@ const refreshAll = async () => {
   // --------------------------
   // NAVIGATION
   // --------------------------
-  const isSameDay = (a, b) => {
+ const isSameDay = (a, b) => {
   const da = toDate(a);
   const db = toDate(b);
+
   if (!da || !db) return false;
 
   return (
@@ -221,47 +165,9 @@ const refreshAll = async () => {
     navigate("/login");
   };
   const [selectedDate] = useState(
-  location.state?.date ? new Date(location.state.date) : new Date()
+  routerLocation.state?.date ? new Date(routerLocation.state.date) : new Date()
 );
-const movFinGiorno = movFin.filter(m =>
-  isSameDay(m.data, selectedDate)
-);
-const buildRow = (m) => {
-  let controparte = "";
-  let dataMov = null;
 
-  if (m.tipo === "fattureCarichi") {
-    const f = mapFatture[m.anagraficaId];
-    if (f) {
-      controparte = f.cliente;
-      dataMov = f.dataCreazione;
-    }
-  }
-
-  if (m.tipo === "prospettiFattura") {
-    const p = mapProspetti[m.anagraficaId];
-    if (p) {
-      controparte = p.cliente;
-      dataMov = p.dataCreazione;
-    }
-  }
-
-  if (m.tipo === "PRIVATI") {
-    const s = mapScarichi[m.anagraficaId];
-    if (s) {
-      controparte = s.fornitore;
-      dataMov = s.data;
-    }
-  }
-
-  return {
-    id: m.id,
-    controparte,
-    dataMov,
-    importo: m.importo,
-    tipo: m.tipo
-  };
-};
 const endOfDay = new Date(selectedDate);
 endOfDay.setHours(23, 59, 59, 999);
 const ALLOWED_TYPES = new Set([
@@ -269,21 +175,17 @@ const ALLOWED_TYPES = new Set([
   "prospettiFattura",
   "PRIVATI"
 ]);
-
 const rows = movFin
   .filter(m => isSameDay(m.data, selectedDate))
   .filter(m => ALLOWED_TYPES.has(m.tipo)) // 🔥 FILTRO CHIAVE
   .map(m => {
     let controparte = "";
-
     if (m.tipo === "fattureCarichi") {
       controparte = mapFatture[m.anagraficaId]?.cliente || "FATTURA";
     }
-
     if (m.tipo === "prospettiFattura") {
       controparte = mapProspetti[m.anagraficaId]?.cliente || "PROSPETTO";
     }
-
     if (m.tipo === "PRIVATI") {
       controparte = "FORNITORE PRIVATO";
     }
@@ -298,23 +200,19 @@ const rows = movFin
     };
   });
 const daConsuntivare = [];
-
 const alreadyConsuntivati = new Set(
   movFin.map(m => {
     const id = m.anagraficaId || m.id;
     return `${m.tipo}_${id}`;
   })
 );
-
 // =====================
 // FATTURE CARICHI
 // =====================
 Object.values(mapFatture).forEach(f => {
   const data = toDate(f.dataCreazione);
   if (!data) return;
-
  if (alreadyConsuntivati.has(`fattureCarichi_${f.id}`) || movFin.some(m => m.tipo === "fattureCarichi" && m.anagraficaId === f.id)) return;
-
   if (!f.DataPagamento && data.getTime() <= endOfDay.getTime()) {
     daConsuntivare.push({
       id: f.id,
@@ -325,7 +223,6 @@ Object.values(mapFatture).forEach(f => {
     });
   }
 });
-
 // =====================
 // PROSPETTI
 // =====================
@@ -445,31 +342,6 @@ const handlePrintPDF = async () => {
   );
 };
 
-
-
-  const handlePay = async (mov) => {
-  const confirm = window.confirm("Confermare pagamento?");
-  if (!confirm) return;
-
-  try {
-    const ref = doc(db, "movimenti", mov.id);
-
-    await updateDoc(ref, {
-      dataPagamento: selectedDate
-    });
-
-    setCarichiScarichi(prev =>
-      prev.map(m =>
-        m.id === mov.id
-          ? { ...m, dataPagamento: selectedDate }
-          : m
-      )
-    );
-    
-  } catch (err) {
-    console.error(err);
-  }
-};
 const handleConsuntiva = async (row) => {
   const ok = window.confirm(
     `Confermare consuntivazione per ${row.controparte}?`
@@ -477,35 +349,53 @@ const handleConsuntiva = async (row) => {
   if (!ok) return;
 
   try {
-    // 1. aggiorna DataPagamento
+    // 1. aggiorna DataPagamento nella collection madre
     if (row.tipo === "fattureCarichi") {
       await updateDoc(doc(db, "fattureCarichi", row.id), {
         DataPagamento: selectedDate
       });
+
+      // 🔥 PROPAGAZIONE SU MOVIMENTI CARICHI
+      const fattura = mapFatture[row.id];
+      if (fattura?.movimentiIds?.length) {
+        for (const movId of fattura.movimentiIds) {
+          await updateDoc(doc(db, "carichi", movId), {
+            dataPagamento: selectedDate
+          });
+        }
+      }
     }
 
     if (row.tipo === "prospettiFattura") {
       await updateDoc(doc(db, "prospettiFattura", row.id), {
         DataPagamento: selectedDate
       });
+
+      // 🔥 PROPAGAZIONE SU MOVIMENTI SCARICHI
+      const prospetto = mapProspetti[row.id];
+      if (prospetto?.movimentiIds?.length) {
+        for (const movId of prospetto.movimentiIds) {
+          await updateDoc(doc(db, "scarichi", movId), {
+            dataPagamento: selectedDate
+          });
+        }
+      }
     }
 
- if (row.tipo === "PRIVATI") {
-  await updateDoc(doc(db, "scarichi", row.id), {
-    DataPagamento: selectedDate
-  });
-}
+    if (row.tipo === "PRIVATI") {
+      await updateDoc(doc(db, "scarichi", row.id), {
+        DataPagamento: selectedDate
+      });
+    }
 
     // 2. crea MovimentoFinanziario
-   let dataDocumento = row.dataMov;
-
-await addDoc(collection(db, "MovimentoFinanziario"), {
-  anagraficaId: row.anagraficaId || row.id,
-  data: selectedDate,          // 🔥 resta: giorno consuntivo (utile per filtro giorno)
-  dataDocumento: dataDocumento, // 🔥 NUOVO: giorno reale documento
-  importo: row.importo,
-  tipo: row.tipo
-});
+    await addDoc(collection(db, "MovimentoFinanziario"), {
+      anagraficaId: row.anagraficaId || row.id,
+      data: selectedDate,
+      dataDocumento: row.dataMov,
+      importo: row.importo,
+      tipo: row.tipo
+    });
 
     await refreshAll();
 
@@ -537,23 +427,7 @@ const handleUnpay = async (mov) => {
   }
 };
 
-  const handleAddMovement = (type) => {
-    console.log("Aggiungi movimento:", type);
-  };
 
-  const handleAddRecurring = (item) => {
-    console.log("Aggiungi ricorrente:", item);
-  };
-
-const pagati = carichiScarichi.filter(m => {
-  if (!m.dataPagamento || !m.data) return false;
-
-  return (
-    m.dataPagamento.getFullYear() === selectedDate.getFullYear() &&
-    m.dataPagamento.getMonth() === selectedDate.getMonth() &&
-    m.dataPagamento.getDate() === selectedDate.getDate()
-  );
-});
 const handleDeleteFin = async (row) => {
   const ok = window.confirm(
     `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${row.importo.toFixed(2)}?`
@@ -561,20 +435,41 @@ const handleDeleteFin = async (row) => {
   if (!ok) return;
 
   try {
-    // 🔥 1. cancella MovimentoFinanziario
+    // 1. elimina MovimentoFinanziario
     await deleteDoc(doc(db, "MovimentoFinanziario", row.id));
 
-    // 🔥 2. reset DataPagamento nella collection madre
+    // 2. reset DataPagamento nella collection madre + PROPAGAZIONE
+
     if (row.tipo === "fattureCarichi") {
       await updateDoc(doc(db, "fattureCarichi", row.anagraficaId), {
         DataPagamento: null
       });
+
+      // 🔥 RESET MOVIMENTI CARICHI
+      const fattura = mapFatture[row.anagraficaId];
+      if (fattura?.movimentiIds?.length) {
+        for (const movId of fattura.movimentiIds) {
+          await updateDoc(doc(db, "carichi", movId), {
+            dataPagamento: null
+          });
+        }
+      }
     }
 
     if (row.tipo === "prospettiFattura") {
       await updateDoc(doc(db, "prospettiFattura", row.anagraficaId), {
         DataPagamento: null
       });
+
+      // 🔥 RESET MOVIMENTI SCARICHI
+      const prospetto = mapProspetti[row.anagraficaId];
+      if (prospetto?.movimentiIds?.length) {
+        for (const movId of prospetto.movimentiIds) {
+          await updateDoc(doc(db, "scarichi", movId), {
+            dataPagamento: null
+          });
+        }
+      }
     }
 
     if (row.tipo === "PRIVATI") {
@@ -583,21 +478,14 @@ const handleDeleteFin = async (row) => {
       });
     }
 
-    // 🔥 3. refresh UI
+    // 3. refresh UI
     await refreshAll();
 
   } catch (err) {
     console.error(err);
   }
 };
-const daPagare = carichiScarichi
-  .filter(m => {
-    if (m.dataPagamento) return false;
-    if (!m.data) return false;
 
-    return m.data.getTime() <= selectedDate.getTime();
-  })
-  .sort((a, b) => a.data - b.data);
 const entrateUsciteTop = rows.map(r => ({
   tipo: r.tipo,
   importo: Number(r.importo) || 0
@@ -705,8 +593,7 @@ const getOccorrenze = (item) => {
   return occ;
 };
 
-const countContabilizzati = (id) =>
-  movFin.filter(m => m.anagraficaId === id).length;
+
   // --------------------------
   // UI
   // --------------------------
@@ -719,7 +606,13 @@ const countContabilizzati = (id) =>
 <button onClick={handlePrintPDF}>
   🖨️ Stampa PDF
 </button>
-  <button onClick={() => navigate("/MovimentiFinanziari")}>
+ <button
+  onClick={() =>
+  navigate("/MovimentiFinanziari", {
+  state: { date: selectedDate.toISOString() }
+})
+  }
+>
   🔙 Calendario
 </button>
 
@@ -782,9 +675,7 @@ const countContabilizzati = (id) =>
         >
           <td>{r.controparte}</td>
           <td>
-            {r.dataMov
-              ? new Date(r.dataMov).toLocaleDateString("it-IT")
-              : ""}
+            {toDate(r.dataMov)?.toLocaleDateString("it-IT") || ""}
           </td>
           <td>
   {r.importo.toLocaleString("it-IT", {
@@ -880,7 +771,7 @@ const countContabilizzati = (id) =>
   isSameDay(m.data, selectedDate)
 ).map(m => ({
   id: m.id,
- data: toDate(m.dataDocumento),
+ data: toDate(m.dataDocumento ?? m.data),
   importo: m.importo,
   tipo: m.tipo
 }));
@@ -1063,7 +954,7 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
           padding: 6,
           borderBottom: "1px solid #eee"
         }}>
-          <span>{o.data.toLocaleDateString("it-IT")}</span>
+          <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
           <span>{o.importo} €</span>
 
           <button
@@ -1180,7 +1071,7 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
           padding: 6,
           borderBottom: "1px solid #eee"
         }}>
-          <span>{o.data.toLocaleDateString("it-IT")}</span>
+          <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
           <span>{Number(o.importo).toFixed(2)} €</span>
 
           <button
