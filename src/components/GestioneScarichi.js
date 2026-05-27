@@ -23,7 +23,8 @@ const GestioneScarichi = () => {
 const [filtroFIR, setFiltroFIR] = useState(""); // filtro dropdown FIR
 const [firDisponibili, setFirDisponibili] = useState([]); // lista FIR disponibili per il filtro
 const [firSearch, setFirSearch] = useState(""); // testo digitato per FIR
-
+const [documentType, setDocumentType] = useState(null);
+// "fattura" | "prospetto"
 const [dal, setDal] = useState(null);   // oggetto Date
 const [al, setAl] = useState(null);     // oggetto Date
 const [sortConfig, setSortConfig] = useState({ key: "data", direction: "desc" });
@@ -126,13 +127,20 @@ const parseDoc = (d, tipo) => {
     utente: data.utente || "sconosciuto",
     tipo,
 
-    consuntivato: data.consuntivato === true, // 🔥 AGGIUNTO
+    // 🔥 NUOVO: unica fonte verità
+    movimentoFinanziarioId: data.movimentoFinanziarioId || null,
 
-    cer: movimenti.map(m => ({
-      fir: m.fir || "-",
-      cer: m.cer || m.codiceCER || "-",
-      righe: m.righe || []
-    }))
+cer: movimenti.map(m => ({
+  fir: m.fir || "-",
+  cer: m.cer || m.codiceCER || "-",
+  tipo: m.tipo, // 🔥 FIX CRITICO
+  righe: (m.righe || []).map(r => ({
+    ...r,
+    netto: r.netto || 0,
+    prezzoAcquisto: r.prezzoAcquisto || 0,
+    prezzoVendita: r.prezzoVendita || 0
+  }))
+}))
   };
 };
     const scarichi = scarichiSnap.docs.map(d => parseDoc(d, "scarico"));
@@ -206,10 +214,17 @@ const validaEPreparaProspetto = async (movimentiIds) => {
 
   return true;
 };
+const filtraMovimentiValidi = (lista) => {
+  const puliti = lista.filter(m => !m.movimentoFinanziarioId);
+
+  if (puliti.length !== lista.length) {
+    alert("⚠️ Alcuni movimenti già consuntivati sono stati esclusi");
+  }
+
+  return puliti;
+};
 const handleSalvaDocumento = async () => {
   try {
-    console.log("🟡 START SALVATAGGIO MODAL:", modalData);
-
     if (!modalData) {
       alert("❌ Dati modal mancanti");
       return;
@@ -222,97 +237,75 @@ const handleSalvaDocumento = async () => {
 
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
 
-const movimentiSelezionati = scarichi.filter(m =>
+ const movimentiSelezionati = scarichi.filter(m =>
   movimentiIds.includes(m.id)
-);
+).filter(m => !m.movimentoFinanziarioId);
+// 🔥 BLOCCO HARD + FILTRO
+const validi = [];
 
-// 🔥 SOLO NON CONSUNTIVATI
-const validi = movimentiSelezionati.filter(m => !m.consuntivato);
+for (const m of movimentiSelezionati) {
+  if (m.movimentoFinanziarioId) {
+    console.warn("⚠️ Movimento già consuntivato saltato:", m.id);
+    continue;
+  }
+  validi.push(m);
+}
 
 if (validi.length === 0) {
   alert("❌ Tutti i movimenti selezionati sono già consuntivati");
   return;
 }
 
-const validiIds = validi.map(m => m.id);
-
-    if (!validiIds.length) {
-      alert("❌ Nessun movimento selezionato");
+    if (validi.length === 0) {
+      alert("❌ Tutti i movimenti selezionati sono già consuntivati");
       return;
     }
 
-    console.log("🟡 IDS:", validiIds);
+    const validiIds = validi.map(m => m.id);
 
-    // 🔥 VALIDAZIONE UNIFICATA (carichi + scarichi)
-    try {
-      await validaEPreparaProspetto(validiIds);
-    } catch (e) {
-      console.error("❌ ERRORE VALIDAZIONE:", e);
-      alert(
-        e.message?.includes("SCARICO_GIA_PAGATO")
-          ? "❌ Uno o più movimenti sono già pagati"
-          : "❌ Errore validazione prospetto"
-      );
-      return;
-    }
+    await validaEPreparaProspetto(validiIds);
 
-    // 🔥 CALCOLO TOTALE
     let totale = 0;
 
     (modalData.blocchi || []).forEach((b) => {
       (b.righe || []).forEach((r) => {
-       const kg = money(r.netto);
+        const kg = money(r.netto);
         const prezzo = money(r.prezzo);
-
-totale = round2(totale + round2(kg * prezzo));
+        totale = round2(totale + round2(kg * prezzo));
       });
     });
 
     const payload = {
-      tipo,
-      cliente: modalData.cliente || "",
-      totale,
-      validiIds,
-      blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),
-      dataCreazione: new Date().toISOString(),
-      DataPagamento: null,
-    };
+  tipo,
+  cliente: modalData.cliente || "",
+  totale,
+  movimentiIds: validiIds, // 🔥 COERENTE
+  blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),
+  dataCreazione: new Date().toISOString(),
+  movimentoFinanziarioId: null
+};
 
-    // 🔥 ID STABILE
     const docId = validiIds.slice().sort().join("-");
 
-    console.log("🟡 DOC ID:", docId);
-
-    // 🔥 PULIZIA FINALE SICURA
     const snap = await getDocs(collection(db, collectionName));
 
-    const daEliminare = [];
-
-    snap.docs.forEach((d) => {
+    for (const d of snap.docs) {
       const data = d.data();
       const ids = data.validiIds || [];
 
-      const overlap = ids.some((id) => validiIds.includes(id));
-
-      if (overlap) {
-        daEliminare.push(d.id);
+      if (ids.some(id => validiIds.includes(id))) {
+        await deleteDoc(doc(db, collectionName, d.id));
       }
-    });
-
-    for (const id of daEliminare) {
-      console.log("🧹 ELIMINO PROSPETTO CONFLITTUALE:", id);
-      await deleteDoc(doc(db, collectionName, id));
     }
 
     await setDoc(doc(db, collectionName, docId), payload, { merge: true });
 
-    console.log("🟢 SALVATO OK:", docId);
-
     alert("✅ Documento salvato correttamente");
     setModalData(null);
+
   } catch (err) {
-    console.error("❌ ERRORE SALVATAGGIO:", err);
-    alert("❌ Errore salvataggio (controlla console)");
+    console.error(err);
+    alert("❌ Errore salvataggio");
   }
 };
 const salvaProspettoUnificato = async (modalData, tipo) => {
@@ -361,10 +354,10 @@ const handleStampaDocumento = async () => {
 
   const win = window.open("", "_blank");
 
-  // 🔥 USA SEMPRE DATI FRESCHI DALLO STATE
-  const movimenti = scarichi.filter(m =>
-    modalData.movimentiIds.includes(m.id)
-  );
+ const movimenti = scarichi.filter(m =>
+  modalData.movimentiIds.includes(m.id) &&
+  !m.movimentoFinanziarioId
+);
 
   let totale = 0;
 
@@ -651,6 +644,21 @@ const estimateResults = () => {
   }
   return dati.length;
 };
+const getDocumentoLabel = () => {
+  const movimenti = getMovimentiValidi();
+
+  const hasScarico = movimenti.some(m => m.tipo === "scarico");
+  const hasCarico = movimenti.some(m => m.tipo === "carico");
+
+  if (!hasScarico && hasCarico) return "📄 Emetti Fattura";
+  if (hasScarico && !hasCarico) return "📑 Prospetto Fattura";
+
+  if (hasScarico && hasCarico) {
+    return "⚠️ Separa Carichi/Scarichi";
+  }
+
+  return "📄 Documento";
+};
 const getTrafficLight = (count) => {
   if (count <= 1000) return "green";
   if (count <= 2000) return "yellow";
@@ -706,25 +714,27 @@ const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
 
   const safe = (v) => Number(v) || 0;
 
-  const tuttiCer = movimentiDelGiorno.flatMap(s =>
-    (s.cer || []).map(cer => ({
+const tuttiCer = movimentiDelGiorno.flatMap(s =>
+  (s.cer || []).map(cer => ({
+    fir: cer.fir || "-",
+    cer: cer.cer || cer.codiceCER || "-",
+    tipo: cer.tipo ?? s.tipo,
+    listino: s.listino,
+
+    // 🔥 NUOVO
+    movimentoFinanziarioId: s.movimentoFinanziarioId,
+
+    righe: (cer.righe || []).map(r => ({
+      ...r,
       fir: cer.fir || "-",
       cer: cer.cer || cer.codiceCER || "-",
-      tipo: cer.tipo ?? s.tipo,
-      listino: s.listino,
-      consuntivato: s.consuntivato === true, // 🔥 AGGIUNTO
-
-      righe: (cer.righe || []).map(r => ({
-        ...r,
-        fir: cer.fir || "-",
-        cer: cer.cer || cer.codiceCER || "-",
-        materiale: r.materiale,
-        netto: r.netto || 0,
-        prezzoAcquisto: r.prezzoAcquisto || 0,
-        prezzoVendita: r.prezzoVendita || 0,
-      }))
+      materiale: r.materiale,
+      netto: r.netto || 0,
+      prezzoAcquisto: r.prezzoAcquisto || 0,
+      prezzoVendita: r.prezzoVendita || 0,
     }))
-  );
+  }))
+);
 
   const nrMovimentiScarico = tuttiCer.filter(c => c.tipo === "scarico").length;
   const nrMovimentiCarico = tuttiCer.filter(c => c.tipo === "carico").length;
@@ -760,24 +770,34 @@ const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
     )
   )].join("; ");
 
-  // 🔥 CONSUNTIVATI LOGIC
-  const totaleMovimenti = movimentiDelGiorno.length;
-  const consuntivati = movimentiDelGiorno.filter(m => m.consuntivato).length;
-  const hasConsuntivati = consuntivati > 0;
+ const totaleMovimenti = movimentiDelGiorno.length;
 
-  let backgroundColor = "";
-  let textColor = "#000";
+const consuntivati = movimentiDelGiorno.filter(
+  m => m.movimentoFinanziarioId
+).length;
 
-  if (hasConsuntivati) {
-    backgroundColor = "#FFF59D"; // GIALLO
-  } else if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
-    backgroundColor = "#326c9f";
-    textColor = "#fff";
-  } else if (nrMovimentiCarico > 0) {
-    backgroundColor = "#C8E6C9";
-  } else {
-    backgroundColor = "#FFECB3";
-  }
+const hasConsuntivati = consuntivati > 0;
+
+// 🔥 NUOVA REGOLA INTELLIGENTE
+let backgroundColor = "";
+let textColor = "#000";
+
+const filtroAttivo =
+  filtroFornitore !== "tutti" ||
+  filtroListino !== "tutti" ||
+  filtroUtente !== "tutti" ||
+  filtroCER !== "tutti";
+
+if (hasConsuntivati && filtroAttivo) {
+  backgroundColor = "#40ef46"; // verde SOLO con controparti selezionate
+} else if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
+  backgroundColor = "#326c9f";
+  textColor = "#fff";
+} else if (nrMovimentiCarico > 0) {
+  backgroundColor = "#C8E6C9";
+} else {
+  backgroundColor = "#FFECB3";
+}
 
   return {
     giornoIT,
@@ -794,7 +814,7 @@ const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
 
     // 🔥 NUOVO
     tooltip: hasConsuntivati
-      ? `In questo giorno esistono movimenti ${totaleMovimenti}, i già contabilizzati sono ${consuntivati}`
+  ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`
       : ""
   };
 });
@@ -1100,17 +1120,29 @@ setFiltroCER("tutti");
 };
 const estimated = estimateResults();
 const traffic = getTrafficLight(estimated);
-const movimentiSelezionati = scarichi.filter(m =>
-  m.fornitore === filtroFornitore &&
-  m.tipo === tipoMovimento
-);
+const getMovimentiValidi = () => {
+  return filteredScarichi.filter(m => {
+    // 🔥 1. deve essere stesso tipo selezionato
+    if (tipoMovimento !== "tutti" && m.tipo !== tipoMovimento) return false;
 
-// 🔥 esiste almeno un movimento NON consuntivato?
-const hasValidi = movimentiSelezionati.some(m => !m.consuntivato);
+    // 🔥 2. deve essere stessa controparte
+    if (filtroFornitore !== "tutti" && m.fornitore !== filtroFornitore) return false;
 
-// 🔥 se non ci sono movimenti o solo consuntivati → blocca
+    // 🔥 3. NON deve essere già consuntivato
+    if (m.movimentoFinanziarioId) return false;
+
+    return true;
+  });
+};
+
+const movimenti = getMovimentiValidi();
+
+const hasScarico = movimenti.some(m => m.tipo === "scarico");
+const hasCarico = movimenti.some(m => m.tipo === "carico");
+
 const bottoneDisabilitato =
-  filtroFornitore === "tutti" || !hasValidi;
+  movimenti.length === 0 || (hasScarico && hasCarico);
+
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -1126,68 +1158,73 @@ const bottoneDisabilitato =
     opacity: bottoneDisabilitato ? 0.4 : 1,
     cursor: bottoneDisabilitato ? "not-allowed" : "pointer"
   }}
-  onClick={() => {
-    if (bottoneDisabilitato) return;
+onClick={() => {
+  if (bottoneDisabilitato) return;
 
-    const movimenti = filteredScarichi.filter(
-      m =>
-        m.fornitore === filtroFornitore &&
-        m.tipo === tipoMovimento &&
-        !m.consuntivato // 🔥 sicurezza extra
-    );
+  const movimenti = getMovimentiValidi();
 
-    if (!movimenti.length) {
-      alert("❌ Nessun movimento valido (già consuntivato)");
-      return;
-    }
+  if (!movimenti.length) {
+    alert("❌ Nessun movimento valido");
+    return;
+  }
 
-    const blocchi = [];
-    let totale = 0;
+  const puliti = movimenti.filter(m => !m.movimentoFinanziarioId);
 
-    movimenti.forEach(m => {
-      (m.cer || []).forEach(c => {
-        const righe = (c.righe || []).map(r => {
-          const netto = Number(r.netto || 0);
+  if (!puliti.length) {
+    alert("❌ Nessun movimento valido (già consuntivato)");
+    return;
+  }
 
-          const prezzo =
-            tipoMovimento === "scarico"
-              ? Number(r.prezzoAcquisto || 0)
-              : Number(r.prezzoVendita || 0);
+  const blocchi = [];
+  let totale = 0;
 
-          const tot = money(netto * prezzo);
-          totale += tot;
+  // 🔥 QUI DENTRO C'È IL FIX BLOCCO
+  puliti.forEach(m => {
+    (m.cer || []).forEach(c => {
+      const righe = (c.righe || []).map(r => {
+        const netto = Number(r.netto || 0);
 
-          return {
-            materiale: r.materiale,
-            netto,
-            prezzo,
-            totale: tot
-          };
-        });
+        const prezzo =
+          m.tipo === "scarico"
+            ? Number(r.prezzoAcquisto || 0)
+            : Number(r.prezzoVendita || 0);
 
-        blocchi.push({
-          fir: c.fir || m.fir || "N/D",
-          data: m.data,
-          cer: c.cer || c.codiceCER || "-",
-          righe
-        });
+        const tot = money(netto * prezzo);
+        totale += tot;
+
+        return {
+          materiale: r.materiale,
+          netto,
+          prezzo,
+          totale: tot
+        };
+      });
+
+      blocchi.push({
+        fir: c.fir || m.fir || "N/D",
+        data: m.data,
+
+        // 🔥 FIX BLOCCO OBBLIGATORIO
+        tipo: m.tipo,
+
+        cer: c.cer || c.codiceCER || "-",
+        righe
       });
     });
+  });
 
-    setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
+  const pulitiIds = puliti.map(m => m.id);
 
-    setModalData({
-      cliente: filtroFornitore,
-      blocchi,
-      movimentiIds: movimenti.map(m => m.id)
-    });
-  }}
+  setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
+
+  setModalData({
+    cliente: filtroFornitore,
+    blocchi,
+    movimentiIds: pulitiIds
+  });
+}}
 >
-  {tipoMovimento === "carico"
-    ? "📄 Emetti Fattura"
-    : tipoMovimento === "scarico"
-      ? "📑 Prospetto Fattura"
-      : "📄 Documento"}
+{getDocumentoLabel()}
 </button>
       </div>
       <h2>Gestione Carichi / Scarichi</h2>
@@ -1209,6 +1246,10 @@ const bottoneDisabilitato =
   <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
     <div style={{width:"15px",height:"15px",background:"#326c9f",border:"1px solid #ccc"}}></div>
     <span>Misti (Carico + Scarico)</span>
+  </div>
+   <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
+    <div style={{width:"15px",height:"15px",background:"#40ef46",border:"1px solid #ccc"}}></div>
+    <span>Già Fatturati</span>
   </div>
 </div>
       <div className="filtri">
@@ -1522,13 +1563,15 @@ const bottoneDisabilitato =
           </tr>
         </thead>
         <tbody>
-{scarichi
-  .filter(m => modalData.movimentiIds.includes(m.id))
-  .flatMap(m => m.cer.map(c => ({
-    fir: c.fir || m.fir || "-",
-    cer: c.cer || c.codiceCER || "-",
-    righe: c.righe || []
-  })))
+{scarichi.filter(m => modalData.movimentiIds.includes(m.id))
+  .flatMap(m =>
+    (m.cer || []).map(c => ({
+      fir: c.fir || m.fir || "-",
+      cer: c.cer || c.codiceCER || "-",
+      tipo: m.tipo,   // 🔥 QUESTA È LA FIX
+      righe: c.righe || []
+    }))
+  )
   .map((b, i) => (
     <React.Fragment key={i}>
       <tr>
@@ -1538,10 +1581,10 @@ const bottoneDisabilitato =
       </tr>
 
       {b.righe.map((r, j) => {
-        const prezzo =
-          tipoMovimento === "scarico"
-            ? (r.prezzoAcquisto ?? 0)
-            : (r.prezzoVendita ?? 0);
+       const prezzo =
+  b.tipo === "scarico"
+    ? (r.prezzoAcquisto ?? 0)
+    : (r.prezzoVendita ?? 0);
 
         const tot = money(r.netto * prezzo);
 
@@ -1565,14 +1608,22 @@ const bottoneDisabilitato =
       .flatMap(m => m.cer)
       .flatMap(c => (c.righe || []))
       .reduce((tot, r) => {
-        const kg = Number(r.netto || 0);
-        const prezzo =
-          tipoMovimento === "scarico"
-            ? Number(r.prezzoAcquisto || 0)
-            : Number(r.prezzoVendita || 0);
+  const kg = Number(r.netto || 0);
 
-        return tot + (kg * prezzo);
-      }, 0)
+  // non esiste b qui → prendiamo il tipo dal contesto del movimento
+  const movimento = scarichi
+    .filter(m => modalData.movimentiIds.includes(m.id))
+    .find(m => (m.cer || []).some(c => (c.righe || []).includes(r)));
+
+  const tipo = movimento?.tipo;
+
+  const prezzo =
+    tipo === "scarico"
+      ? (r.prezzoAcquisto ?? 0)
+      : (r.prezzoVendita ?? 0);
+
+  return tot + kg * prezzo;
+}, 0)
     )
   ).toFixed(2)}
 </h3>
