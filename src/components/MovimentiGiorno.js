@@ -349,53 +349,69 @@ const handleConsuntiva = async (row) => {
   if (!ok) return;
 
   try {
-    // 1. aggiorna DataPagamento nella collection madre
-    if (row.tipo === "fattureCarichi") {
-      await updateDoc(doc(db, "fattureCarichi", row.id), {
-        DataPagamento: selectedDate
-      });
-
-      // 🔥 PROPAGAZIONE SU MOVIMENTI CARICHI
-      const fattura = mapFatture[row.id];
-      if (fattura?.movimentiIds?.length) {
-        for (const movId of fattura.movimentiIds) {
-          await updateDoc(doc(db, "carichi", movId), {
-            dataPagamento: selectedDate
-          });
-        }
-      }
-    }
-
-    if (row.tipo === "prospettiFattura") {
-      await updateDoc(doc(db, "prospettiFattura", row.id), {
-        DataPagamento: selectedDate
-      });
-
-      // 🔥 PROPAGAZIONE SU MOVIMENTI SCARICHI
-      const prospetto = mapProspetti[row.id];
-      if (prospetto?.movimentiIds?.length) {
-        for (const movId of prospetto.movimentiIds) {
-          await updateDoc(doc(db, "scarichi", movId), {
-            dataPagamento: selectedDate
-          });
-        }
-      }
-    }
-
-    if (row.tipo === "PRIVATI") {
-      await updateDoc(doc(db, "scarichi", row.id), {
-        DataPagamento: selectedDate
-      });
-    }
-
-    // 2. crea MovimentoFinanziario
-    await addDoc(collection(db, "MovimentoFinanziario"), {
+    // 1. crea MovimentoFinanziario
+    const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
       anagraficaId: row.anagraficaId || row.id,
       data: selectedDate,
       dataDocumento: row.dataMov,
       importo: row.importo,
       tipo: row.tipo
     });
+
+    const movimentoId = movRef.id;
+
+    // =========================
+    // 🔥 FATTURE CARICHI
+    // =========================
+    if (row.tipo === "fattureCarichi") {
+
+      // documento
+      await updateDoc(doc(db, "fattureCarichi", row.id), {
+        movimentoFinanziarioId: movimentoId
+      });
+
+      // 🔥 PROPAGAZIONE SU CARICHI
+      const fattura = mapFatture[row.id];
+
+      if (fattura?.movimentiIds?.length) {
+        for (const id of fattura.movimentiIds) {
+          await updateDoc(doc(db, "carichi", id), {
+            movimentoFinanziarioId: movimentoId
+          });
+        }
+      }
+    }
+
+    // =========================
+    // 🔥 PROSPETTI → SCARICHI
+    // =========================
+    if (row.tipo === "prospettiFattura") {
+
+      // documento
+      await updateDoc(doc(db, "prospettiFattura", row.id), {
+        movimentoFinanziarioId: movimentoId
+      });
+
+      // 🔥 PROPAGAZIONE SU SCARICHI
+      const prospetto = mapProspetti[row.id];
+
+      if (prospetto?.movimentiIds?.length) {
+        for (const id of prospetto.movimentiIds) {
+          await updateDoc(doc(db, "scarichi", id), {
+            movimentoFinanziarioId: movimentoId
+          });
+        }
+      }
+    }
+
+    // =========================
+    // 🔥 PRIVATI (scarico singolo)
+    // =========================
+    if (row.tipo === "PRIVATI") {
+      await updateDoc(doc(db, "scarichi", row.id), {
+        movimentoFinanziarioId: movimentoId
+      });
+    }
 
     await refreshAll();
 
@@ -404,28 +420,6 @@ const handleConsuntiva = async (row) => {
   }
 };
 
-const handleUnpay = async (mov) => {
-  const confirm = window.confirm("Rimuovere pagamento?");
-  if (!confirm) return;
-
-  try {
-    const ref = doc(db, "movimenti", mov.id);
-
-    await updateDoc(ref, {
-      dataPagamento: null
-    });
-
-    setCarichiScarichi(prev =>
-      prev.map(m =>
-        m.id === mov.id
-          ? { ...m, dataPagamento: null }
-          : m
-      )
-    );
-  } catch (err) {
-    console.error(err);
-  }
-};
 
 
 const handleDeleteFin = async (row) => {
@@ -438,47 +432,55 @@ const handleDeleteFin = async (row) => {
     // 1. elimina MovimentoFinanziario
     await deleteDoc(doc(db, "MovimentoFinanziario", row.id));
 
-    // 2. reset DataPagamento nella collection madre + PROPAGAZIONE
-
+    // =========================
+    // 🔥 FATTURE CARICHI
+    // =========================
     if (row.tipo === "fattureCarichi") {
+
       await updateDoc(doc(db, "fattureCarichi", row.anagraficaId), {
-        DataPagamento: null
+        movimentoFinanziarioId: null
       });
 
-      // 🔥 RESET MOVIMENTI CARICHI
       const fattura = mapFatture[row.anagraficaId];
+
       if (fattura?.movimentiIds?.length) {
-        for (const movId of fattura.movimentiIds) {
-          await updateDoc(doc(db, "carichi", movId), {
-            dataPagamento: null
+        for (const id of fattura.movimentiIds) {
+          await updateDoc(doc(db, "carichi", id), {
+            movimentoFinanziarioId: null
           });
         }
       }
     }
 
+    // =========================
+    // 🔥 PROSPETTI
+    // =========================
     if (row.tipo === "prospettiFattura") {
+
       await updateDoc(doc(db, "prospettiFattura", row.anagraficaId), {
-        DataPagamento: null
+        movimentoFinanziarioId: null
       });
 
-      // 🔥 RESET MOVIMENTI SCARICHI
       const prospetto = mapProspetti[row.anagraficaId];
+
       if (prospetto?.movimentiIds?.length) {
-        for (const movId of prospetto.movimentiIds) {
-          await updateDoc(doc(db, "scarichi", movId), {
-            dataPagamento: null
+        for (const id of prospetto.movimentiIds) {
+          await updateDoc(doc(db, "scarichi", id), {
+            movimentoFinanziarioId: null
           });
         }
       }
     }
 
+    // =========================
+    // 🔥 PRIVATI
+    // =========================
     if (row.tipo === "PRIVATI") {
       await updateDoc(doc(db, "scarichi", row.anagraficaId), {
-        DataPagamento: null
+        movimentoFinanziarioId: null
       });
     }
 
-    // 3. refresh UI
     await refreshAll();
 
   } catch (err) {
