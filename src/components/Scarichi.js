@@ -12,6 +12,7 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import {  PdfHeader } from "../utils/dateUtils";
+import Select from "react-select";
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -590,6 +591,8 @@ useEffect(() => {
       salvaBozza();
     }
   };
+
+  
 
   window.addEventListener("beforeunload", handleBeforeUnload);
 
@@ -1235,6 +1238,48 @@ const creaSnapshotScarico = (scaricoData) => {
 };
 
 const listinoBloccato = selectedFornitore !== "";
+
+const sortByLabel = (a, b) => {
+  const strA = (typeof a === "string" ? a : a?.nome || "").toString();
+  const strB = (typeof b === "string" ? b : b?.nome || "").toString();
+
+  return strA.localeCompare(strB, "it", { sensitivity: "base" });
+};
+
+// FORNITORI
+const fornitoriOptions = fornitori.sort(sortByLabel).map(f => ({
+  value: f.nome,
+  label: f.nome
+}));
+
+
+const listiniOptions = listini
+  .filter(l =>
+    (l.tipoListino || "").trim().toLowerCase() ===
+    (tipoMovimento || "").trim().toLowerCase()
+  )
+  .sort((a, b) =>
+    (a.nome || "").localeCompare(b.nome || "", "it", {
+      sensitivity: "base"
+    })
+  )
+  .map(l => ({
+    value: l.nome,
+    label: l.nome
+  }));
+
+// CER
+const cerOptions = cerDisponibili.sort(sortByLabel).map(c => ({
+  value: c,
+  label: c
+}));
+
+// MATERIALI
+const materialiOptions = materialiFiltrati.map(m => ({
+  value: m.nome,
+  label: m.nome
+}));
+
   return (
     <div className="scarichi-container">
       <div className="scarichi-header">
@@ -1349,42 +1394,39 @@ setTimeout(() => {
     {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
   </label>
 
-  <select
-    disabled={listinoBloccato}
-    value={selectedFornitore}
-   onChange={(e) => {
-  const nome = e.target.value;
-  setSelectedFornitore(nome);
+<Select
+  options={fornitoriOptions}
+  value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
+  onChange={(selected) => {
+    const nome = selected?.value || "";
+    setSelectedFornitore(nome);
 
-  const forn = fornitori.find((f) => f.nome === nome);
-  if (!forn) return;
+    const forn = fornitori.find(f => f.nome === nome);
+    if (!forn) return;
 
-  // 1. usa listino predefinito se presente
-  if (forn.predefListino) {
-    const listinoAssoc = listini.find(
-     l => l.id === forn.predefListino && ((l.tipoListino || "").trim() === tipoMovimento)
-    );
-    if (listinoAssoc) {
-      setSelectedListino(listinoAssoc.nome);
-      return;
+    if (forn.predefListino) {
+      const listinoAssoc = listini.find(
+        l => l.id === forn.predefListino &&
+        ((l.tipoListino || "").trim() === tipoMovimento)
+      );
+      if (listinoAssoc) {
+        setSelectedListino(listinoAssoc.nome);
+        return;
+      }
     }
-  }
-  // 2. fallback: primo listino compatibile
-  const primoCompatibile = listini.find(
-    l => (l.tipoListino || "").trim() === tipoMovimento
-  );
-  if (primoCompatibile) {
-    setSelectedListino(primoCompatibile.nome);
-  } else {
-    setSelectedListino("");
-  }
-}}
-  >
-    <option value="">-- Seleziona --</option>
-    {[...fornitori].sort((a, b) => a.nome.localeCompare(b.nome)).map((f) => (
-      <option key={f.id} value={f.nome}>{f.nome}</option>
-    ))}
-  </select>
+
+    const primoCompatibile = listini.find(
+      l => (l.tipoListino || "").trim() === tipoMovimento
+    );
+
+    if (primoCompatibile) {
+      setSelectedListino(primoCompatibile.nome);
+    }
+  }}
+  placeholder="Cerca fornitore..."
+  isSearchable
+  isClearable
+/>
   {/* PULSANTE NUOVO FORNITORE / DESTINATARIO */}
   <button     type="button"    onClick={() => { // 🔥 SALVA STATO CORRENTE PRIMA DI USCIRE
     localStorage.setItem("scaricoReturnPage", "/scarichi");
@@ -1397,30 +1439,20 @@ localStorage.setItem("fornitore_prefill_nome", "");
      style={{ marginLeft: "10px" }}  >+ {tipoMovimento === "carico" ? "Nuovo Destinatario" : "Nuovo Fornitore"}  </button>
 </div>
         <label>Listino:</label>
-        <select
- disabled={role !== "admin" && selectedListino && !isEditing}
-  value={selectedListino}
-  onChange={(e) => {
-  listinoUserChangeRef.current = true;
-  setSelectedListino(e.target.value);
- setDirty(true);
-  setTimeout(() => {
-    listinoUserChangeRef.current = false;
-  }, 300);
-}}
->
-          <option value="">-- Seleziona --</option>
-          {listini.filter(l => {
-  const tipo = (l.tipoListino || "").toString().trim().toLowerCase();
-
-  if (!tipo) {
-    // 🔥 DEFAULT: senza flag → SCARICO
-    return tipoMovimento.toLowerCase() === "scarico";
-  }
-
-  return tipo === tipoMovimento.toLowerCase();
-}).map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
-        </select>
+<Select
+  options={listiniOptions}
+  value={listiniOptions.find(o => o.value === selectedListino) || null}
+  onChange={(selected) => {
+    setSelectedListino(selected?.value || "");
+  }}
+  placeholder="Cerca listino..."
+  isSearchable
+  isClearable
+  menuPortalTarget={document.body}
+  styles={{
+    menuPortal: base => ({ ...base, zIndex: 9999 })
+  }}
+/>
         
         <button onClick={handleReset} style={{ marginLeft: "15px" }}>    {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
   </button>
@@ -1534,16 +1566,15 @@ onChange={async (e) => {
       {listinoBloccato && (
         <>
           <label>Codice CER:</label>
-          <select value={selectedCer} onChange={(e) => setSelectedCer(e.target.value)}>
-            <option value="">-- Seleziona CER --</option>
-            {[...cerDisponibili]
-  .sort((a, b) => a.localeCompare(b, "it", { numeric: true }))
-  .map((c) => (
-    <option key={c} value={c}>
-      {c}
-    </option>
-))}
-          </select>
+<Select
+  options={cerOptions}
+  value={cerOptions.find(o => o.value === selectedCer) || null}
+  onChange={(selected) => {
+    setSelectedCer(selected?.value || "");
+  }}
+  placeholder="Cerca CER..."
+  isSearchable
+/>
           <label>F.I.R (CER)/DDT:</label>
 <input
 id="fir-input"
@@ -1586,16 +1617,15 @@ className={firError ? "input-error" : ""}
       {selectedCer && (
         <>
           <label>Materiale:</label>
-          <select value={selectedMateriale} onChange={(e) => setSelectedMateriale(e.target.value)}>
-            <option value="">-- Seleziona Materiale --</option>
-            {[...materialiFiltrati]
-  .sort((a, b) => a.nome.localeCompare(b.nome, "it", { numeric: true }))
-  .map((m) => (
-    <option key={m.id} value={m.nome}>
-      {m.nome}
-    </option>
-))}
-          </select>
+<Select
+  options={materialiOptions}
+  value={materialiOptions.find(o => o.value === selectedMateriale) || null}
+  onChange={(selected) => {
+    setSelectedMateriale(selected?.value || "");
+  }}
+  placeholder="Cerca materiale..."
+  isSearchable
+/>
 <br/>
           <label>Peso (kg):</label>
           <input

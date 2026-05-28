@@ -4,7 +4,7 @@ import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { ripristinaLog } from "../utils/log";
-
+import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -94,7 +94,10 @@ const logRipristinabile = (log) => {
 
   const apriDettagli = (log) => navigate("/dettagli-log", { state: { log } });
   const formattaData = ts => ts?.toDate ? `${ts.toDate().toLocaleDateString("it-IT")} ${ts.toDate().toLocaleTimeString("it-IT")}` : "";
-
+const selectStyle = {
+  control: (base) => ({ ...base, minWidth: 200 }),
+  menu: (base) => ({ ...base, zIndex: 9999 })
+};
   return (
     <div className="gestione-log-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -142,26 +145,59 @@ const logRipristinabile = (log) => {
         <div style={{marginTop:"12px"}}>
           <label>
             Pagina:
-            <select value={paginaFilter} onChange={e=>setPaginaFilter(e.target.value)}>
-              <option value="tutte">Tutte</option>
-              {pagineDisponibili.map(p=><option key={p}>{p}</option>)}
-            </select>
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    📄 Pagina
+  </label>
+
+  <Select
+    styles={selectStyle}
+    value={{ value: paginaFilter, label: paginaFilter }}
+    onChange={(opt) => setPaginaFilter(opt?.value || "tutte")}
+    options={[
+      { value: "tutte", label: "Tutte" },
+      ...pagineDisponibili.map(p => ({ value: p, label: p }))
+    ]}
+  />
+</div>
           </label>
 
           <label style={{marginLeft:"12px"}}>
             Utente:
-            <select value={utenteFilter} onChange={e=>setUtenteFilter(e.target.value)}>
-              <option value="tutti">Tutti</option>
-              {utentiDisponibili.map(u=><option key={u}>{u}</option>)}
-            </select>
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    👤 Utente
+  </label>
+
+  <Select
+    styles={selectStyle}
+    value={{ value: utenteFilter, label: utenteFilter }}
+    onChange={(opt) => setUtenteFilter(opt?.value || "tutti")}
+    options={[
+      { value: "tutti", label: "Tutti" },
+      ...utentiDisponibili.map(u => ({ value: u, label: u }))
+    ]}
+  />
+</div>
           </label>
 
           <label style={{marginLeft:"12px"}}>
             Tipo:
-            <select value={tipoFilter} onChange={e=>setTipoFilter(e.target.value)}>
-              <option value="tutte">Tutte</option>
-              {tipiDisponibili.map(t=><option key={t}>{t}</option>)}
-            </select>
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    ⚙️ Tipo evento
+  </label>
+
+  <Select
+    styles={selectStyle}
+    value={{ value: tipoFilter, label: tipoFilter }}
+    onChange={(opt) => setTipoFilter(opt?.value || "tutte")}
+    options={[
+      { value: "tutte", label: "Tutte" },
+      ...tipiDisponibili.map(t => ({ value: t, label: t }))
+    ]}
+  />
+</div>
           </label>
         </div>
       </div>

@@ -13,7 +13,7 @@ import {
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
-
+import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
     const formatDataSafe = (d) => {
@@ -887,7 +887,10 @@ const cerDropdown = [
     if(field===sortField) setSortAsc(!sortAsc);
     else { setSortField(field); setSortAsc(true); }
   };
-
+const selectStyle = {
+  control: (base) => ({ ...base, minWidth: 200 }),
+  menu: (base) => ({ ...base, zIndex: 9999 })
+};
   // ---------------- UI ----------------
   return (
     <div className="gestione-utenti-container">
@@ -943,47 +946,64 @@ const cerDropdown = [
   <div style={{ marginBottom: 20, padding: 10, border: "1px solid #ccc" }}>
     
     {/* CER */}
-    <select
-      value={mergeCER}
-      onChange={(e) => {
-        setMergeCER(e.target.value);
-        setMergeMatSX("");
-        setMergeMatDX("");
-      }}
-    >
-      <option value="">Seleziona CER</option>
-      {[...new Set(materiali.map(m => m.codiceCER))]
-        .sort((a,b)=>a.localeCompare(b))
-        .map(c => <option key={c}>{c}</option>)
-      }
-    </select>
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    📦 Seleziona CER
+  </label>
+
+  <Select
+    styles={selectStyle}
+    value={mergeCER ? { value: mergeCER, label: mergeCER } : null}
+    onChange={(opt) => {
+      setMergeCER(opt?.value || "");
+      setMergeMatSX("");
+      setMergeMatDX("");
+    }}
+    options={[
+      { value: "", label: "Seleziona CER" },
+      ...Array.from(new Set(materiali.map(m => m.codiceCER)))
+        .sort()
+        .map(c => ({ value: c, label: c }))
+    ]}
+  />
+</div>
 
     {/* MATERIALI */}
-    <select
-      disabled={!mergeCER}
-      value={mergeMatSX}
-      onChange={e => setMergeMatSX(e.target.value)}
-    >
-      <option value="">Materiale finale (SX)</option>
-      {materiali
-        .filter(m => m.codiceCER === mergeCER)
-        .sort((a,b)=>a.nome.localeCompare(b.nome))
-        .map(m => <option key={m.idDoc}> {m.nome}</option>)
-      }
-    </select>
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    🎯 Materiale finale (SX)
+  </label>
 
-    <select
-      disabled={!mergeCER}
-      value={mergeMatDX}
-      onChange={e => setMergeMatDX(e.target.value)}
-    >
-      <option value="">Materiale da fondere (DX)</option>
-      {materiali
-        .filter(m => m.codiceCER === mergeCER)
-        .sort((a,b)=>a.nome.localeCompare(b.nome))
-        .map(m => <option key={m.idDoc}> {m.nome}</option>)
-      }
-    </select>
+  <Select
+    isDisabled={!mergeCER}
+    styles={selectStyle}
+    value={mergeMatSX ? { value: mergeMatSX, label: mergeMatSX } : null}
+    onChange={(opt) => setMergeMatSX(opt?.value || "")}
+    options={materiali
+      .filter(m => m.codiceCER === mergeCER)
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+      .map(m => ({ value: m.nome, label: m.nome }))
+    }
+  />
+</div>
+
+<div style={{ marginBottom: 10 }}>
+  <label style={{ display: "block", marginBottom: 5 }}>
+    🔥 Materiale da fondere (DX)
+  </label>
+
+  <Select
+    isDisabled={!mergeCER}
+    styles={selectStyle}
+    value={mergeMatDX ? { value: mergeMatDX, label: mergeMatDX } : null}
+    onChange={(opt) => setMergeMatDX(opt?.value || "")}
+    options={materiali
+      .filter(m => m.codiceCER === mergeCER)
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+      .map(m => ({ value: m.nome, label: m.nome }))
+    }
+  />
+</div>
 
     {/* BOTTONE */}
     <button
@@ -1001,16 +1021,22 @@ const cerDropdown = [
       <div style={{margin:"20px 0", display:"flex", gap:"12px", alignItems:"center"}}>
         <label>
           Materiale:
-          <select value={filtroMateriale} onChange={e=>setFiltroMateriale(e.target.value)}>
-            {materialiDropdown.map(m=> <option key={m}>{m}</option>)}
-          </select>
+<Select
+  styles={selectStyle}
+  value={{ value: filtroMateriale, label: filtroMateriale }}
+  onChange={(opt) => setFiltroMateriale(opt.value)}
+  options={materialiDropdown.map(m => ({ value: m, label: m }))}
+/>
         </label>
 
         <label>
           Codice CER:
-          <select value={filtroCER} onChange={e=>setFiltroCER(e.target.value)}>
-            {cerDropdown.map(c=> <option key={c}>{c}</option>)}
-          </select>
+<Select
+  styles={selectStyle}
+  value={{ value: filtroCER, label: filtroCER }}
+  onChange={(opt) => setFiltroCER(opt.value)}
+  options={cerDropdown.map(c => ({ value: c, label: c }))}
+/>
         </label>
 
         <label>
