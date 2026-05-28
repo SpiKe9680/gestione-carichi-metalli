@@ -713,7 +713,7 @@ const getOccorrenze = (item) => {
         <tr
           key={i}
           onClick={() => handleConsuntiva(r)}
-          title={`effettua un click per consuntivare il movimento ${r.controparte} di $ {r.importo.toLocaleString("it-IT", {
+          title={`effettua un click per consuntivare il movimento ${r.controparte} di ${r.importo.toLocaleString("it-IT", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} €`}
