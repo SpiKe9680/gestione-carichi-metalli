@@ -12,7 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import { scriviLog } from "../utils/log";
-
+import Select from "react-select";
 import DatePicker from "react-datepicker"; 
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -513,7 +513,14 @@ const handleApriFormNuovoFornitore = async () => {
   }
 };
   const aggiungiFornitore = () => handleApriFormNuovoFornitore();
-
+const fornitoriOptions = [...fornitori]
+  .sort((a, b) =>
+    (a.nome || "").localeCompare(b.nome || "", "it", { sensitivity: "base" })
+  )
+  .map(f => ({
+    value: f.nome,
+    label: f.nome
+  }));
   // ---------------- MODIFICA ----------------
   const modificaFornitore = async (f) => {
     const indirizzo = prompt(`Modifica indirizzo controparte (${f.nome})`, f.indirizzo || "") || "";
@@ -621,6 +628,8 @@ const handleStampa = async () => {
     const scarichi = countScarichi(f);
     const carichi = countCarichi(f);
 
+
+
     return [
       f.nome || "",
       f.indirizzo || "-",
@@ -711,27 +720,21 @@ if (sortConfig.key) {
     
     <h4>Fusione Controparti</h4>
 
-    <select value={merge1} onChange={e => setMerge1(e.target.value)}>
-      <option value="">Seleziona Controparte 1</option>
-      {[...fornitori]
-  .sort((a, b) =>
-    (a.nome || "").localeCompare(b.nome || "", "it", { sensitivity: "base" })
-  )
-  .map(f => (
-    <option key={f.id} value={f.nome}>{f.nome}</option>
-))}
-    </select>
+<Select
+  value={fornitoriOptions.find(o => o.value === merge1) || null}
+  onChange={(opt) => setMerge1(opt?.value || "")}
+  options={fornitoriOptions}
+  placeholder="Seleziona Controparte 1"
+/>
 
-    <select value={merge2} onChange={e => setMerge2(e.target.value)} style={{marginLeft:10}}>
-      <option value="">Seleziona Controparte 2</option>
-      {[...fornitori]
-  .sort((a, b) =>
-    (a.nome || "").localeCompare(b.nome || "", "it", { sensitivity: "base" })
-  )
-  .map(f => (
-    <option key={f.id} value={f.nome}>{f.nome}</option>
-))}
-    </select>
+<div style={{ marginTop: 10 }}>
+  <Select
+    value={fornitoriOptions.find(o => o.value === merge2) || null}
+    onChange={(opt) => setMerge2(opt?.value || "")}
+    options={fornitoriOptions}
+    placeholder="Seleziona Controparte 2"
+/>
+</div>
 {merge1 && merge2 && merge1 === merge2 && (
   <div style={{color:"red", marginTop:5}}>
     ⚠️ Hai selezionato la stessa controparte

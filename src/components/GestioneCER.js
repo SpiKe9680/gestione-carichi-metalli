@@ -40,6 +40,13 @@ const [prezzoDefault, setPrezzoDefault] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState("");
 const [carichi, setCarichi] = useState([]);
+const canDeleteMateriale = (m) => {
+  return (
+    (m.nrMovimenti || 0) === 0 &&
+    (m.nrScarichi || 0) === 0 &&
+    (m.nrCarichi || 0) === 0
+  );
+};
   const [filtroMateriale, setFiltroMateriale] = useState("Tutti");
   const [filtroCER, setFiltroCER] = useState("Tutti");
 const [buttonLabel, setButtonLabel] = useState("Aggiungi Materiale"); // testo del pulsante
@@ -230,6 +237,69 @@ useEffect(() => {
   }
 }, [nome, categoria, codiceCER, descrizione, prezzoDefault, formVisible, editingId, initialFormState]);
 
+const handleDeleteMateriale = async (m) => {
+  const conferma = window.confirm(
+    `Vuoi eliminare definitivamente il materiale "${m.nome}"?\n\nOperazione irreversibile.`
+  );
+
+  if (!conferma) return;
+
+  try {
+    // 🔎 controllo movimenti
+    const haMovimenti =
+      (m.nrMovimenti || 0) > 0 ||
+      (m.nrScarichi || 0) > 0 ||
+      (m.nrCarichi || 0) > 0;
+
+    if (haMovimenti) {
+      alert("Impossibile eliminare: il materiale ha movimenti associati.");
+      return;
+    }
+
+    // 🗑️ elimina materiale
+    await deleteDoc(doc(db, "materiali", m.idDoc));
+
+    // 🧹 rimuovi dai listini
+    const updatedListini = listini.map((l) => {
+      const prezzi = l.prezzi || {};
+
+      const cleaned = Object.fromEntries(
+        Object.entries(prezzi).filter(([key]) => key !== m.nome)
+      );
+
+      return { ...l, prezzi: cleaned };
+    });
+
+    // 🔥 aggiorna DB listini
+    for (const l of updatedListini) {
+      await updateDoc(doc(db, "listini", l.id), {
+        prezzi: l.prezzi,
+      });
+    }
+
+    // 🧠 log
+    await scriviLog({
+      pagina: "GestioneCER",
+      evento: "DELETE_MATERIALE",
+      riferimento: {
+        collezione: "materiali",
+        documentoId: m.idDoc,
+      },
+      before: m,
+      after: null,
+      utente: getUtenteReact(),
+      ripristinabile: true,
+    });
+
+    await fetchMateriali();
+    await fetchListini();
+
+    setMessage("Materiale eliminato con successo");
+  } catch (err) {
+    console.error(err);
+    alert("Errore eliminazione materiale");
+  }
+};
 
 const syncListiniConMateriali = async () => {
   try {
@@ -239,53 +309,69 @@ const syncListiniConMateriali = async () => {
     const materialiSnap = await getDocs(collection(db, "materiali"));
     const listiniSnap = await getDocs(collection(db, "listini"));
 
-    const materialiList = materialiSnap.docs.map(d => d.data());
-    const listini = listiniSnap.docs;
+    const materialiList = materialiSnap.docs.map(d => ({
+      idDoc: d.id,
+      ...d.data()
+    }));
 
     let materialiAggiuntiTotali = 0;
 
-    for (const l of listini) {
+    const updatedListini = [];
+
+    for (const l of listiniSnap.docs) {
       const listino = l.data();
       const ref = doc(db, "listini", l.id);
 
-      const prezzi = listino.prezzi || {};
+      const prezzi = listino.prezzi ? { ...listino.prezzi } : {};
 
-      const esistentiNormalizzati = new Set(
+      const esistenti = new Set(
         Object.keys(prezzi).map(normalize)
       );
 
-      let aggiuntiInQuestoListino = 0;
+      let added = 0;
 
       for (const m of materialiList) {
         const key = normalize(m.nome);
 
-        if (!esistentiNormalizzati.has(key)) {
+        if (!esistenti.has(key)) {
           prezzi[m.nome] = {
             acquisto: m.prezzoAcquistoDefault || 0,
             vendita: m.prezzoVenditaDefault || 0
           };
 
-          esistentiNormalizzati.add(key);
-          aggiuntiInQuestoListino++;
+          esistenti.add(key);
+          added++;
         }
       }
 
-      if (aggiuntiInQuestoListino > 0) {
-        materialiAggiuntiTotali += aggiuntiInQuestoListino;
+      if (added > 0) {
+        materialiAggiuntiTotali += added;
+
         await updateDoc(ref, { prezzi });
+
+        updatedListini.push({
+          id: l.id,
+          ...listino,
+          prezzi
+        });
+      } else {
+        updatedListini.push({
+          id: l.id,
+          ...listino
+        });
       }
     }
 
-    let msg = "";
+    // 🔥 aggiorna stato locale SUBITO (fix principale del tuo bug)
+    setListini(updatedListini);
 
-    if (materialiAggiuntiTotali === 0) {
-      msg = "Nessun listino aggiornato, tutti i materiali sono già presenti.";
-    } else {
-      msg = `${materialiAggiuntiTotali} materiali aggiunti nei listini.`;
-    }
+    const msg =
+      materialiAggiuntiTotali === 0
+        ? "Nessun aggiornamento: tutti i materiali sono già nei listini."
+        : `${materialiAggiuntiTotali} materiali aggiunti ai listini.`;
 
     const conferma = window.confirm(
-      msg + "\n\nVuoi procedere con la pulizia dei listini?"
+      msg + "\n\nVuoi procedere con la pulizia dei duplicati?"
     );
 
     if (!conferma) {
@@ -293,49 +379,46 @@ const syncListiniConMateriali = async () => {
       return;
     }
 
-    // 🧹 PULIZIA LISTINI
-    let totalMerge = 0;
+    // 🧹 PULIZIA
+    let totalDuplicates = 0;
 
-    for (const l of listiniSnap.docs) {
-      const listino = l.data();
+    for (const l of updatedListini) {
       const ref = doc(db, "listini", l.id);
 
-      const prezzi = listino.prezzi || {};
-      const mapNormalizzati = new Map();
+      const prezzi = l.prezzi || {};
+      const map = new Map();
 
-      for (const [nome, valori] of Object.entries(prezzi)) {
+      for (const [nome, val] of Object.entries(prezzi)) {
         const key = normalize(nome);
 
-        if (!mapNormalizzati.has(key)) {
-          mapNormalizzati.set(key, {
-            nomeOriginale: nome,
-            data: valori
-          });
+        if (!map.has(key)) {
+          map.set(key, { nomeOriginale: nome, data: val });
         } else {
-          totalMerge++;
+          totalDuplicates++;
         }
       }
 
       const cleaned = {};
-      for (const [, v] of mapNormalizzati.entries()) {
+      for (const [, v] of map.entries()) {
         cleaned[v.nomeOriginale] = v.data;
       }
 
       await updateDoc(ref, { prezzi: cleaned });
     }
 
+    await fetchListini(); // 🔥 riallineamento finale sicurezza
+
     alert(
       msg +
-      "\n\nPulizia completata: " +
-      totalMerge +
-      " duplicati gestiti."
+      "\n\nDuplicati gestiti: " +
+      totalDuplicates
     );
 
-    setMessage("Sync + pulizia listini completati");
+    setMessage("Sync listini completato");
 
   } catch (err) {
     console.error(err);
-    setMessage("Errore sync/pulizia listini");
+    setMessage("Errore sync listini");
   }
 };
 const puliziaListini = async () => {
@@ -1130,7 +1213,16 @@ const selectStyle = {
     : m.dataUltimoMovimento}
 </td>
                 <td>
-                  <button onClick={()=>handleEdit(m)}>Modifica</button>
+                  <button onClick={() => handleEdit(m)}>Modifica</button>
+
+{canDeleteMateriale(m) && (
+  <button
+    style={{ marginLeft: 5, background: "red", color: "white" }}
+    onClick={() => handleDeleteMateriale(m)}
+  >
+    Elimina
+  </button>
+)}
                 {(
   (filtroTipoMovimento === "SCARICO" && m.nrScarichi > 0) ||
   (filtroTipoMovimento === "CARICO" && m.nrCarichi > 0) ||

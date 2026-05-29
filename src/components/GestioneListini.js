@@ -34,10 +34,11 @@ try {
   console.warn("⚠️ utenteLoggato non valido:", sessionStorage.getItem("utenteLoggato"));
   currentUser = {};
 }
+const [propagaModificaGlobale, setPropagaModificaGlobale] = useState(false);
   const [listini, setListini] = useState([]);
   const [fornitori, setFornitori] = useState([]);
   //const [configAzienda, setConfigAzienda] = useState(null);
-  const [selectedIndex, ] = useState(null);
+const [propagaPrezzi, setPropagaPrezzi] = useState({});
   const [editor, setEditor] = useState(null);
   const [originalEditor, setOriginalEditor] = useState(null);
 const [sortConfig, setSortConfig] = useState({
@@ -158,22 +159,58 @@ const selezionaListino = (listinoId) => {
   // UPDATE PREZZO
   // =============================
 const updatePrezzo = (codice, valore) => {
-  setEditor(prev => ({
-    ...prev,
-    prezzi: {
-      ...prev.prezzi,
-      [codice]: {
-        ...(prev.prezzi?.[codice] || {}),
-        vendita: Number(valore) || 0,
-        acquisto: Number(valore) || 0
+  const num = Number(valore) || 0;
+
+  setEditor(prev => {
+    const vecchio = originalEditor?.prezzi?.[codice];
+
+    const vecchioVal = prev?.tipoListino === "CARICO"
+      ? vecchio?.vendita ?? 0
+      : vecchio?.acquisto ?? 0;
+
+    const changed = num !== Number(vecchioVal);
+
+    return {
+      ...prev,
+      prezzi: {
+        ...prev.prezzi,
+        [codice]: {
+          ...(prev.prezzi?.[codice] || {}),
+          vendita: num,
+          acquisto: num
+        }
       }
+    };
+  });
+
+  // toggle checkbox dinamica
+  setPropagaPrezzi(prev => {
+    const nuovo = { ...prev };
+    if (Number(valore) === Number(originalEditor?.prezzi?.[codice]?.vendita ?? 0)) {
+      delete nuovo[codice];
+    } else {
+      nuovo[codice] = true;
     }
-  }));
+    return nuovo;
+  });
 };
 
-  const campoModificato = codice =>
-    editor && originalEditor &&
-    editor.prezzi[codice] !== originalEditor.prezzi[codice];
+const campoModificato = (codice) => {
+  if (!editor || !originalEditor) return false;
+
+  const nuovo = editor.prezzi?.[codice];
+  const vecchio = originalEditor.prezzi?.[codice];
+
+  const nuovoVal = editor.tipoListino === "CARICO"
+    ? nuovo?.vendita ?? 0
+    : nuovo?.acquisto ?? 0;
+
+  const vecchioVal = originalEditor.tipoListino === "CARICO"
+    ? vecchio?.vendita ?? 0
+    : vecchio?.acquisto ?? 0;
+
+  return Number(nuovoVal) !== Number(vecchioVal);
+};
 
   // =============================
   // ASSOCIA FORNITORE
@@ -262,40 +299,70 @@ const rows = materiali.map(c => [
   // =============================
   // SALVA LISTINO
   // =============================
-  const salvaListino = async () => {
-    if (!editor) return;
+const salvaListino = async () => {
+  if (!editor) return;
 
-    try {
-      const ref = doc(db, "listini", editor.id);
+  try {
+    const ref = doc(db, "listini", editor.id);
 
-     await updateDoc(ref, {
-  prezzi: editor.prezzi,
-  nome: editor.nome,
-  tipoListino: editor.tipoListino // <-- salva anche il tipo listino
-});
+    await updateDoc(ref, {
+      prezzi: editor.prezzi,
+      nome: editor.nome,
+      tipoListino: editor.tipoListino
+    });
 
-      await scriviLog({
-  evento: "MODIFICA_LISTINO",
-tipo: "MODIFICA_LISTINO",
-pagina: "gestione-listini",
-collezioneRef: "listini",
-documentoId: editor.id,
-dati_originali: originalEditor,
-dati_modificati: editor,
-utente: currentUser?.username || currentUser?.email || "sconosciuto",
-timestamp: new Date()
-});
+    // 🔥 PROPAGAZIONE SU ALTRI LISTINI
+    const altriListini = listini.filter(
+      l => l.id !== editor.id && (l.tipoListino || "SCARICO") === editor.tipoListino
+    );
 
-      setEditor(null);
-     
-      setOriginalEditor(null);
+    for (const l of altriListini) {
+      let updated = false;
+      const nuoviPrezzi = { ...(l.prezzi || {}) };
 
-      loadListini();
+      Object.keys(propagaPrezzi).forEach(codice => {
+        if (!propagaPrezzi[codice]) return;
 
-    } catch (e) {
-      setErrori(prev => [...prev, e.message]);
+        const valore = editor.prezzi?.[codice];
+        if (!valore) return;
+
+        nuoviPrezzi[codice] = {
+          vendita: valore.vendita,
+          acquisto: valore.acquisto
+        };
+
+        updated = true;
+      });
+
+      if (updated) {
+        await updateDoc(doc(db, "listini", l.id), {
+          prezzi: nuoviPrezzi
+        });
+      }
     }
-  };
+
+    await scriviLog({
+      evento: "MODIFICA_LISTINO",
+      tipo: "MODIFICA_LISTINO",
+      pagina: "gestione-listini",
+      collezioneRef: "listini",
+      documentoId: editor.id,
+      dati_originali: originalEditor,
+      dati_modificati: editor,
+      utente: currentUser?.username || currentUser?.email || "sconosciuto",
+      timestamp: new Date()
+    });
+
+    setEditor(null);
+    setOriginalEditor(null);
+    setPropagaPrezzi({});
+
+    loadListini();
+
+  } catch (e) {
+    setErrori(prev => [...prev, e.message]);
+  }
+};
 
   // =============================
   // CREA LISTINO
@@ -696,17 +763,53 @@ if (sortConfig.key) {
     <option value="CARICO">Carico (uscita)</option>
   </select>
 </div>
-         {materialiDinamici.map(c=>(
-            <div key={c}>
-              {c}:
-              <input type="number" value={
-  editor.tipoListino === "CARICO"
-    ? editor.prezzi?.[c]?.vendita ?? 0
-    : editor.prezzi?.[c]?.acquisto ?? 0
-} onChange={e=>updatePrezzo(c,e.target.value)}
-                     style={{marginLeft:10, background:campoModificato(c)?"#fff3a0":"white"}} />
-            </div>
-          ))}
+{materialiDinamici.map(c => (
+  <div key={c} style={{ marginBottom: 6 }}>
+    {c}:
+
+    <input
+      type="number"
+      value={
+        editor.tipoListino === "CARICO"
+          ? editor.prezzi?.[c]?.vendita ?? 0
+          : editor.prezzi?.[c]?.acquisto ?? 0
+      }
+      onChange={e => updatePrezzo(c, e.target.value)}
+      style={{
+        marginLeft: 10,
+        background: campoModificato(c) ? "#fff3a0" : "white"
+      }}
+    />
+
+    {/* CHECKBOX DINAMICA */}
+    {campoModificato(c) && (
+      <label style={{ marginLeft: 10, fontSize: 12 }}>
+        <input
+          type="checkbox"
+          checked={!!propagaPrezzi[c]}
+          onChange={(e) =>
+            setPropagaPrezzi(prev => ({
+              ...prev,
+              [c]: e.target.checked
+            }))
+          }
+        />
+        applica a tutti i listini ({editor.tipoListino})
+      </label>
+    )}
+  </div>
+))}
+          <div style={{ marginTop: 10, marginBottom: 10 }}>
+  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <input
+      type="checkbox"
+      checked={propagaModificaGlobale}
+      onChange={(e) => setPropagaModificaGlobale(e.target.checked)}
+    />
+    Applicare questa modifica a tutti i listini
+    ({editor.tipoListino === "CARICO" ? "CARICO" : "SCARICO"})
+  </label>
+</div>
           <div style={{marginTop:15}}>
             <button onClick={salvaListino}>💾 Salva</button>
             <button onClick={cancellaListino} style={{marginLeft:10}}>🗑 Cancella</button>

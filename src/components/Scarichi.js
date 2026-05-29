@@ -610,112 +610,72 @@ const handleAdd = () => {
 
   let prezzoVendita = 0;
   let prezzoAcquisto = 0;
-  let trovatoNelListino = false;
 
-  if (listinoObj?.prezzi) {
-    const key = Object.keys(listinoObj.prezzi).find(
-      k => k.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
-    );
+  const key = Object.keys(listinoObj?.prezzi || {}).find(
+    k => k.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
+  );
 
-    if (key) {
-      prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
-      prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
-      trovatoNelListino = true;
-    }
-  }
-
-  if (!trovatoNelListino) {
-    const mat = materiali.find(
-      m => m.nome.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
-    );
-
-    if (mat) {
-      prezzoVendita = Number(mat.prezzoVenditaDefault || 0);
-      prezzoAcquisto = Number(mat.prezzoAcquistoDefault || 0);
-    }
+  if (key) {
+    prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
+    prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
   }
 
   const nuovoRigo = {
     materiale: selectedMateriale,
     peso: Number(peso.replace(",", ".")),
     calo: Number(calo?.replace(",", ".") || 0),
-    netto: Number(peso.replace(",", ".")) - Number(calo?.replace(",", ".") || 0),
+    netto:
+      Number(peso.replace(",", ".")) -
+      Number(calo?.replace(",", ".") || 0),
     prezzoVendita,
     prezzoAcquisto
   };
 
- setScarico(prev => {
-  const clean = [...prev].map(c => ({
-    ...c,
-    righe: [...(c.righe || [])]
-  }));
+  setScarico(prev => {
+    const updated = [...prev];
 
-  const idx = clean.findIndex(
-    c => c.cer === cer && c.fir === fir
-  );
+    // 🔥 FIX: IDENTITÀ SOLO CER (NON FIR)
+    const cerIdx = updated.findIndex(c => c.cer === cer);
 
-    // se CER non esiste → lo creo
-    if (idx === -1) {
-      return [
-        ...prev,
-        {
-          cer,
-          fir,
-          righe: [nuovoRigo],
-          totaleCer: nuovoRigo.netto
-        }
-      ];
+    if (cerIdx === -1) {
+      updated.push({
+        cer,
+        fir,
+        righe: [nuovoRigo],
+        totaleCer: nuovoRigo.netto
+      });
+
+      return updated;
     }
 
-    // altrimenti aggiorno CER esistente
-const updated = [...prev];
+    const existing = updated[cerIdx];
 
-// 🔥 UNA SOLA VARIABILE (niente duplicati)
-const cerIdx = updated.findIndex(
-  c => c.cer === cer && c.fir === fir
-);
+    const righe = [...(existing.righe || [])];
 
-const existing = cerIdx !== -1 ? updated[cerIdx] : {
-  cer,
-  fir,
-  righe: [],
-  totaleCer: 0
-};
+    const rigaIdx = righe.findIndex(
+      r => r.materiale === selectedMateriale
+    );
 
-const righe = [...existing.righe];
+    if (rigaIdx !== -1) {
+      righe[rigaIdx] = nuovoRigo;
+    } else {
+      righe.push(nuovoRigo);
+    }
 
-const existingIndex = righe.findIndex(
-  r => r.materiale === selectedMateriale
-);
+    updated[cerIdx] = {
+      ...existing,
+      fir, // FIR aggiornabile senza duplicare blocchi
+      righe,
+      totaleCer: righe.reduce((s, r) => s + r.netto, 0)
+    };
 
-if (existingIndex !== -1) {
-  righe[existingIndex] = nuovoRigo;
-} else {
-  righe.push(nuovoRigo);
-}
-
-const updatedCER = {
-  ...existing,
-  righe,
-  totaleCer: righe.reduce((s, r) => s + r.netto, 0)
-};
-
-if (cerIdx !== -1) {
-  updated[cerIdx] = updatedCER;
-} else {
-  updated.push(updatedCER);
-}
-
-return updated;
+    return updated;
   });
 
   setSelectedMateriale("");
   setPeso("");
   setCalo("");
-
-  
-
-setDirty(true);
+  setDirty(true);
 };
 const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
@@ -1576,6 +1536,7 @@ onChange={async (e) => {
   isSearchable
 />
           <label>F.I.R (CER)/DDT:</label>
+          
 <input
 id="fir-input"
 className={firError ? "input-error" : ""}
@@ -1594,10 +1555,12 @@ className={firError ? "input-error" : ""}
   }
   }}
   placeholder={
-    isFornitorePrivato
-      ? "FIR non richiesto per fornitore privato"
-      : "Numero formulario"
-  }
+  isFornitorePrivato
+    ? "FIR non richiesto per fornitore privato"
+    : firError
+      ? "FIR obbligatorio"
+      : "Numero formulario (FIR)"
+}
   style={{
     textTransform: "uppercase",
     backgroundColor: isFornitorePrivato ? "#eee" : "white"
