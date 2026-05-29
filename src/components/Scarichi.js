@@ -13,6 +13,9 @@ import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import {  PdfHeader } from "../utils/dateUtils";
 import Select from "react-select";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -216,7 +219,23 @@ useEffect(() => {
     setFirExists(false);
   }
 }, [isEditing]);
+useEffect(() => {
+  if (!selectedFornitore || !fornitori.length || !listini.length) return;
 
+  const forn = fornitori.find(f => f.nome === selectedFornitore);
+  if (!forn?.predefListino) return;
+
+  const listinoAssoc = listini.find(
+    l =>
+      l.id === forn.predefListino &&
+      (l.tipoListino || "").trim().toLowerCase() ===
+      (tipoMovimento || "").trim().toLowerCase()
+  );
+
+  if (listinoAssoc) {
+    setSelectedListino(listinoAssoc.nome);
+  }
+}, [selectedFornitore, fornitori, listini, tipoMovimento]);
 useEffect(() => {
   console.log("🟡 EDIT MODE:", {
     isEditing,
@@ -349,6 +368,33 @@ useEffect(() => {
   oraStr,
   previewFoto
 ]);
+
+const salvaPdfSuDisco = async (pdf, filename) => {
+  try {
+    if (!window.showSaveFilePicker) return false;
+
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [
+        {
+          description: "PDF",
+          accept: { "application/pdf": [".pdf"] },
+        },
+      ],
+    });
+
+    const writable = await handle.createWritable();
+    const blob = pdf.output("blob");
+
+    await writable.write(blob);
+    await writable.close();
+
+    return true;
+  } catch (err) {
+    console.warn("Salvataggio su disco annullato o fallito", err);
+    return false;
+  }
+};
 const salvaBozza = async () => {
   try {
     const utenteId = getLogUser();
@@ -929,9 +975,10 @@ if (docData.note && docData.note.trim() !== "") {
     }
 
     // ---------------- SAVE ----------------
-    pdf.save(
-      `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`
-    );
+    const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
+
+await sharePdfCapacitor(pdf, filename);
+return;
 
   } catch (err) {
     console.error("Errore PDF:", err);
@@ -1179,24 +1226,117 @@ if (!isFornitorePrivato && !hasImages) {
   }
 };
 
-const creaSnapshotScarico = (scaricoData) => {
-  return (scaricoData || []).map(c => ({
-    cer: c.cer || "",
-    fir: c.fir || "",
+const salvaPdfCapacitor = async (pdf, filename) => {
+  try {
+    const isNative = Capacitor.isNativePlatform();
 
-    righe: (c.righe || []).map(r => ({
-      materiale: r.materiale || "",
-      peso: Number(r.peso || 0),
-      calo: Number(r.calo || 0),
-      netto: Number(r.netto || 0),
-      prezzoVendita: Number(r.prezzoVendita || 0),
-      prezzoAcquisto: Number(r.prezzoAcquisto || 0)
-    })),
+    // 🟢 BROWSER
+    if (!isNative) {
+      pdf.save(filename);
+      return;
+    }
 
-    totaleCer: Number(c.totaleCer || 0)
-  }));
+    // 🤖 ANDROID / IOS
+
+    const blob = pdf.output("blob");
+
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // 🔥 1. CREA CARTELLA (FONDAMENTALE)
+    try {
+      await Filesystem.mkdir({
+        path: "pdf",
+        directory: Directory.Documents,
+        recursive: true,
+      });
+    } catch (e) {
+      // se esiste già ignora errore
+    }
+
+    // 🔥 2. SCRIVI FILE
+    await Filesystem.writeFile({
+      path: `pdf/${filename}`,
+      data: base64,
+      directory: Directory.Documents,
+    });
+
+    alert("PDF salvato nei Documenti/pdf");
+  } catch (err) {
+    console.error("PDF SAVE ERROR FULL:", err);
+
+    alert(
+      "Errore salvataggio PDF:\n\n" +
+      (err?.message || err)
+    );
+  }
 };
+const sharePdfCapacitor = async (pdf, filename) => {
+  try {
+    const isNative = Capacitor.isNativePlatform();
 
+    // 🟢 BROWSER fallback
+    if (!isNative) {
+      pdf.save(filename);
+      return;
+    }
+
+    // 📦 crea blob
+    const blob = pdf.output("blob");
+
+    // 🔄 blob -> base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(reader.result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // 📁 scrive file temporaneo (cache)
+    const filePath = `temp/${filename}`;
+
+    try {
+      await Filesystem.mkdir({
+        path: "temp",
+        directory: Directory.Cache,
+        recursive: true,
+      });
+    } catch (e) {}
+
+    await Filesystem.writeFile({
+      path: filePath,
+      data: base64,
+      directory: Directory.Cache,
+    });
+
+    // 🔗 ottieni URI pubblico
+    const fileUri = await Filesystem.getUri({
+      path: filePath,
+      directory: Directory.Cache,
+    });
+
+    // 📤 SHARE NATIVO ANDROID
+    await Share.share({
+      title: "Movimento PDF",
+      text: "Ecco il documento generato",
+      url: fileUri.uri,
+      dialogTitle: "Condividi PDF",
+    });
+
+  } catch (err) {
+    console.error("SHARE PDF ERROR:", err);
+    alert("Errore condivisione PDF:\n" + (err?.message || err));
+  }
+};
 const listinoBloccato = selectedFornitore !== "";
 
 const sortByLabel = (a, b) => {
@@ -1364,18 +1504,7 @@ setTimeout(() => {
     const forn = fornitori.find(f => f.nome === nome);
     if (!forn) return;
 
-    if (forn.predefListino) {
-      const listinoAssoc = listini.find(
-        l => l.id === forn.predefListino &&
-        ((l.tipoListino || "").trim() === tipoMovimento)
-      );
-      if (listinoAssoc) {
-        setSelectedListino(listinoAssoc.nome);
-        return;
-      }
-    }
-
-    const primoCompatibile = listini.find(
+      const primoCompatibile = listini.find(
       l => (l.tipoListino || "").trim() === tipoMovimento
     );
 
