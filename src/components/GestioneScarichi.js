@@ -1,4 +1,3 @@
-
 // src/components/GestioneScarichi.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
@@ -10,17 +9,7 @@ import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { PdfHeader } from "../utils/dateUtils";
 import Select from "react-select";
-
-
-const normalizeKey = (v) =>
-  (v ?? "")
-    .toString()
-    .toUpperCase()
-    .trim()
-    // elimina tutto tranne lettere e numeri
-    .replace(/[^A-Z0-9]/g, "");
 
 export const applyListino = async ({
   movimentiIds = [],
@@ -80,51 +69,19 @@ export const applyListino = async ({
         righe: (cer.righe || []).map((r) => {
           const raw = r.materiale;
           const key = norm(raw);
-          const prezzoObj =
-            smartMap[key] ||
-            smartMap[raw] ||
-            null;
-          if (!prezzoObj) {
+          const prezzoObj =            smartMap[key] ||            smartMap[raw] ||            null;          if (!prezzoObj) {
             nonTrovati++;
             return r;
           }
           modifiche++;
-          const acquisto =
-            prezzoObj.acquisto ?? prezzoObj.prezzoAcquisto ?? 0;
-          const vendita =
-            prezzoObj.vendita ?? prezzoObj.prezzoVendita ?? 0;
-          const prezzoFinale =
-            tipo === "scarico" ? acquisto : vendita;
-          return {
-            ...r,
-            prezzoAcquisto:
-              tipo === "scarico"
-                ? Number(acquisto)
-                : Number(r.prezzoAcquisto ?? 0),
-            prezzoVendita:
-              tipo === "carico"
-                ? Number(vendita)
-                : Number(r.prezzoVendita ?? 0),
-            prezzo: Number(prezzoFinale ?? 0),
-            listino,
-          };
-        }),
-      }));
+          const acquisto =            prezzoObj.acquisto ?? prezzoObj.prezzoAcquisto ?? 0;
+          const vendita =            prezzoObj.vendita ?? prezzoObj.prezzoVendita ?? 0;
+          const prezzoFinale =            tipo === "scarico" ? acquisto : vendita;
+          return {            ...r,            prezzoAcquisto:              tipo === "scarico"                ? Number(acquisto)                : Number(r.prezzoAcquisto ?? 0),            prezzoVendita:              tipo === "carico"                ? Number(vendita)                : Number(r.prezzoVendita ?? 0),            prezzo: Number(prezzoFinale ?? 0),            listino,          };        }),      }));
       if (modifiche === 0) {
-        console.warn(
-          "⚠️ applyListino: nessuna modifica applicata (check matching dati)"
-        );
-      }
-      await updateDoc(ref, {
-        [field]: aggiornato,
-        listino,
-        lastUpdate: Date.now()
-      });
-    }
-  } catch (e) {
-    console.error("💥 ERRORE APPLYLISTINO:", e);
-  }
-};
+        console.warn(          "⚠️ applyListino: nessuna modifica applicata (check matching dati)"        );      }
+      await updateDoc(ref, {        [field]: aggiornato,        listino,        lastUpdate: Date.now()      });    }
+  } catch (e) {    console.error("💥 ERRORE APPLYLISTINO:", e);  }};
 registerLocale("it", it);
 const GestioneScarichi = () => {
 const [scarichi, setScarichi] = useState([]);
@@ -146,21 +103,14 @@ const [filtroListino, setFiltroListino] = useState("tutti");
 const [filtroUtente, setFiltroUtente] = useState("tutti");
 const [giornoSelezionato, setGiornoSelezionato] = useState(null);
 const [reloadKey, setReloadKey] = useState(0);
-const forceModalRefresh = () => {
-setReloadKey(prev => prev + 1);
-};
-  const money = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-  const [prospettoRighe, setProspettoRighe] = useState([]);
+const money = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+ const [prospettoRighe, setProspettoRighe] = useState([]);
 const [filtroDestinatario, setFiltroDestinatario] = useState("tutti");
   const [fornitoriDisponibili, setFornitoriDisponibili] = useState([]);
   const [listiniDisponibili, setListiniDisponibili] = useState([]);
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
   const [modalTipo, setModalTipo] = useState(null); 
-// "prospetto" | "fattura"
-const round2 = (n) => {
-  const num = Number(n) || 0;
-  return Number(num.toFixed(2));
-};
+const round2 = (n) => {  const num = Number(n) || 0;  return Number(num.toFixed(2));};
 const [modalData, setModalData] = useState(null);
   const [listini, setListini] = useState({});
 const [filtroCER, setFiltroCER] = useState("tutti");
@@ -168,29 +118,14 @@ const [cerDisponibili, setCerDisponibili] = useState([]);
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-const normalizeDate = (d) => {
-  if (!d) return null;
-  if (d instanceof Date) return d;
-  if (d?.toDate) return d.toDate();
-  return new Date(d);
-};
-  const getLabelFornDest = () => {
-  if (tipoMovimento === "carico") return "Smaltitori";
-  if (tipoMovimento === "scarico") return "Fornitori";
-  return "Fornitore / Smaltitore";
-};
+const normalizeDate = (d) => {  if (!d) return null;  if (d instanceof Date) return d;  if (d?.toDate) return d.toDate();  return new Date(d);};
+  const getLabelFornDest = () => {  if (tipoMovimento === "carico") return "Smaltitori";  if (tipoMovimento === "scarico") return "Fornitori";  return "Fornitore / Smaltitore";};
   const navigate = useNavigate();
   const location = useLocation();
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
- const goHome = () => {
-  window.location.href = "/admin";
-};
+ const goHome = () => {  window.location.href = "/admin";};
   const formatDataIT = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
-const requestSort = (key) => {
-  let direction = "asc";
-  if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
-  setSortConfig({ key, direction });
-};
+const requestSort = (key) => {  let direction = "asc";  if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";  setSortConfig({ key, direction });};
 useEffect(() => {
   const today = new Date();
   const primo = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -218,9 +153,7 @@ const fetchMovimenti = async () => {
     movimentoFinanziarioId:
   data.movimentoFinanziarioId !== undefined &&
   data.movimentoFinanziarioId !== null &&
-  String(data.movimentoFinanziarioId).trim() !== ""
-    ? data.movimentoFinanziarioId
-    : null,
+  String(data.movimentoFinanziarioId).trim() !== ""    ? data.movimentoFinanziarioId    : null,
     cer: movimenti.map(m => ({
       fir: m.fir || "-",      cer: m.cer || m.codiceCER || "-",      tipo: m.tipo,      righe: (m.righe || []).map(r => ({        ...r,        netto: r.netto || 0,        prezzoAcquisto: r.prezzoAcquisto || 0,        prezzoVendita: r.prezzoVendita || 0      }))    }))  };};
     const scarichi = scarichiSnap.docs.map(d => parseDoc(d, "scarico"));
@@ -252,64 +185,34 @@ const validaEPreparaProspetto = async (movimentiIds) => {
       const overlap = ids.filter((id) => movimentiIds.includes(id));
       if (overlap.length === 0) return;
       if (p.DataPagamento) {        conflittiPagati.push({          id: d.id,          collection: col,          fornitore: p.fornitore,          dataPagamento: p.DataPagamento,          overlap,        });      
-    } else {
-        daEliminare.push({ id: d.id, collection: col });
-      }
-    });
+    } else {        daEliminare.push({ id: d.id, collection: col });      }    });
   }
-  if (conflittiPagati.length > 0) {
-    const msg = conflittiPagati
+  if (conflittiPagati.length > 0) {    const msg = conflittiPagati
       .map(
         (c) =>
-          `Fornitore: ${c.fornitore} - Pagato il: ${
-            c.dataPagamento?.toDate?.()?.toLocaleDateString("it-IT") ||
-            c.dataPagamento ||
-            "N/D"
-          }`
-      )
+          `Fornitore: ${c.fornitore} - Pagato il: ${            c.dataPagamento?.toDate?.()?.toLocaleDateString("it-IT") ||            c.dataPagamento ||            "N/D"          }`      )
       .join("\n");
     throw new Error("SCARICO_GIA_PAGATO\n\n" + msg);
   }
-  for (const d of daEliminare) {
-    await deleteDoc(doc(db, d.collection, d.id));
-  }
+  for (const d of daEliminare) {    await deleteDoc(doc(db, d.collection, d.id));  }
   return true;
 };
 const handleSalvaDocumento = async () => {
   try {
-    if (!modalData) {
-      alert("❌ Dati modal mancanti");
-      return;
-    }
+    if (!modalData) {      alert("❌ Dati modal mancanti");      return;    }
     const tipo = modalTipo === "prospetto" ? "prospetto" : "fattura";
     const collectionName =
       tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
-const isConsuntivato = (v) =>
-  v !== null &&
-  v !== undefined &&
-  String(v).trim() !== "";
-
-const movimentiSelezionati = filteredScarichi.filter(
-  m => movimentiIds.includes(m.id) && !isConsuntivato(m.movimentoFinanziarioId)
-);
-// 🔥 BLOCCO HARD + FILTRO
+const isConsuntivato = (v) =>  v !== null &&  v !== undefined &&  String(v).trim() !== "";
+const movimentiSelezionati = filteredScarichi.filter(  m => movimentiIds.includes(m.id) && !isConsuntivato(m.movimentoFinanziarioId));
 const validi = [];
-for (const m of movimentiSelezionati) {
-  if (m.movimentoFinanziarioId) {
-    console.warn("⚠️ Movimento già consuntivato saltato:", m.id);
-    continue;
-  }
+for (const m of movimentiSelezionati) {  if (m.movimentoFinanziarioId) {    console.warn("⚠️ Movimento già consuntivato saltato:", m.id);    continue;  }
   validi.push(m);
 }
-if (validi.length === 0) {
-  alert("❌ Tutti i movimenti selezionati sono già consuntivati");
-  return;
+if (validi.length === 0) {  alert("❌ Tutti i movimenti selezionati sono già consuntivati");  return;
 }
-    if (validi.length === 0) {
-      alert("❌ Tutti i movimenti selezionati sono già consuntivati");
-      return;
-    }
+    if (validi.length === 0) {      alert("❌ Tutti i movimenti selezionati sono già consuntivati");      return;    }
     const validiIds = validi.map(m => m.id);
     await validaEPreparaProspetto(validiIds);
     let totale = 0;
@@ -320,130 +223,232 @@ if (validi.length === 0) {
         totale = round2(totale + round2(kg * prezzo));
       });
     });
-    const payload = {
-  tipo,
-  cliente: modalData.cliente || "",
-  totale,
-  movimentiIds: validiIds, // 🔥 COERENTE
-  blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),
-  dataCreazione: dataSalvataggio.toISOString(),
-  movimentoFinanziarioId: null
-};
+    const payload = {  tipo,  cliente: modalData.cliente || "",  totale,  movimentiIds: validiIds, // 🔥 COERENTE
+  blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),  dataCreazione: dataSalvataggio.toISOString(),  movimentoFinanziarioId: null};
     const docId = validiIds.slice().sort().join("-");
     const snap = await getDocs(collection(db, collectionName));
-    for (const d of snap.docs) {
-      const data = d.data();
-      const ids = data.validiIds || [];
-      if (ids.some(id => validiIds.includes(id))) {
-        await deleteDoc(doc(db, collectionName, d.id));
-      }
-    }
+    for (const d of snap.docs) {      const data = d.data();      const ids = data.validiIds || [];
+      if (ids.some(id => validiIds.includes(id))) {        await deleteDoc(doc(db, collectionName, d.id));      }    }
     await setDoc(doc(db, collectionName, docId), payload, { merge: true });
     alert("✅ Documento salvato correttamente");
     setModalData(null);
-  } catch (err) {
-    console.error(err);
-    alert("❌ Errore salvataggio");
-  }
+  } catch (err) {    console.error(err);    alert("❌ Errore salvataggio");  }
 };
 const salvaProspettoUnificato = async (modalData, tipo) => {
   const scarichiIds = modalData.movimentiIds || [];
-  if (!scarichiIds.length) {
-    throw new Error("Nessun movimento selezionato");
-  }
+  if (!scarichiIds.length) {    throw new Error("Nessun movimento selezionato");  }
   await validaEPreparaProspetto(scarichiIds);
  let totale = 0;
 (modalData.blocchi || []).forEach(b => {
-  (b.righe || []).forEach(r => {
-   const kg = money(r.netto);
-    const prezzo = money(r.prezzo);
-    totale += round2(kg * prezzo);
-  });
+  (b.righe || []).forEach(r => {   const kg = money(r.netto);    const prezzo = money(r.prezzo);    totale += round2(kg * prezzo);  });
 });
 totale = round2(totale);
   const collectionName =
     tipo === "prospetto" ? "prospetti" : "fattureCarichi";
-  return addDoc(collection(db, collectionName), {
-    tipo,
-    cliente: modalData.cliente,
-    totale,
-    movimentiIds: scarichiIds,
-    blocchi: modalData.blocchi,
-    dataCreazione: new Date().toISOString(),
-    DataPagamento: null
-  });
+  return addDoc(collection(db, collectionName), {    tipo,    cliente: modalData.cliente,    totale,    movimentiIds: scarichiIds,    blocchi: modalData.blocchi,    dataCreazione: new Date().toISOString(),    DataPagamento: null  });
 };
 const handleStampaDocumento = async () => {
   const isFattura = modalTipo === "fattura";
-
   const snap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
   const config = snap.exists() ? snap.data() : {};
-
   const win = window.open("", "_blank");
-
   const isConsuntivato = (v) =>
-    v !== null &&
-    v !== undefined &&
-    String(v).trim() !== "";
-
-  // 🔥 USA filteredScarichi (NON scarichi)
-  const movimenti = filteredScarichi.filter(m =>
-    modalData.movimentiIds.includes(m.id) &&
-    !isConsuntivato(m.movimentoFinanziarioId)
+    v !== null && v !== undefined && String(v).trim() !== "";
+  const movimenti = filteredScarichi.filter(
+    (m) =>
+      modalData.movimentiIds.includes(m.id) &&
+      !isConsuntivato(m.movimentoFinanziarioId)
   );
-
-  console.log("🧾 STAMPA movimenti:", movimenti);
-
   let totale = 0;
-
-  let body = "";
-
-  movimenti.forEach(m => {
-    (m.cer || []).forEach(c => {
-      body += `
-        <table>
-          <tr class="fir">
-            <td colspan="4">FIR: ${c.fir} | CER: ${c.cer}</td>
-          </tr>
-          <tr>
-            <th>Materiale</th>
-            <th>Kg</th>
-            <th>Prezzo</th>
-            <th>Totale</th>
-          </tr>
-      `;
-
-      (c.righe || []).forEach(r => {
-        const kg = Number(r.netto || 0);
-
-        const prezzo = isFattura
-          ? Number(r.prezzoVendita || 0)
-          : Number(r.prezzoAcquisto || 0);
-
-        const tot = kg * prezzo;
-        totale += tot;
-
-        body += `
-          <tr>
-            <td>${r.materiale || "-"}</td>
-            <td>${kg.toFixed(2)}</td>
-            <td>${prezzo.toFixed(2)}</td>
-            <td>${tot.toFixed(2)}</td>
-          </tr>
-        `;
+  let rows = "";
+  const buildGruppi = (useVendita) => {    const gruppi = {};
+    movimenti.forEach((m) => {      const dataMov =
+        m.dataScarico || m.data || m.dataCreazione || null;
+      (m.cer || []).forEach((c) => {
+        const firKey = c.fir || "SENZA FIR";
+        if (!gruppi[firKey]) {
+          gruppi[firKey] = {
+            data: dataMov,
+            righe: [],
+          };
+        }
+        if (!gruppi[firKey].data && dataMov) {
+          gruppi[firKey].data = dataMov;
+        }
+        (c.righe || []).forEach((r) => {
+          gruppi[firKey].righe.push({
+            cer: c.cer,
+            materiale: r.materiale,
+            kg: Number(r.netto || 0),
+            prezzo: Number(
+              useVendita ? r.prezzoVendita : r.prezzoAcquisto
+            ),
+          });
+        });
       });
+    });
+    return gruppi;
+  };
+  const gruppi = buildGruppi(isFattura);
+  Object.keys(gruppi).forEach((fir) => {
+    const gruppo = gruppi[fir];
+   const dataTxt = gruppo.data
+      ? new Date(gruppo.data).toLocaleDateString("it-IT")
+      : "-";
+    rows += `
+      <tr>
+        <td colspan="6" style="padding:0;border:none;">
+          <div style="
+            background:#eee;
+            font-weight:bold;
+            padding:10px;
+            display:flex;
+            justify-content:space-between;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          ">
+            <span>FIR: ${fir}</span>
+            <span>${isFattura ? "Data carico" : "Data scarico"}: ${dataTxt}</span>
+          </div>
+        </td>
+      </tr>
+    `;
 
-      body += `</table>`;
+    gruppo.righe.forEach((r) => {
+      const tot = r.kg * r.prezzo;
+      totale += tot;
+
+      rows += `
+        <tr>
+          <td></td>
+          <td>${r.cer || "-"}</td>
+          <td>${r.materiale || "-"}</td>
+          <td class="num">${r.kg.toFixed(2)}</td>
+          <td class="num">€ ${r.prezzo.toFixed(2)}</td>
+          <td class="num">€ ${tot.toFixed(2)}</td>
+        </tr>
+      `;
     });
   });
 
   const html = `
-    <html>
-      <body>
-        ${body}
-        <h2>TOTALE: € ${totale.toFixed(2)}</h2>
-      </body>
-    </html>
+  <html>
+  <head>
+    <title>${isFattura ? "Fattura" : "Prospetto Fattura"}</title>
+
+    <style>
+      body {
+        font-family: Arial;
+        padding: 30px;
+        color: #333;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .logo { max-height: 60px; }
+
+      .azienda {
+        text-align: right;
+        font-size: 12px;
+      }
+
+      h1 {
+        text-align: center;
+        margin-top: 20px;
+      }
+
+      .info {
+        margin: 20px 0;
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th {
+        background: #222;
+        color: #fff;
+        padding: 8px;
+        font-size: 13px;
+      }
+
+      td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+        font-size: 13px;
+      }
+
+      .num { text-align: right; }
+
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      .totale {
+        margin-top: 20px;
+        text-align: right;
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      @media print {
+        thead { display: table-header-group; }
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <div class="header">
+      ${
+        config?.logoBase64
+          ? `<img class="logo" src="data:image/png;base64,${config.logoBase64}" />`
+          : ""
+      }
+
+      <div class="azienda">
+        <strong>${config?.ragioneSociale || ""}</strong><br/>
+        ${config?.indirizzo || ""}<br/>
+        ${config?.capCitta || ""}<br/>
+        P.IVA: ${config?.piva || "-"}
+      </div>
+    </div>
+
+    <h1>${isFattura ? "FATTURA" : "PROSPETTO FATTURA"}</h1>
+
+    <div class="info">
+      <strong>Controparte:</strong> ${modalData.cliente || "-"}<br/>
+      <strong>Data:</strong> ${new Date().toLocaleDateString("it-IT")}
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>FIR</th>
+          <th>CER</th>
+          <th>Materiale</th>
+          <th>Kg</th>
+          <th>Prezzo</th>
+          <th>Totale</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+
+    <div class="totale">
+      TOTALE: € ${totale.toFixed(2)}
+    </div>
+
+  </body>
+  </html>
   `;
 
   win.document.write(html);
@@ -457,6 +462,30 @@ useEffect(() => {
     navigate(location.pathname, { replace: true, state: {} });
   }
 }, [location.state]);
+useEffect(() => {
+  if (!modalData?.movimentiIds?.length) return;
+
+  const movs = filteredScarichi.filter(m =>
+    modalData.movimentiIds.includes(m.id)
+  );
+
+  const dates = movs
+    .map(m => m.data)
+    .filter(Boolean)
+    .map(d => normalizeDate(d))
+    .filter(Boolean);
+
+  if (!dates.length) return;
+
+  const min = new Date(Math.min(...dates.map(d => d.getTime())));
+
+  setMinDataSalvataggio(min);
+
+  // 🔥 se la data attuale è "troppo piccola", la correggiamo automaticamente
+  setDataSalvataggio(prev =>
+    prev && prev >= min ? prev : min
+  );
+}, [modalData, filteredScarichi]);
 useEffect(() => {
   fetchMovimenti();
 }, [reloadKey]);
@@ -633,15 +662,28 @@ const estimateResults = () => {
   }
   return dati.length;
 };
+const isDocumentoDisabled = () => {
+  return (
+    filtroFornitore === "tutti" ||
+    tipoMovimento === "tutti"
+  );
+};
 const getDocumentoLabel = () => {
+  // 🚫 BLOCCO SE NON C'È CONTROPARTE
+  if (filtroFornitore === "tutti") {
+    return "⚠️ Seleziona controparte";
+  }
+
+  // 🚫 BLOCCO SE NON È SELEZIONATO TIPO
+  if (tipoMovimento === "tutti") {
+    return "⚠️ Seleziona tipo";
+  }
   const movimenti = getMovimentiValidi();
   const hasScarico = movimenti.some(m => m.tipo === "scarico");
   const hasCarico = movimenti.some(m => m.tipo === "carico");
   if (!hasScarico && hasCarico) return "📄 Emetti Fattura";
   if (hasScarico && !hasCarico) return "📑 Prospetto Fattura";
-  if (hasScarico && hasCarico) {
-    return "⚠️ Separa Carichi/Scarichi";
-  }
+  if (hasScarico && hasCarico) return "⚠️ Separa Carichi/Scarichi";
   return "📄 Documento";
 };
 const getTrafficLight = (count) => {
@@ -698,25 +740,9 @@ const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
   const safe = (v) => Number(v) || 0;
 const tuttiCer = movimentiDelGiorno.flatMap(s =>
-  (s.cer || []).map(cer => ({
-    fir: cer.fir || "-",
-    cer: cer.cer || cer.codiceCER || "-",
-    tipo: cer.tipo ?? s.tipo,
-    listino: s.listino,
-
-    // 🔥 NUOVO
-    movimentoFinanziarioId: s.movimentoFinanziarioId,
-
-    righe: (cer.righe || []).map(r => ({
-      ...r,
-      fir: cer.fir || "-",
-      cer: cer.cer || cer.codiceCER || "-",
-      materiale: r.materiale,
-      netto: r.netto || 0,
-      prezzoAcquisto: r.prezzoAcquisto || 0,
-      prezzoVendita: r.prezzoVendita || 0,
-    }))
-  }))
+  (s.cer || []).map(cer => ({    fir: cer.fir || "-",    cer: cer.cer || cer.codiceCER || "-",    tipo: cer.tipo ?? s.tipo,    listino: s.listino,    movimentoFinanziarioId: s.movimentoFinanziarioId,
+    righe: (cer.righe || []).map(r => ({      ...r,      fir: cer.fir || "-",      cer: cer.cer || cer.codiceCER || "-",
+      materiale: r.materiale,      netto: r.netto || 0,      prezzoAcquisto: r.prezzoAcquisto || 0,      prezzoVendita: r.prezzoVendita || 0,    }))  }))
 );
   const nrMovimentiScarico = tuttiCer.filter(c => c.tipo === "scarico").length;
   const nrMovimentiCarico = tuttiCer.filter(c => c.tipo === "carico").length;
@@ -826,27 +852,38 @@ goBack={() => {
  refreshScarichi={async () => {
   await fetchMovimenti();
 }}/>  );}
+const handleApriDocumento = () => {
+  if (isDocumentoDisabled()) return;
+  const movimenti = getMovimentiValidi();
+  if (!movimenti.length) {
+    alert("⚠️ Nessun movimento valido");
+    return;
+  }
+  const hasScarico = movimenti.some(m => m.tipo === "scarico");
+  const hasCarico = movimenti.some(m => m.tipo === "carico");
+  if (hasScarico && hasCarico) {
+    alert("⚠️ Non puoi mischiare carichi e scarichi");
+    return;
+  }
+  const tipo = hasScarico ? "prospetto" : "fattura";
+  setModalTipo(tipo);
+  setModalData({
+    cliente: filtroFornitore,
+    movimentiIds: movimenti.map(m => m.id),
+    blocchi: movimenti.flatMap(m => m.cer || [])
+  });
+};
 const handleStampa = async () => {
   const movimenti = filteredScarichi;
   if (!movimenti || !Array.isArray(movimenti)) return;
-  const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
   const formatDate = (date) => {
     const d =
       date instanceof Date        ? date        : date?.toDate        ? date.toDate()        : new Date(date);    return d.toLocaleDateString("it-IT");  };
   const formatHour = (date) => {
-    const d =
-      date instanceof Date
-        ? date
-        : date?.toDate
-        ? date.toDate()
-        : new Date(date);
-    return d.toLocaleTimeString("it-IT", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+    const d =      date instanceof Date        ? date        : date?.toDate        ? date.toDate()        : new Date(date);
+    return d.toLocaleTimeString("it-IT", {      hour: "2-digit",      minute: "2-digit",    });  };
   const safe = (v) => Number(v) || 0;
   const getUtente = (m) => m.utente || m.email || "sconosciuto";
   const gruppi = {};
@@ -879,25 +916,13 @@ const ricavo = righe.reduce(
   (t, r) => t + round2(round2(r.prezzoVendita) * round2(r.netto)),
   0
 );
-      if (tipo === "scarico") {
-        g.scarichi++;
-        g.pesoScarichi += peso;
-        g.costi += costo;
-        totaleScarichi++;
-        totalePesoScarichi += peso;
-        totaleCosti += costo;
-      } else {
-        g.carichi++;
-        g.pesoCarichi += peso;
-        g.ricavi += ricavo;
-        totaleCarichi++;
-        totalePesoCarichi += peso;
-        totaleRicavi += ricavo;
-      }
+      if (tipo === "scarico") {        g.scarichi++;        g.pesoScarichi += peso;        g.costi += costo;
+        totaleScarichi++;        totalePesoScarichi += peso;        totaleCosti += costo;
+      } else {        g.carichi++;        g.pesoCarichi += peso;        g.ricavi += ricavo;
+        totaleCarichi++;        totalePesoCarichi += peso;        totaleRicavi += ricavo;      }
       if (cer.fir) g.firSet.add(cer.fir);
       g.utenti.add(utente);
-      g.dettagli.push({        ora: formatHour(dataObj),        controparte,        fir: cer.fir || "-",        peso,        costo,        ricavo,        utente,        tipo,      });    });
-  });
+      g.dettagli.push({        ora: formatHour(dataObj),        controparte,        fir: cer.fir || "-",        peso,        costo,        ricavo,        utente,        tipo,      });    });  });
   const { pdf, startY } = await PdfHeader();
   let y = startY-30;
   pdf.setFontSize(14);
@@ -939,52 +964,31 @@ const stampaSoloProspetto = () => {
   const righe = [];
   righeOrdinate.forEach(g => {
     const movimentiDelGiorno = filteredScarichi.filter(s => {
-      const dataObj =
-        s.data instanceof Date
-          ? s.data
-          : s.data?.toDate?.() || null;
+      const dataObj =        s.data instanceof Date          ? s.data          : s.data?.toDate?.() || null;
       if (!dataObj) return false;
-      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;
-    });
+      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;    });
     movimentiDelGiorno.forEach(m => {
       if (m.tipo !== "scarico") return;
       (m.cer || []).forEach(c => {
         (c.righe || []).forEach(r => {
           righe.push({
-            fir: c.fir || "",
-            materiale: r.materiale || "",
-            peso: Number(r.peso || 0),
-            calo: Number(r.calo || 0),
-            netto: Number(r.netto || 0),
-            prezzoKg: Number(r.prezzoAcquisto || 0),
-            fornitore: m.fornitore || ""
-          });
-        });
-      });
-    });
-  });
-  const fornitoreFinale =
-    filtroFornitore && filtroFornitore !== "tutti"
-      ? filtroFornitore
-      : righe[0]?.fornitore || "";
+            fir: c.fir || "",            materiale: r.materiale || "",            peso: Number(r.peso || 0),
+            calo: Number(r.calo || 0),            netto: Number(r.netto || 0),            prezzoKg: Number(r.prezzoAcquisto || 0),            fornitore: m.fornitore || ""
+          });        });      });    });  });
+  const fornitoreFinale =    filtroFornitore && filtroFornitore !== "tutti"      ? filtroFornitore      : righe[0]?.fornitore || "";
   stampaProspettoFatturaScarichi(righe, fornitoreFinale);
 };
 const resetFiltri = () => {
-  setFiltroFornitore("tutti");
-  setFiltroListino("tutti");
-  setFiltroUtente("tutti");
-  setFiltroFIR("");
-  setTipoMovimento("tutti");
-setFirSearch("");
-setFiltroFIR("");
-setFiltroCER("tutti");
+  setFiltroFornitore("tutti");  setFiltroListino("tutti");
+  setFiltroUtente("tutti");  setFiltroFIR("");
+  setTipoMovimento("tutti");setFirSearch("");
+setFiltroFIR(""); setFiltroCER("tutti");
   setTutti(false);
   const today = new Date();
   const primo = new Date(today.getFullYear(), today.getMonth(), 1);
   const minDate = minDataDB ?? primo;
   const maxDate = maxDataDB ?? today;
-  setDal(minDate);
-  setAl(maxDate);
+  setDal(minDate);  setAl(maxDate);
 };
 const estimated = estimateResults();
 const traffic = getTrafficLight(estimated);
@@ -993,39 +997,21 @@ const getMovimentiValidi = () => {
     v !== null &&
     v !== undefined &&
     String(v).trim() !== "";
-
   return filteredScarichi.filter((m) => {
-    // filtro tipo
     if (tipoMovimento !== "tutti" && m.tipo !== tipoMovimento) {
       return false;
     }
-
-    // filtro fornitore
     if (filtroFornitore !== "tutti" && m.fornitore !== filtroFornitore) {
       return false;
     }
-
-    // 🔥 REGOLA FINALE: se ESISTE QUALSIASI valore "vero" → scarta
     if (isConsuntivato(m.movimentoFinanziarioId)) {
       return false;
     }
-
     return true;
   });
 };
-
-const movimenti = getMovimentiValidi();
-const hasScarico = movimenti.some(m => m.tipo === "scarico");
-const hasCarico = movimenti.some(m => m.tipo === "carico");
-const bottoneDisabilitato =
-   movimenti.length === 0 ||
-  (hasScarico && hasCarico) ||
-  tipoMovimento === "tutti";
-
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
-
-
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -1035,104 +1021,19 @@ const toOptions = (arr) =>
 </button>
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
 <button
-  disabled={bottoneDisabilitato}
-    title={
-    tipoMovimento === "tutti"
-      ? "Selezionare il Tipo di documenti per cui creare la contabile"
-      : undefined
+  onClick={handleApriDocumento}
+  disabled={isDocumentoDisabled()}
+  title={
+    isDocumentoDisabled()
+      ? "Selezionare il Tipo di documento e la controparte per cui creare la contabile"
+      : "Crea documento"
   }
   style={{
-    marginLeft: 10,
-    opacity: bottoneDisabilitato ? 0.4 : 1,
-    cursor: bottoneDisabilitato ? "not-allowed" : "pointer"
+    opacity: isDocumentoDisabled() ? 0.5 : 1,
+    cursor: isDocumentoDisabled() ? "not-allowed" : "pointer"
   }}
-onClick={() => {
-  console.group("🧠 BUILD MODAL DEBUG");
-
-const movimenti = getMovimentiValidi();
-
-console.log("movimenti selezionati:", movimenti.map(m => ({
-  id: m.id,
-  tipo: m.tipo,
-  cerCount: (m.cer || []).length
-})));
-
-const blocchi = [];
-let totale = 0;
-
-movimenti.forEach((m) => {
-  console.group("📦 MOVIMENTO", m.id);
-
-  (m.cer || []).forEach((c) => {
-    console.group("  🧾 CER");
-
-    console.log("fir:", c.fir);
-    console.log("cer:", c.cer || c.codiceCER);
-    console.log("righe RAW:", c.righe);
-
-    const righe = (c.righe || []).map((r) => {
-      const netto = Number(r.netto || 0);
-
-      const prezzo =
-        m.tipo === "scarico"
-          ? Number(r.prezzoAcquisto || 0)
-          : Number(r.prezzoVendita || 0);
-
-      const tot = netto * prezzo;
-
-      console.log("      riga:", {
-        materiale: r.materiale,
-        netto,
-        prezzo,
-        tot
-      });
-
-      totale += tot;
-
-      return {
-        materiale: r.materiale,
-        netto,
-        prezzo,
-        totale: tot
-      };
-    });
-
-    console.log("  righe FINAL:", righe);
-
-    blocchi.push({
-      fir: c.fir || m.fir || "N/D",
-      data: m.data,
-      tipo: m.tipo,
-      cer: c.cer || c.codiceCER || "-",
-      righe
-    });
-
-    console.groupEnd();
-  });
-
-  console.groupEnd();
-});
-
-console.log("💰 TOTALE:", totale);
-console.log("📦 BLOCCHI:", blocchi);
-
-console.groupEnd();
-
-setModalTipo(tipoMovimento === "scarico" ? "prospetto" : "fattura");
-setModalData({
-  cliente: filtroFornitore,
-  blocchi,
-  movimentiIds: movimenti.map(m => m.id)
-});
-const maxMovData = movimenti
-  .map(m => (m.data instanceof Date ? m.data : new Date(m.data)))
-  .reduce((max, d) => (d > max ? d : max), new Date(0));
-
-setMinDataSalvataggio(maxMovData);
-setDataSalvataggio(new Date());
-}}
 >
-{getDocumentoLabel()}
+  {getDocumentoLabel()}
 </button>
       </div>
       <h2>Gestione Carichi / Scarichi</h2>
@@ -1184,31 +1085,19 @@ setDataSalvataggio(new Date());
   <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
     <label>
   Dal:
-  <DatePicker
-    selected={dal}
-    onChange={(date) => setDal(date)}
-    minDate={minDataDB || new Date(2000,0,1)}
-    maxDate={maxDataDB || new Date()}
-    dateFormat="dd/MM/yyyy"
-    placeholderText="gg/mm/yyyy"
-  />
+  <DatePicker    selected={dal}    onChange={(date) => setDal(date)}
+    minDate={minDataDB || new Date(2000,0,1)}    maxDate={maxDataDB || new Date()}
+    dateFormat="dd/MM/yyyy"    placeholderText="gg/mm/yyyy"  />
 </label>
 <label>  Al:  <DatePicker
-    selected={al}
-    onChange={(date) => setAl(date)}
+    selected={al}    onChange={(date) => setAl(date)}
     minDate={dal instanceof Date ? dal : minDataDB || new Date(2000,0,1)}
-   maxDate={maxDataDB || new Date()}
-    dateFormat="dd/MM/yyyy"
-    placeholderText="gg/mm/yyyy"
+   maxDate={maxDataDB || new Date()}    dateFormat="dd/MM/yyyy"    placeholderText="gg/mm/yyyy"
   />
 </label>
 <label style={{ display: "flex", alignItems: "center", gap: "4px" }}>  FIR/DDT:
-  <input
-    type="text"
-    placeholder="Scrivi per filtrare..."
-    value={filtroFIR}
-    onChange={e => setFiltroFIR(e.target.value)}
-    style={{ padding: "4px 6px", width: "150px" }}
+  <input    type="text"    placeholder="Scrivi per filtrare..."
+    value={filtroFIR}    onChange={e => setFiltroFIR(e.target.value)}    style={{ padding: "4px 6px", width: "150px" }}
   />
 </label>
  <label style={{ marginLeft: "12px" }}>          Codice CER:
@@ -1288,8 +1177,6 @@ setDataSalvataggio(new Date());
   </select>
 </label>
       </div>
-
-{/* SEMAFORO RISULTATI */}
 <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
   <span>Movimenti:</span>
   <span style={{
@@ -1345,9 +1232,7 @@ setDataSalvataggio(new Date());
         style={{
   cursor: "pointer",
   backgroundColor: r.backgroundColor,
-  color: r.textColor
-}}
-      >
+  color: r.textColor}}      >
         <td>{r.giornoIT}</td>
         <td>{r.nrMovimentiScarico} / {r.nrMovimentiCarico}</td>
         <td>{r.nrFIR}</td>
@@ -1356,62 +1241,39 @@ setDataSalvataggio(new Date());
         <td>{r.costiTotali.toFixed(2)}</td>
         <td>{r.ricaviTotali.toFixed(2)}</td>
         {filtroUtente === "tutti" && <td>{r.utenti || r.utentiDelGiorno || "-"}</td>}
-      </tr>
-    ))}
+      </tr>    ))}
   </tbody>
-</table>
-{modalProspetto && (
+</table>{modalProspetto && (
   <div style={{
-    position: "fixed",
-    top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.6)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  }}>
-    <div style={{
-      background: "white",
-      padding: 20,
-      borderRadius: 10,
-      width: "80%",
-      maxHeight: "80vh",
-      overflow: "auto"
+    position: "fixed",    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(0,0,0,0.6)",    display: "flex",
+    justifyContent: "center",    alignItems: "center"
+  }}>    <div style={{
+      background: "white",      padding: 20,
+      borderRadius: 10,      width: "80%",
+      maxHeight: "80vh",      overflow: "auto"
     }}>
       <h3>Prospetto Fattura</h3>
       <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
         <thead>
           <tr>
-            <th>FIR</th>
-            <th>CER</th>
-            <th>Materiale</th>
-            <th>Kg</th>
-            <th>Calo</th>
-            <th>Netto</th>
-            <th>€/Kg</th>
-            <th>Totale</th>
+            <th>FIR</th>            <th>CER</th>
+            <th>Materiale</th>            <th>Kg</th>
+            <th>Calo</th>            <th>Netto</th>
+            <th>€/Kg</th>            <th>Totale</th>
           </tr>
         </thead>
         <tbody>
 {prospettoRighe.map((r, i) => {
   const netto = round2(r.netto);
  const prezzo = money(r.prezzo);
-
-
   const tot = money(netto * prezzo);
-
   return (
-    <tr key={i}>
-      <td>{r.fir}</td>
-      <td>{r.cer}</td>
-      <td>{r.materiale}</td>
-      <td>{round2(r.peso)}</td>
-      <td>{round2(r.calo)}</td>
-      <td>{netto}</td>
-      <td>{prezzo}</td>
-      <td>{tot.toFixed(2)}</td>
-    </tr>
-  );
-})}
+    <tr key={i}>      <td>{r.fir}</td>
+      <td>{r.cer}</td>      <td>{r.materiale}</td>
+      <td>{round2(r.peso)}</td>      <td>{round2(r.calo)}</td>
+      <td>{netto}</td>      <td>{prezzo}</td>
+      <td>{tot.toFixed(2)}</td>    </tr>  );})}
         </tbody>
       </table>
       <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
@@ -1432,12 +1294,8 @@ setDataSalvataggio(new Date());
   <label>    📊 Applica listino:    <select      value={listinoApplicato}      onChange={(e) => setListinoApplicato(e.target.value)}    >      <option value="tutti">Nessuno</option>
       {Object.keys(listini)
         .filter(nome => {
-          if (modalTipo === "prospetto") {
-            return listini[nome]?.tipoListino === "SCARICO";
-          }
-          if (modalTipo === "fattura") {
-            return listini[nome]?.tipoListino === "CARICO";
-          }
+          if (modalTipo === "prospetto") {            return listini[nome]?.tipoListino === "SCARICO";          }
+          if (modalTipo === "fattura") {            return listini[nome]?.tipoListino === "CARICO";          }
           return true;
         })
         .map(nome => (
@@ -1447,13 +1305,11 @@ setDataSalvataggio(new Date());
         ))}
     </select>
   </label>
-
   <button onClick={async () => {  await applyListino({    movimentiIds: pulitiIds,    listino: listinoApplicato,    db,    collectionName: tipoMovimento === "carico" ? "carichi" : "scarichi"  });
   await fetchMovimenti();      // 🔥 RICARICA DB
   setReloadKey(prev => prev + 1); // 🔥 FORZA RE-RENDER MODAL
 }}
-  disabled={listinoApplicato === "tutti"}
-  >
+  disabled={listinoApplicato === "tutti"} >
     ⚡ Applica
   </button>
 </div>
@@ -1467,12 +1323,10 @@ setDataSalvataggio(new Date());
   const movs = scarichi.filter(m =>
     modalData.movimentiIds.includes(m.id)
   );
-
   console.group("🧾 MODAL RENDER DEBUG");
   console.log("modalTipo:", modalTipo);
   console.log("movimentiIds:", modalData.movimentiIds);
   console.log("movimenti trovati:", movs.length);
-
   movs.forEach(m => {
     console.log("➡️ MOVIMENTO:", {
       id: m.id,
@@ -1480,16 +1334,13 @@ setDataSalvataggio(new Date());
       cerCount: m.cer?.length || 0,
       movimentoFinanziarioId: m.movimentoFinanziarioId
     });
-
     (m.cer || []).forEach(c => {
       console.log("   FIR:", c.fir);
       console.log("   CER:", c.cer || c.codiceCER);
       console.log("   RIGHE COUNT:", c.righe?.length || 0);
     });
   });
-
   console.groupEnd();
-
   return movs;
 })()
   .filter(m => {
@@ -1512,15 +1363,12 @@ setDataSalvataggio(new Date());
           FIR: {b.fir} | CER: {b.cer}
         </td>
       </tr>
-
       {b.righe.map((r, j) => {
        const prezzo =
   b.tipo === "scarico"
     ? (r.prezzoAcquisto ?? 0)
     : (r.prezzoVendita ?? 0);
-
         const tot = money(r.netto * prezzo);
-
         return (
           <tr key={j}>
             <td>{r.materiale}</td>
@@ -1542,8 +1390,6 @@ setDataSalvataggio(new Date());
       .flatMap(c => (c.righe || []))
       .reduce((tot, r) => {
   const kg = Number(r.netto || 0);
-
-  // non esiste b qui → prendiamo il tipo dal contesto del movimento
  const movimento = scarichi
   .filter(m => modalData.movimentiIds.includes(m.id))
   .filter(m => {
@@ -1551,14 +1397,11 @@ setDataSalvataggio(new Date());
     if (modalTipo === "fattura") return m.tipo === "carico";
     return true;
   });
-
   const tipo = movimento?.tipo;
-
   const prezzo =
     tipo === "scarico"
       ? (r.prezzoAcquisto ?? 0)
       : (r.prezzoVendita ?? 0);
-
   return tot + kg * prezzo;
 }, 0)
     )
@@ -1568,28 +1411,14 @@ setDataSalvataggio(new Date());
   <div style={{ fontWeight: "bold", marginBottom: 5 }}>
     Salva il movimento pagabile dal:
   </div>
-
   <DatePicker
-    selected={dataSalvataggio}
-    onChange={(date) => setDataSalvataggio(date)}
-    minDate={minDataSalvataggio}
-    maxDate={new Date()}
-    dateFormat="dd/MM/yyyy"
-  />
+    selected={dataSalvataggio}    onChange={(date) => setDataSalvataggio(date)}
+    minDate={minDataSalvataggio}    maxDate={new Date()}    dateFormat="dd/MM/yyyy"  />
 </div>
       <div style={{ marginTop: 20 }}>
-        <button onClick={handleSalvaDocumento}>
-          💾 Salva
-        </button>
-        <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>
-          🖨️ Stampa
-        </button>
-        <button
-          onClick={() => setModalData(null)}
-          style={{ marginLeft: 10 }}
-        >
-          ❌ Chiudi
-        </button>
+        <button onClick={handleSalvaDocumento}>          💾 Salva        </button>
+        <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
+        <button          onClick={() => setModalData(null)}          style={{ marginLeft: 10 }}        >          ❌ Chiudi        </button>
       </div>
     </div>
   </div>
