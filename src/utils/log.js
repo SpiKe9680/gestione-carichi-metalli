@@ -99,7 +99,7 @@ export const scriviLog = async ({
     riferimento,
     before: createSnapshot(before),
     after: createSnapshot(after),
-    utente: utente ?? "sconosciuto",
+    utente: utente ? JSON.stringify(utente) : "sconosciuto",
     timestamp: serverTimestamp(),
     meta,
     ripristinabile,

@@ -15,7 +15,7 @@ import { scriviLog } from "../utils/log";
 import Select from "react-select";
 import DatePicker from "react-datepicker"; 
 import "react-datepicker/dist/react-datepicker.css";
-
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const createOperationId = () =>
   `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 const GestioneContropartiAvanzata = () => {
@@ -648,7 +648,8 @@ const handleStampa = async () => {
     headStyles: { fillColor: [230, 230, 230] },
   });
 
-  pdf.save("controparti.pdf");
+  
+   await salvaESharePdfCapacitor(pdf, "controparti.pdf");
 };
 let fornitoriOrdinati = [...fornitori];
 

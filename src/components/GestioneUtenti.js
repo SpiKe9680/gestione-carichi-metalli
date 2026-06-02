@@ -1,12 +1,12 @@
 // src/components/GestioneUtenti.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, setDoc, doc, deleteDoc,getDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { collection, getDocs, setDoc, doc, deleteDoc,getDoc, updateDoc } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { ripristinaUtente } from "../utils/utenti";
-
+import bcrypt from "bcryptjs";
 
 const GestioneUtenti = () => {
   const [users, setUsers] = useState([]);
@@ -26,10 +26,59 @@ const [confirmPassword, setConfirmPassword] = useState("");
   // -------- FETCH UTENTI --------
   useEffect(() => { fetchUsers(); }, []);
 
-  const fetchUsers = async () => {
-    const snap = await getDocs(collection(db, "utenti"));
-    setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
+const fetchUsers = async () => {
+  const snap = await getDocs(collection(db, "utenti"));
+
+  const data = snap.docs.map(d => {
+    const u = { id: d.id, ...d.data() };
+
+    const isBlocked =
+      u.lock_until && u.lock_until > Date.now();
+
+    return {
+      ...u,
+      stato: isBlocked ? "BLOCCATO" : "ABILITATO"
+    };
+  });
+
+  setUsers(data);
+};
+
+const handleUnlockUser = async (u) => {
+  if (!window.confirm(`Sbloccare ${u.username || u.email}?`)) return;
+
+  try {
+    await updateDoc(doc(db, "utenti", u.id), {
+      lock_until: null,
+      failed_attempts: 0
+    });
+
+    await scriviLog({
+      pagina: "gestione-utenti",
+      azione: "SBLOCCA_UTENTE",
+      collezioneRef: "utenti",
+      documentoId: u.id,
+      dati_originali: {
+        lock_until: u.lock_until,
+        failed_attempts: u.failed_attempts
+      },
+      dati_modificati: {
+        lock_until: null,
+        failed_attempts: 0
+      },
+      meta: { tipo: "UTENTE" },
+      ripristinabile: true
+    });
+
+    setMessage(`Utente ${u.username || u.email} sbloccato`);
+
+    fetchUsers();
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore sblocco utente");
+  }
+};
 
   // -------- LOGOUT --------
   const handleLogout = async () => { await signOut(auth); navigate("/login"); };
@@ -102,40 +151,52 @@ const handleAnnulla = () => {
 };
 const handleUpdateUser = async () => {
   if (!selectedUser) return;
-if (password !== confirmPassword) {
-  setMessage("Le password non coincidono");
-  return;
-}
+
+  if (password !== confirmPassword) {
+    setMessage("Le password non coincidono");
+    return;
+  }
+
   try {
     const orig = { ...selectedUser };
 
     const emailFinale = email || adminEmail || null;
 
-   const updated = {
-  ...selectedUser,
-  username: username,
-  password: password,
-  email: emailFinale,
-  ruolo: role // ← aggiorna anche il ruolo
-};
+    // =============================
+    // COSTRUZIONE UTENTE AGGIORNATO
+    // =============================
+    const updated = {
+      ...selectedUser,
+      username: username,
+      email: emailFinale,
+      ruolo: role
+    };
+
+    // =============================
+    // PASSWORD MANAGEMENT
+    // =============================
+    if (password && password.trim() !== "") {
+      updated.password_hash = await bcrypt.hash(password, 10);
+      delete updated.password;
+    }
 
     await setDoc(doc(db, "utenti", selectedUser.uid), updated);
 
-   await scriviLog({
-  pagina: "gestione-utenti",
-  azione: "MODIFICA",
-  collezioneRef: "utenti",
-  documentoId: selectedUser.uid,
+    await scriviLog({
+      pagina: "gestione-utenti",
+      azione: "MODIFICA",
+      collezioneRef: "utenti",
+      documentoId: selectedUser.uid,
 
-  dati_originali: orig,
-  dati_modificati: updated,
+      dati_originali: orig,
+      dati_modificati: updated,
 
-  meta: {
-    tipo: "UTENTE"
-  },
+      meta: {
+        tipo: "UTENTE"
+      },
 
-  ripristinabile: true
-});
+      ripristinabile: true
+    });
 
     setMessage(`Utente ${username} modificato!`);
 
@@ -143,7 +204,8 @@ if (password !== confirmPassword) {
     setUsername("");
     setPassword("");
     setEmail("");
-setConfirmPassword("");
+    setConfirmPassword("");
+
     fetchUsers();
 
   } catch (err) {
@@ -158,8 +220,10 @@ const handleResetPassword = async (u) => {
   try {
     const updatedUser = {
       ...u,
-      password: "12345"
+      password_hash: await bcrypt.hash("12345", 10)
     };
+
+    delete updatedUser.password;
 
     await setDoc(doc(db, "utenti", u.uid), updatedUser);
 
@@ -170,7 +234,7 @@ const handleResetPassword = async (u) => {
       documentoId: u.uid,
 
       dati_originali: { password: "***" },
-      dati_modificati: { password: "12345" },
+      dati_modificati: { password: "***" },
 
       meta: { tipo: "UTENTE" },
       ripristinabile: true
@@ -222,15 +286,15 @@ const handleAddUser = async () => {
     setMessage("Username già presente!");
     return;
   }
+
   if (password !== confirmPassword) {
-  setMessage("Le password non coincidono");
-  return;
-}
+    setMessage("Le password non coincidono");
+    return;
+  }
 
   try {
     const uid = crypto.randomUUID();
 
-    // 🔥 EMAIL SEMPRE VALORIZZATA
     const emailFinale = email && email.trim() !== ""
       ? email
       : adminEmail;
@@ -240,37 +304,42 @@ const handleAddUser = async () => {
       return;
     }
 
- const newUser = {
-  username,
-  password,
-  email: emailFinale,
-  ruolo: role,  // ← ADESSO DINAMICO
-  uid
-};
+    const newUser = {
+      username,
+      email: emailFinale,
+      ruolo: role,
+      uid,
+      attivo: true,
+      failed_attempts: 0,
+      lock_until: null,
+      password_hash: await bcrypt.hash(password, 10)
+    };
+
     await setDoc(doc(db, "utenti", uid), newUser);
 
-   await scriviLog({
-  pagina: "gestione-utenti",
-  azione: "CREAZIONE",
-  collezioneRef: "utenti",
-  documentoId: uid,
+    await scriviLog({
+      pagina: "gestione-utenti",
+      azione: "CREAZIONE",
+      collezioneRef: "utenti",
+      documentoId: uid,
 
-  dati_originali: null,
-  dati_modificati: newUser,
+      dati_originali: null,
+      dati_modificati: newUser,
 
-  meta: {
-    tipo: "UTENTE"
-  },
+      meta: {
+        tipo: "UTENTE"
+      },
 
-  ripristinabile: true
-});
+      ripristinabile: true
+    });
 
     setMessage(`Utente ${username} creato con successo!`);
 
     setUsername("");
     setPassword("");
     setEmail("");
-setConfirmPassword("");
+    setConfirmPassword("");
+
     fetchUsers();
 
   } catch (error) {
@@ -399,8 +468,9 @@ if (sortConfig.key) {
   value={role}
   onChange={e => setRole(e.target.value)}
 >
-  <option value="operatore">Operatore</option>
-  <option value="admin">Admin</option>
+  <option value="OPERATORE">Operatore</option>
+  <option value="MANAGER">Manager</option>
+  <option value="ADMIN">Admin</option>
 </select>
 {selectedUser ? (
   <>
@@ -448,7 +518,7 @@ if (sortConfig.key) {
           : "⬇️"
         : ""}
     </th>
-
+<th style={{ textAlign: "left" }}>Stato</th>
     <th style={{ textAlign: "left" }}>Azioni</th>
   </tr>
 </thead>
@@ -465,23 +535,43 @@ if (sortConfig.key) {
       {/* EMAIL RECUPERO */}
       <td>{u.email || "-"}</td>
       <td>{u.ruolo || "operatore"}</td>
+      <td>
+  <span
+    style={{
+      color: u.stato === "BLOCCATO" ? "red" : "green",
+      fontWeight: "bold"
+    }}
+  >
+    {u.stato}
+  </span>
+</td>
       {/* AZIONI */}
-      <td style={{ display: "flex", gap: "10px" }}>
-        <button
-          onClick={e => { e.stopPropagation(); handleDeleteUser(u); }}
-          disabled={u.id === auth.currentUser?.uid}
-          style={{ backgroundColor: "#f44336", color: "white" }}
-        >
-          Elimina
-        </button>
+<td style={{ display: "flex", gap: "10px" }}>
+  <button
+    onClick={e => { e.stopPropagation(); handleDeleteUser(u); }}
+    disabled={u.id === auth.currentUser?.uid}
+    style={{ backgroundColor: "#f44336", color: "white" }}
+  >
+    Elimina
+  </button>
 
-        <button
-  onClick={e => { e.stopPropagation(); handleResetPassword(u); }}
-  style={{ backgroundColor: "#ff9800", color: "white" }}
->
-  Reset Password
-</button>
-      </td>
+  <button
+    onClick={e => { e.stopPropagation(); handleResetPassword(u); }}
+    style={{ backgroundColor: "#ff9800", color: "white" }}
+  >
+    Reset Password
+  </button>
+
+  {/* 🔥 NUOVO: SBLOCCA SOLO SE BLOCCATO */}
+  {u.stato === "BLOCCATO" && (
+    <button
+      onClick={e => { e.stopPropagation(); handleUnlockUser(u); }}
+      style={{ backgroundColor: "#4caf50", color: "white" }}
+    >
+      Sblocca
+    </button>
+  )}
+</td>
     </tr>
   ))}
 </tbody>

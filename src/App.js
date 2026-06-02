@@ -36,11 +36,26 @@ const ProtectedRoute = ({ children, roleRequired }) => {
   return children;
 };
 
+
+
+const PrivateRoute = ({ children }) => {
+  const user = getUser();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  return children;
+};
+
 const AdminRoute = ({ children }) => {
   const user = getUser();
 
   if (!user) return <Navigate to="/login" replace />;
-  if (user.ruolo !== "admin") return <Navigate to="/scarichi" replace />;
+
+  const ruolo = (user.ruolo || "").toUpperCase();
+
+  if (!["ADMIN", "MANAGER"].includes(ruolo)) {
+    return <Navigate to="/scarichi" replace />;
+  }
 
   return children;
 };
@@ -61,10 +76,10 @@ const App = () => {
         <Route
           path="/login"
           element={
-            !getUser()
-              ? <Login />
-              : <Navigate to={getUser().ruolo === "admin" ? "/admin" : "/scarichi"} replace />
-          }
+  !getUser()
+    ? <Login />
+    : <Navigate to={(getUser().ruolo || "").toUpperCase() === "ADMIN" ? "/admin" : "/scarichi"} replace />
+}
         />
 
         {/* SCARICHI */}
@@ -81,7 +96,7 @@ const App = () => {
         <Route
           path="/admin"
           element={
-            <AdminRoute>
+           <AdminRoute>
               <AdminDashboard logout={logout} />
             </AdminRoute>
           }
@@ -91,25 +106,25 @@ const App = () => {
         <Route path="/fornitori" element={<ProtectedRoute><GestioneFornitoriAvanzata /></ProtectedRoute>} />
 
         <Route path="/gestione-utenti"
-          element={<AdminRoute><GestioneUtenti logout={logout} /></AdminRoute>} />
+          element={<PrivateRoute><GestioneUtenti logout={logout} /></PrivateRoute>} />
 
         <Route path="/gestione-scarichi"
-          element={<AdminRoute><GestioneScarichi logout={logout} /></AdminRoute>} />
+          element={<PrivateRoute><GestioneScarichi logout={logout} /></PrivateRoute>} />
 
         <Route path="/gestione-listini"
-          element={<AdminRoute><GestioneListini logout={logout} /></AdminRoute>} />
+          element={<PrivateRoute><GestioneListini logout={logout} /></PrivateRoute>} />
 
         <Route path="/gestione-cer"
-          element={<AdminRoute><GestioneCER logout={logout} /></AdminRoute>} />
+          element={<PrivateRoute><GestioneCER logout={logout} /></PrivateRoute>} />
 
         <Route path="/gestione-log"
-          element={<AdminRoute><GestioneLog /></AdminRoute>} />
+          element={<PrivateRoute><GestioneLog /></PrivateRoute>} />
 
         <Route path="/dettagli-log"
-          element={<AdminRoute><DettagliLog /></AdminRoute>} />
+          element={<PrivateRoute><DettagliLog /></PrivateRoute>} />
 
         <Route path="/configurazioni-generali"
-          element={<AdminRoute><ConfigurazioniGenerali /></AdminRoute>} />
+          element={<PrivateRoute><ConfigurazioniGenerali /></PrivateRoute>} />
 <Route
   path="/MovimentiFinanziari"
   element={
@@ -120,16 +135,16 @@ const App = () => {
 />
 
 <Route path="/movimenti-giorno"
-          element={<AdminRoute><MovimentiGiorno /></AdminRoute>} />
+          element={<PrivateRoute><MovimentiGiorno /></PrivateRoute>} />
 <Route path="/AnaMovFin"
-          element={<AdminRoute><AnaMovFin /></AdminRoute>} />
+          element={<PrivateRoute><AnaMovFin /></PrivateRoute>} />
 
         {/* FALLBACK */}
         <Route
           path="*"
           element={
             <Navigate
-              to={getUser() ? (getUser().ruolo === "admin" ? "/admin" : "/scarichi") : "/login"}
+              to={getUser() ? ((getUser()?.ruolo || "").toUpperCase() === "ADMIN" ? "/admin" : "/scarichi") : "/login"}
               replace
             />
           }

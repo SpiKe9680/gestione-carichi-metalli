@@ -16,6 +16,7 @@ import Select from "react-select";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -977,7 +978,8 @@ if (docData.note && docData.note.trim() !== "") {
     // ---------------- SAVE ----------------
     const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
 
-await sharePdfCapacitor(pdf, filename);
+
+ await salvaESharePdfCapacitor(pdf, filename);
 return;
 
   } catch (err) {
@@ -1226,117 +1228,8 @@ if (!isFornitorePrivato && !hasImages) {
   }
 };
 
-const salvaPdfCapacitor = async (pdf, filename) => {
-  try {
-    const isNative = Capacitor.isNativePlatform();
 
-    // 🟢 BROWSER
-    if (!isNative) {
-      pdf.save(filename);
-      return;
-    }
 
-    // 🤖 ANDROID / IOS
-
-    const blob = pdf.output("blob");
-
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result;
-        resolve(result.split(",")[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
-    // 🔥 1. CREA CARTELLA (FONDAMENTALE)
-    try {
-      await Filesystem.mkdir({
-        path: "pdf",
-        directory: Directory.Documents,
-        recursive: true,
-      });
-    } catch (e) {
-      // se esiste già ignora errore
-    }
-
-    // 🔥 2. SCRIVI FILE
-    await Filesystem.writeFile({
-      path: `pdf/${filename}`,
-      data: base64,
-      directory: Directory.Documents,
-    });
-
-    alert("PDF salvato nei Documenti/pdf");
-  } catch (err) {
-    console.error("PDF SAVE ERROR FULL:", err);
-
-    alert(
-      "Errore salvataggio PDF:\n\n" +
-      (err?.message || err)
-    );
-  }
-};
-const sharePdfCapacitor = async (pdf, filename) => {
-  try {
-    const isNative = Capacitor.isNativePlatform();
-
-    // 🟢 BROWSER fallback
-    if (!isNative) {
-      pdf.save(filename);
-      return;
-    }
-
-    // 📦 crea blob
-    const blob = pdf.output("blob");
-
-    // 🔄 blob -> base64
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve(reader.result.split(",")[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
-    // 📁 scrive file temporaneo (cache)
-    const filePath = `temp/${filename}`;
-
-    try {
-      await Filesystem.mkdir({
-        path: "temp",
-        directory: Directory.Cache,
-        recursive: true,
-      });
-    } catch (e) {}
-
-    await Filesystem.writeFile({
-      path: filePath,
-      data: base64,
-      directory: Directory.Cache,
-    });
-
-    // 🔗 ottieni URI pubblico
-    const fileUri = await Filesystem.getUri({
-      path: filePath,
-      directory: Directory.Cache,
-    });
-
-    // 📤 SHARE NATIVO ANDROID
-    await Share.share({
-      title: "Movimento PDF",
-      text: "Ecco il documento generato",
-      url: fileUri.uri,
-      dialogTitle: "Condividi PDF",
-    });
-
-  } catch (err) {
-    console.error("SHARE PDF ERROR:", err);
-    alert("Errore condivisione PDF:\n" + (err?.message || err));
-  }
-};
 const listinoBloccato = selectedFornitore !== "";
 
 const sortByLabel = (a, b) => {
@@ -1390,9 +1283,9 @@ const materialiOptions = materialiFiltrati.map(m => ({
   }
 </h2>
         <div>
-        {((activeUserRole || role || "")
-  .toLowerCase()
-  .trim() === "admin") && (
+        {["admin", "manager"].includes(
+  (activeUserRole || role || "").toLowerCase().trim()
+) && (
   <button onClick={handleGoToDashboard}>
     Torna alla Dashboard
   </button>

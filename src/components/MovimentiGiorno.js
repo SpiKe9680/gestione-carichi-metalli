@@ -6,6 +6,7 @@ import { signOut } from "firebase/auth";
 import { collection, getDocs, updateDoc, doc, getDoc, deleteDoc, addDoc } from "firebase/firestore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const MovimentiGiorno = () => {
   const navigate = useNavigate();
   const routerLocation  = useLocation();
@@ -337,9 +338,8 @@ const handlePrintPDF = async () => {
     heightLeft -= pageHeight;
   }
 
-  pdf.save(
-    `Movimenti_${new Date(selectedDate).toLocaleDateString("it-IT")}.pdf`
-  );
+ 
+   await salvaESharePdfCapacitor(pdf, `Movimenti_${new Date(selectedDate).toLocaleDateString("it-IT")}.pdf`);
 };
 
 const handleConsuntiva = async (row) => {
