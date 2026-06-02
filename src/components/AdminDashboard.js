@@ -18,7 +18,7 @@ import {
 const AdminDashboard = ({ logout }) => {
   const navigate = useNavigate();
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
-
+const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
   if (!currentUser) return null;
 
   return (
@@ -58,36 +58,43 @@ const AdminDashboard = ({ logout }) => {
           Definizione Listini
         </button>
 
-          <button
-          onClick={() => navigate("/MovimentiFinanziari")}
-          style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
-        >
-          <FaCalendarAlt style={{ marginRight: "8px" }} />
-          Calendario Movimenti Finanziari
-        </button>
+        {role === "ADMIN" && (
+  <button
+    onClick={() => navigate("/MovimentiFinanziari")}
+    style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
+  >
+    <FaCalendarAlt style={{ marginRight: "8px" }} />
+    Calendario Movimenti Finanziari
+  </button>
+)}
 
-        <button
-          onClick={() => navigate("/AnaMovFin")}
-          style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
-        >
-          <FaMoneyBillWave style={{ marginRight: "8px" }} />
-          Definizione Movimenti Finanziari
-        </button>
+       {role === "ADMIN" && (
+  <button onClick={() => navigate("/AnaMovFin")}
+    style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
+  >
+    <FaMoneyBillWave style={{ marginRight: "8px" }} />
+    Definizione Movimenti Finanziari
+  </button>
+)}
 
-        <button onClick={() => navigate("/gestione-log")}
-          style={{ backgroundColor: "#f36c19", color: "#11ffdb", marginTop: "10px" }}
-          >
-          <FaClipboardList style={{ marginRight: "8px" }} />
-          Log Operazioni
-        </button>
+    {role === "ADMIN" && (
+  <button onClick={() => navigate("/gestione-log")}
+    style={{ backgroundColor: "#f36c19", color: "#11ffdb", marginTop: "10px" }}
+  >
+    <FaClipboardList style={{ marginRight: "8px" }} />
+    Log Operazioni
+  </button>
+)}
 
-        <button
-          onClick={() => navigate("/configurazioni-generali")}
-          style={{ backgroundColor: "#4CAF50", color: "#fff", marginTop: "10px" }}
-        >
-          <FaCog style={{ marginRight: "8px" }} />
-          Configurazione Generale
-        </button>
+       {role === "ADMIN" && (
+  <button
+    onClick={() => navigate("/configurazioni-generali")}
+    style={{ backgroundColor: "#4CAF50", color: "#fff", marginTop: "10px" }}
+  >
+    <FaCog style={{ marginRight: "8px" }} />
+    Configurazione Generale
+  </button>
+)}
 
         <button onClick={() => navigate("/fornitori")}>
           <FaTruck style={{ marginRight: "8px" }} />
@@ -95,10 +102,12 @@ const AdminDashboard = ({ logout }) => {
         </button>
 
 
-         <button onClick={() => navigate("/gestione-utenti")}>
-          <FaUsers style={{ marginRight: "8px" }} />
-          Utenti
-        </button>
+    {role === "ADMIN" && (
+  <button onClick={() => navigate("/gestione-utenti")}>
+    <FaUsers style={{ marginRight: "8px" }} />
+    Utenti
+  </button>
+)}
 
       
       </div>

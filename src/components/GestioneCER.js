@@ -11,6 +11,7 @@ import {
   getDoc 
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import Select from "react-select";
@@ -22,6 +23,7 @@ import "react-datepicker/dist/react-datepicker.css";
   if (d instanceof Date) return d.toLocaleString("it-IT");
   return new Date(d).toLocaleString("it-IT");
 };
+
 const GestioneCER = () => {
   const navigate = useNavigate();
 const [filtroTipoMovimento, setFiltroTipoMovimento] = useState("TUTTI"); // SCARICO | CARICO | TUTTI
@@ -946,7 +948,8 @@ const handleStampa = async () => {
     }
   });
 
-  pdf.save("gestione_cer.pdf");
+ 
+   await salvaESharePdfCapacitor(pdf, "gestione_cer.pdf");
 };
 const materialiDropdown = [
   "Tutti",

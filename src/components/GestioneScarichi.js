@@ -10,7 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Select from "react-select";
-
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 export const applyListino = async ({
   movimentiIds = [],
   listino,
@@ -199,40 +199,84 @@ const validaEPreparaProspetto = async (movimentiIds) => {
 };
 const handleSalvaDocumento = async () => {
   try {
-    if (!modalData) {      alert("❌ Dati modal mancanti");      return;    }
+    if (!modalData) {
+      alert("❌ Dati modal mancanti");
+      return;
+    }
+
     const tipo = modalTipo === "prospetto" ? "prospetto" : "fattura";
     const collectionName =
       tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
+
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
-const isConsuntivato = (v) =>  v !== null &&  v !== undefined &&  String(v).trim() !== "";
-const movimentiSelezionati = filteredScarichi.filter(  m => movimentiIds.includes(m.id) && !isConsuntivato(m.movimentoFinanziarioId));
-const validi = [];
-for (const m of movimentiSelezionati) {  if (m.movimentoFinanziarioId) {    console.warn("⚠️ Movimento già consuntivato saltato:", m.id);    continue;  }
-  validi.push(m);
-}
-if (validi.length === 0) {  alert("❌ Tutti i movimenti selezionati sono già consuntivati");  return;
-}
-    if (validi.length === 0) {      alert("❌ Tutti i movimenti selezionati sono già consuntivati");      return;    }
-    const validiIds = validi.map(m => m.id);
-    await validaEPreparaProspetto(validiIds);
+
+    // 🔥 USA STATO UI, NON FIRESTORE RAW
+    const movs = filteredScarichi
+      .filter(m => movimentiIds.includes(m.id));
+
+    if (!movs.length) {
+      console.error("❌ MOVS VUOTO - IDS:", movimentiIds);
+      alert("❌ Nessun movimento trovato (UI state vuoto)");
+      return;
+    }
+
+    const blocchi = movs.flatMap(m =>
+      (m.cer || []).map(c => ({
+        fir: c.fir || m.fir || "-",
+        cer: c.cer || c.codiceCER || "-",
+        righe: (c.righe || []).map(r => ({
+          materiale: r.materiale,
+          netto: Number(r.netto || 0),
+
+          // 🔥 FIX FONDAMENTALE: usa prezzo già valorizzato da UI/applyListino
+          prezzo:
+            Number(
+              r.prezzo ??
+              r.prezzoVendita ??
+              r.prezzoAcquisto ??
+              0
+            ),
+        }))
+      }))
+    );
+
+    if (!blocchi.length) {
+      console.error("❌ BLOCCHI VUOTI:", movs);
+      alert("❌ Blocchi vuoti: dati non coerenti");
+      return;
+    }
+
     let totale = 0;
-    (modalData.blocchi || []).forEach((b) => {
-      (b.righe || []).forEach((r) => {
-        const kg = money(r.netto);
-        const prezzo = money(r.prezzo);
-        totale = round2(totale + round2(kg * prezzo));
+
+    blocchi.forEach(b => {
+      b.righe.forEach(r => {
+        totale += Number(r.netto || 0) * Number(r.prezzo || 0);
       });
     });
-    const payload = {  tipo,  cliente: modalData.cliente || "",  totale,  movimentiIds: validiIds, // 🔥 COERENTE
-  blocchi: JSON.parse(JSON.stringify(modalData.blocchi || [])),  dataCreazione: dataSalvataggio.toISOString(),  movimentoFinanziarioId: null};
-    const docId = validiIds.slice().sort().join("-");
-    const snap = await getDocs(collection(db, collectionName));
-    for (const d of snap.docs) {      const data = d.data();      const ids = data.validiIds || [];
-      if (ids.some(id => validiIds.includes(id))) {        await deleteDoc(doc(db, collectionName, d.id));      }    }
-    await setDoc(doc(db, collectionName, docId), payload, { merge: true });
+
+    const payload = {
+      tipo,
+      cliente: modalData.cliente || "",
+      totale: round2(totale),
+      movimentiIds,
+      blocchi,
+      dataCreazione: dataSalvataggio.toISOString(),
+      movimentoFinanziarioId: null,
+    };
+
+    await setDoc(
+      doc(db, collectionName, movimentiIds.sort().join("-")),
+      payload,
+      { merge: true }
+    );
+
     alert("✅ Documento salvato correttamente");
     setModalData(null);
-  } catch (err) {    console.error(err);    alert("❌ Errore salvataggio");  }
+
+  } catch (err) {
+    console.error(err);
+    alert("❌ Errore salvataggio");
+  }
 };
 const salvaProspettoUnificato = async (modalData, tipo) => {
   const scarichiIds = modalData.movimentiIds || [];
@@ -281,8 +325,10 @@ const handleStampaDocumento = async () => {
             materiale: r.materiale,
             kg: Number(r.netto || 0),
             prezzo: Number(
-              useVendita ? r.prezzoVendita : r.prezzoAcquisto
-            ),
+  r.prezzo ??
+  (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
+  0
+),
           });
         });
       });
@@ -669,12 +715,9 @@ const isDocumentoDisabled = () => {
   );
 };
 const getDocumentoLabel = () => {
-  // 🚫 BLOCCO SE NON C'È CONTROPARTE
   if (filtroFornitore === "tutti") {
     return "⚠️ Seleziona controparte";
   }
-
-  // 🚫 BLOCCO SE NON È SELEZIONATO TIPO
   if (tipoMovimento === "tutti") {
     return "⚠️ Seleziona tipo";
   }
@@ -734,7 +777,8 @@ totale += round2(tot);
   pdf.setFontSize(12);
   totale = round2(totale);
   pdf.text(`TOTALE: € ${totale.toFixed(2)}`, 10, finalY + 10);
-  pdf.save(`prospetto_${(fornitore || "cliente").replace(/[^a-z0-9]/gi, "_")}.pdf`);
+
+  await salvaESharePdfCapacitor(pdf, `prospetto_${(fornitore || "cliente").replace(/[^a-z0-9]/gi, "_")}.pdf`);
 };
 const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
@@ -953,7 +997,7 @@ const ricavo = righe.reduce(
     startY: 30,
     head: [["Movimenti", "Peso S", "Peso C", "Costi", "Ricavi", "Utile"]],
     body: [      [        `${totaleScarichi}/${totaleCarichi}`,        totalePesoScarichi.toFixed(2),        totalePesoCarichi.toFixed(2),        totaleCosti.toFixed(2),        totaleRicavi.toFixed(2),        utile.toFixed(2),      ],    ],  });
-  pdf.save("movimenti.pdf");
+  await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
 };
 const confermaSalvataggioProspetto = async () => {
   setModalProspetto(false);

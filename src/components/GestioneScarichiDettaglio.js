@@ -10,6 +10,7 @@ import autoTable from "jspdf-autotable";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import {  PdfHeader } from "../utils/dateUtils";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const formattaDataItaliana = (date) => {
@@ -620,7 +621,8 @@ const base64data = await new Promise((resolve, reject) => {
     }
   }
 }
-    pdf.save(`${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "Sconosciuto"}_${docData.listino || "Sconosciuto"}.pdf`);
+
+   await salvaESharePdfCapacitor(pdf, `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "Sconosciuto"}_${docData.listino || "Sconosciuto"}.pdf`);
   } catch (err) {
     console.error("Errore generazione PDF:", err);
     alert("Errore generazione PDF, vedi console");
@@ -1225,7 +1227,7 @@ const handleStampa = async () => {
     pdf.text(`UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`, 14, y + 10);
   }
 
-  pdf.save("movimenti.pdf");
+  await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
 };
 
 

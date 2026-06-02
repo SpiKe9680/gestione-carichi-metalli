@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 import { loadConfigAzienda, getDataOraStampa, PdfHeader } from "../utils/dateUtils";
 
 const GestioneListini = () => {
@@ -294,7 +294,8 @@ const rows = materiali.map(c => [
     theme: "grid"
   });
 
-  pdf.save(`listino_${listino.nome}.pdf`);
+
+  await salvaESharePdfCapacitor(pdf, `listino_${listino.nome}.pdf`);
 };
   // =============================
   // SALVA LISTINO
@@ -542,11 +543,9 @@ const stampaTuttiListini = async () => {
     await generaPDFListinoConHeader(l, pdf);
   }
 
-  pdf.save("tutti_listini.pdf");
+  await salvaESharePdfCapacitor(pdf, "tutti_listini.pdf");
 };
-let listiniFiltrati = listini.filter(
-  l => (l.tipoListino || "SCARICO") === tipoFiltroListino
-);
+
 
 let listiniOrdinati = [...listini].filter(
   l => (l.tipoListino || "SCARICO") === tipoFiltroListino

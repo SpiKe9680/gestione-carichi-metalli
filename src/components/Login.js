@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { useEffect } from "react";
 import { getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import bcrypt from "bcryptjs";
 const Login = () => {
   const navigate = useNavigate();
 const [logoBase64, setLogoBase64] = useState(null);
@@ -23,64 +23,183 @@ const [logoBase64, setLogoBase64] = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleLogin = async () => {
-    setMessage("");
+const buildLogUser = (userFound, input) => {
+  if (!userFound) return input;
 
-    if (!inputUsername || !inputPassword) {
-      setMessage("Inserisci username o email e password");
+  const username =
+    userFound.username ||
+    (userFound.email ? userFound.email.split("@")[0] : input);
+
+  return `${userFound.ruolo || "UNKNOWN"} - ${username}`;
+};
+
+const handleLogin = async () => {
+  console.log("🚀 LOGIN START");
+
+  setMessage("");
+
+  if (!inputUsername || !inputPassword) {
+    setMessage("Inserisci username o email e password");
+    return;
+  }
+
+  try {
+    await loginAdminFirebase();
+
+    const snap = await getDocs(collection(db, "utenti"));
+    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const inputNormalized = inputUsername.trim().toLowerCase();
+
+    const userFound = users.find(u => {
+      const usernameFinal = u.username
+        ? u.username.toLowerCase()
+        : (u.email ? u.email.split("@")[0].toLowerCase() : "");
+
+      const emailFinal = u.email ? u.email.toLowerCase() : "";
+
+      return usernameFinal === inputNormalized || emailFinal === inputNormalized;
+    });
+
+    if (!userFound) {
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_FAILED_USER_NOT_FOUND",
+        riferimento: null,
+        before: null,
+        after: null,
+        utente: buildLogUser(null, inputNormalized),
+        meta: { tipo: "AUTH" },
+        ripristinabile: false
+      });
+
+      auth.signOut();
+      setMessage("Username o password errati");
       return;
     }
 
-    try {
-      await loginAdminFirebase();
+    const logUser = buildLogUser(userFound, inputNormalized);
 
-      const snap = await getDocs(collection(db, "utenti"));
-      const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const inputNormalized = inputUsername.trim().toLowerCase();
-
-      const userFound = users.find(u => {
-        const usernameFinal = u.username
-          ? u.username.toLowerCase()
-          : (u.email ? u.email.split("@")[0].toLowerCase() : "");
-
-        const emailFinal = u.email ? u.email.toLowerCase() : "";
-
-        return (
-          (usernameFinal === inputNormalized || emailFinal === inputNormalized) &&
-          u.password === inputPassword
-        );
+    if (userFound.lock_until && userFound.lock_until > Date.now()) {
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_BLOCKED_ACCOUNT",
+        riferimento: {
+          collezione: "utenti",
+          documentoId: userFound.id
+        },
+        before: {
+          lock_until: userFound.lock_until,
+          failed_attempts: userFound.failed_attempts || 0
+        },
+        after: null,
+        utente: logUser,
+        meta: { tipo: "SECURITY" },
+        ripristinabile: false
       });
 
-      if (!userFound) {
-        auth.signOut();
-        setMessage("Username o password errati");
-        return;
+      setMessage("Account temporaneamente bloccato");
+      auth.signOut();
+      return;
+    }
+
+    let passwordOk = false;
+
+    if (userFound.password_hash) {
+      passwordOk = await bcrypt.compare(inputPassword, userFound.password_hash);
+    } else if (userFound.password) {
+      passwordOk = inputPassword === userFound.password;
+    }
+
+    if (!passwordOk) {
+      const failedAttempts = (userFound.failed_attempts || 0) + 1;
+
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_FAILED_WRONG_PASSWORD",
+        riferimento: {
+          collezione: "utenti",
+          documentoId: userFound.id
+        },
+        before: {
+          failed_attempts: userFound.failed_attempts || 0
+        },
+        after: {
+          failed_attempts: failedAttempts
+        },
+        utente: logUser,
+        meta: { tipo: "AUTH" },
+        ripristinabile: false
+      });
+
+      let lockMinutes = 0;
+
+      if (failedAttempts >= 7) lockMinutes = 24 * 60;
+      else if (failedAttempts >= 5) lockMinutes = 60;
+      else if (failedAttempts >= 3) lockMinutes = 15;
+
+      const updateData = { failed_attempts: failedAttempts };
+
+      if (lockMinutes > 0) {
+        updateData.lock_until = Date.now() + lockMinutes * 60000;
       }
 
-      const usernameFinal =
-        userFound.username ||
-        (userFound.email ? userFound.email.split("@")[0] : "Sconosciuto");
+      await updateDoc(doc(db, "utenti", userFound.id), updateData);
 
-      sessionStorage.setItem(
-        "utenteLoggato",
-        JSON.stringify({
-          uid: userFound.uid,
-          username: usernameFinal,
-          ruolo: userFound.ruolo || "operatore",
-          email: userFound.email || ""
-        })
-      );
-
-      navigate(userFound.ruolo === "admin" ? "/admin" : "/scarichi", {
-        replace: true
-      });
-
-    } catch (err) {
-      console.error(err);
-      setMessage("Errore login DB");
+      auth.signOut();
+      setMessage("Username o password errati");
+      return;
     }
-  };
+
+    await updateDoc(doc(db, "utenti", userFound.id), {
+      failed_attempts: 0,
+      lock_until: null
+    });
+
+    const ruolo = (userFound.ruolo || "OPERATORE").toUpperCase();
+
+    await scriviLog({
+      pagina: "login",
+      evento: "LOGIN_OK",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: userFound.id
+      },
+      before: null,
+      after: null,
+      utente: logUser,
+      meta: { tipo: "AUTH" },
+      ripristinabile: false
+    });
+
+    const usernameFinal =
+      userFound.username ||
+      (userFound.email ? userFound.email.split("@")[0] : "Sconosciuto");
+
+    const safeUser = {
+      uid: userFound.uid,
+      username: usernameFinal,
+      ruolo,
+      email: userFound.email || ""
+    };
+
+    sessionStorage.setItem("utenteLoggato", JSON.stringify(safeUser));
+
+    setTimeout(() => {
+      const stored = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+
+      if (stored?.ruolo === "ADMIN" || stored?.ruolo === "MANAGER") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/scarichi", { replace: true });
+      }
+    }, 50);
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore login DB");
+  }
+};
 
   // =============================
   // CONTROLLO UTENTE
@@ -91,10 +210,14 @@ const [logoBase64, setLogoBase64] = useState(null);
     const snap = await getDocs(collection(db, "utenti"));
     const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const found = users.find(u =>
-      (u.username === oldUser || u.email === oldUser) &&
-      u.password === oldPass
-    );
+   const found = users.find(u => {
+  const usernameMatch = u.username === oldUser || u.email === oldUser;
+  const passMatch = u.password_hash
+    ? bcrypt.compareSync(oldPass, u.password_hash)
+    : u.password === oldPass;
+
+  return usernameMatch && passMatch;
+});
 
     return found || null;
   };
@@ -189,9 +312,12 @@ useEffect(() => {
       const user = await verifyUser();
       if (!user) return setMessage("Credenziali attuali errate");
 
-      await updateDoc(doc(db, "utenti", user.id), {
-        password: newPassword
-      });
+     const hashed = await bcrypt.hash(newPassword, 10);
+
+await updateDoc(doc(db, "utenti", user.id), {
+  password_hash: hashed,
+  password: null
+});
 
      await scriviLog({
   pagina: "login",

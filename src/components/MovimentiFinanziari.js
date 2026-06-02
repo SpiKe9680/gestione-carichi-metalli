@@ -12,6 +12,7 @@ import { collection, getDocs } from "firebase/firestore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useLocation } from "react-router-dom";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const MovimentiFinanziari = () => {
   const navigate = useNavigate();
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
@@ -267,9 +268,8 @@ const handlePrintPDF = async () => {
     heightLeft -= pageHeight;
   }
 
-  pdf.save(
-    `Movimenti_Settimana_${new Date().toLocaleDateString("it-IT")}.pdf`
-  );
+ 
+   await salvaESharePdfCapacitor(pdf,  `Movimenti_Settimana_${new Date().toLocaleDateString("it-IT")}.pdf`);
 };
 
   return (
