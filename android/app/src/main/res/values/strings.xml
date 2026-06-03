@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Movimentazione Metalli</string>
     <string name="title_activity_main">Movimentazione Metalli</string>
-    <string name="package_name">com.tammarometalli.movimentazione</string>
-    <string name="custom_url_scheme">com.tammarometalli.movimentazione</string>
+    <string name="package_name">com.metalflow.app</string>
+    <string name="custom_url_scheme">com.metalflow.app</string>
 </resources>

@@ -1,7 +1,9 @@
 import { jsPDF } from "jspdf";
 import { db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
-
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 /**
  * Legge la configurazione azienda dal db
  * @returns {Promise<Object>} Oggetto config azienda
@@ -63,6 +65,50 @@ export const parseDataOra = (dataStr, oraStr) => {
   return d;
 };
 
+
+export const salvaESharePdfCapacitor = async (pdf, filename) => {
+  try {
+    const isNative = Capacitor.isNativePlatform();
+
+    // 🌐 BROWSER
+    if (!isNative) {
+      pdf.save(filename);
+      return;
+    }
+
+    // 📄 ANDROID / IOS
+    const blob = pdf.output("blob");
+
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    const file = await Filesystem.writeFile({
+      path: `pdf/${filename}`,
+      data: base64,
+      directory: Directory.Documents,
+      recursive: true, // 🔥 FIX ERRORI DIRECTORY
+    });
+
+    // 📤 SHARE AUTOMATICO (ANDROID)
+    await Share.share({
+      title: "Documento PDF",
+      text: filename,
+      url: file.uri,
+      dialogTitle: "Condividi PDF",
+    });
+
+    alert("PDF salvato e condiviso");
+  } catch (err) {
+    console.error("PDF SAVE ERROR:", err);
+    alert("Errore salvataggio PDF:\n" + (err?.message || err));
+  }
+};
+
+
 export const PdfHeader = async (pdfObj) => {
   const pdf = pdfObj || new jsPDF("p", "mm", "a4");
 
@@ -90,4 +136,3 @@ export const PdfHeader = async (pdfObj) => {
 
   return { pdf, startY };
 };
-

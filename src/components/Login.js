@@ -24,19 +24,31 @@ const [logoBase64, setLogoBase64] = useState(null);
   const [confirmPassword, setConfirmPassword] = useState("");
 
 const buildLogUser = (userFound, input) => {
-  if (!userFound) return input;
+  const ruolo = userFound?.ruolo || "UNKNOWN";
 
   const username =
-    userFound.username ||
-    (userFound.email ? userFound.email.split("@")[0] : input);
+    userFound?.username?.trim() ||
+    (userFound?.email ? userFound.email.split("@")[0] : null) ||
+    input ||
+    "utente_non_identificato";
 
-  return `${userFound.ruolo || "UNKNOWN"} - ${username}`;
+  return `${ruolo} - ${username}`;
+};
+
+const getClientIP = async () => {
+  try {
+    const res = await fetch("https://api.ipify.org?format=json");
+    const data = await res.json();
+    return data.ip || "UNKNOWN_IP";
+  } catch (e) {
+    return "UNKNOWN_IP";
+  }
 };
 
 const handleLogin = async () => {
-  console.log("🚀 LOGIN START");
-
   setMessage("");
+
+  const userAgent = navigator.userAgent || "UNKNOWN_DEVICE";
 
   if (!inputUsername || !inputPassword) {
     setMessage("Inserisci username o email e password");
@@ -61,48 +73,57 @@ const handleLogin = async () => {
       return usernameFinal === inputNormalized || emailFinal === inputNormalized;
     });
 
+    const ip = await getClientIP();
+
+    const baseMeta = {
+      tipo: "AUTH",
+      ip,
+      device: userAgent
+    };
+
+    const utenteLog = (base) => `${base} +IP: ${ip}`;
+
+    // ❌ USER NOT FOUND
     if (!userFound) {
+      auth.signOut();
+
       await scriviLog({
         pagina: "login",
-        evento: "LOGIN_FAILED_USER_NOT_FOUND",
-        riferimento: null,
-        before: null,
-        after: null,
-        utente: buildLogUser(null, inputNormalized),
-        meta: { tipo: "AUTH" },
+        evento: "LOGIN_FAIL_USER_NOT_FOUND",
+        riferimento: {
+          collezione: "utenti",
+          documentoId: null
+        },
+        utente: utenteLog(inputNormalized),
+        meta: baseMeta,
         ripristinabile: false
       });
 
-      auth.signOut();
       setMessage("Username o password errati");
       return;
     }
 
-    const logUser = buildLogUser(userFound, inputNormalized);
-
+    // 🔒 ACCOUNT BLOCCATO
     if (userFound.lock_until && userFound.lock_until > Date.now()) {
+      auth.signOut();
+
       await scriviLog({
         pagina: "login",
-        evento: "LOGIN_BLOCKED_ACCOUNT",
+        evento: "LOGIN_BLOCKED",
         riferimento: {
           collezione: "utenti",
           documentoId: userFound.id
         },
-        before: {
-          lock_until: userFound.lock_until,
-          failed_attempts: userFound.failed_attempts || 0
-        },
-        after: null,
-        utente: logUser,
-        meta: { tipo: "SECURITY" },
+        utente: utenteLog(inputNormalized),
+        meta: baseMeta,
         ripristinabile: false
       });
 
       setMessage("Account temporaneamente bloccato");
-      auth.signOut();
       return;
     }
 
+    // 🔐 PASSWORD CHECK
     let passwordOk = false;
 
     if (userFound.password_hash) {
@@ -111,29 +132,11 @@ const handleLogin = async () => {
       passwordOk = inputPassword === userFound.password;
     }
 
+    // ❌ PASSWORD SBAGLIATA
     if (!passwordOk) {
       const failedAttempts = (userFound.failed_attempts || 0) + 1;
 
-      await scriviLog({
-        pagina: "login",
-        evento: "LOGIN_FAILED_WRONG_PASSWORD",
-        riferimento: {
-          collezione: "utenti",
-          documentoId: userFound.id
-        },
-        before: {
-          failed_attempts: userFound.failed_attempts || 0
-        },
-        after: {
-          failed_attempts: failedAttempts
-        },
-        utente: logUser,
-        meta: { tipo: "AUTH" },
-        ripristinabile: false
-      });
-
       let lockMinutes = 0;
-
       if (failedAttempts >= 7) lockMinutes = 24 * 60;
       else if (failedAttempts >= 5) lockMinutes = 60;
       else if (failedAttempts >= 3) lockMinutes = 15;
@@ -147,30 +150,61 @@ const handleLogin = async () => {
       await updateDoc(doc(db, "utenti", userFound.id), updateData);
 
       auth.signOut();
+
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_FAIL_WRONG_PASSWORD",
+        riferimento: {
+          collezione: "utenti",
+          documentoId: userFound.id
+        },
+        utente: utenteLog(inputNormalized),
+        meta: baseMeta,
+        ripristinabile: false
+      });
+
       setMessage("Username o password errati");
       return;
     }
 
+    // 🚨 DEFAULT PASSWORD CHECK
+    let isDefaultPassword = false;
+
+    if (userFound.password_hash) {
+      isDefaultPassword = await bcrypt.compare("12345", userFound.password_hash);
+    } else {
+      isDefaultPassword = userFound.password === "12345";
+    }
+
+    if (isDefaultPassword) {
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_DEFAULT_PASSWORD",
+        riferimento: {
+          collezione: "utenti",
+          documentoId: userFound.id
+        },
+        utente: utenteLog(inputNormalized),
+        meta: baseMeta,
+        ripristinabile: false
+      });
+
+      alert("Password di default: devi cambiarla");
+
+      setMode("password");
+      setOldUser(userFound.username || userFound.email || "");
+      setOldPass("12345");
+
+      return;
+    }
+
+    // ✅ RESET TENTATIVI
     await updateDoc(doc(db, "utenti", userFound.id), {
       failed_attempts: 0,
       lock_until: null
     });
 
     const ruolo = (userFound.ruolo || "OPERATORE").toUpperCase();
-
-    await scriviLog({
-      pagina: "login",
-      evento: "LOGIN_OK",
-      riferimento: {
-        collezione: "utenti",
-        documentoId: userFound.id
-      },
-      before: null,
-      after: null,
-      utente: logUser,
-      meta: { tipo: "AUTH" },
-      ripristinabile: false
-    });
 
     const usernameFinal =
       userFound.username ||
@@ -185,15 +219,26 @@ const handleLogin = async () => {
 
     sessionStorage.setItem("utenteLoggato", JSON.stringify(safeUser));
 
-    setTimeout(() => {
-      const stored = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+    // 🎯 LOGIN OK (pulito + consistente)
+    await scriviLog({
+      pagina: "login",
+      evento: "LOGIN_OK",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: userFound.id
+      },
+      before: null,
+      after: null,
+      utente: utenteLog(buildLogUser(userFound, inputNormalized)),
+      meta: baseMeta,
+      ripristinabile: false
+    });
 
-      if (stored?.ruolo === "ADMIN" || stored?.ruolo === "MANAGER") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/scarichi", { replace: true });
-      }
-    }, 50);
+    if (ruolo === "ADMIN" || ruolo === "MANAGER") {
+      navigate("/admin", { replace: true });
+    } else {
+      navigate("/scarichi", { replace: true });
+    }
 
   } catch (err) {
     console.error(err);
@@ -204,23 +249,34 @@ const handleLogin = async () => {
   // =============================
   // CONTROLLO UTENTE
   // =============================
-  const verifyUser = async () => {
-    await loginAdminFirebase();
+ const verifyUser = async () => {
+  await loginAdminFirebase();
 
-    const snap = await getDocs(collection(db, "utenti"));
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, "utenti"));
 
-   const found = users.find(u => {
-  const usernameMatch = u.username === oldUser || u.email === oldUser;
-  const passMatch = u.password_hash
-    ? bcrypt.compareSync(oldPass, u.password_hash)
-    : u.password === oldPass;
+  const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const inputNormalized = oldUser.trim().toLowerCase();
 
-  return usernameMatch && passMatch;
-});
+  const found = users.find(u => {
+    const usernameFinal = u.username
+      ? u.username.toLowerCase()
+      : (u.email ? u.email.split("@")[0].toLowerCase() : "");
 
-    return found || null;
-  };
+    const emailFinal = u.email ? u.email.toLowerCase() : "";
+
+    const usernameMatch =
+      usernameFinal === inputNormalized ||
+      emailFinal === inputNormalized;
+
+    const passMatch = u.password_hash
+      ? bcrypt.compareSync(oldPass, u.password_hash)
+      : u.password === oldPass;
+
+    return usernameMatch && passMatch;
+  });
+
+  return found || null;
+};
 
 const loadConfigAzienda = async () => {
   await loginAdminFirebase(); // 👈 STESSO IDENTICO PASSAGGIO
@@ -264,9 +320,9 @@ useEffect(() => {
       if (!user) return setMessage("Credenziali attuali errate");
 
       const snap = await getDocs(collection(db, "utenti"));
-      const exists = snap.docs.some(d =>
-        d.data().username === newUsername
-      );
+    const exists = snap.docs.some(d =>
+  d.data().username?.toLowerCase() === newUsername.toLowerCase()
+);
 
       if (exists) return setMessage("Username già esistente");
 
@@ -298,50 +354,71 @@ useEffect(() => {
     }
   };
 
-  // =============================
-  // CAMBIO PASSWORD
-  // =============================
-  const handleChangePassword = async () => {
-    setMessage("");
+const handleChangePassword = async () => {
+  console.log("🚀 START cambio password");
 
-    if (newPassword !== confirmPassword) {
-      return setMessage("Le password non coincidono");
+  setMessage("");
+
+  if (newPassword !== confirmPassword) {
+    console.log("❌ password non coincidono");
+    return setMessage("Le password non coincidono");
+  }
+
+  try {
+    console.log("🔍 verifico utente...");
+    const user = await verifyUser();
+
+    console.log("👤 risultato verifyUser:", user);
+
+    if (!user) {
+      console.log("❌ utente NON trovato o password errata");
+      return setMessage("Credenziali attuali errate");
     }
 
-    try {
-      const user = await verifyUser();
-      if (!user) return setMessage("Credenziali attuali errate");
+    console.log("🔐 password attuale inserita:", oldPass);
+    console.log("🔐 hash salvato:", user.password_hash);
 
-     const hashed = await bcrypt.hash(newPassword, 10);
-
-await updateDoc(doc(db, "utenti", user.id), {
-  password_hash: hashed,
-  password: null
-});
-
-     await scriviLog({
-  pagina: "login",
-  azione: "MODIFICA_PASSWORD",
-  collezioneRef: "utenti",
-  documentoId: user.id,
-
-  dati_originali: { password: "***" },
-  dati_modificati: { password: "***" },
-
-  meta: {
-    tipo: "AUTH"
-  },
-
-  ripristinabile: true
-});
-
-      setMessage("Password aggiornata");
-      setMode(null);
-
-    } catch (e) {
-      setMessage("Errore cambio password");
+    if (user.password_hash) {
+      const compareTest = await bcrypt.compare(oldPass, user.password_hash);
+      console.log("🧪 test bcrypt compare:", compareTest);
+    } else {
+      console.log("⚠️ utente ha password in chiaro");
     }
-  };
+
+    console.log("🆕 nuova password:", newPassword);
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    console.log("🔐 nuovo hash generato:", hashed);
+
+    await updateDoc(doc(db, "utenti", user.id), {
+      password_hash: hashed,
+      password: null
+    });
+
+    console.log("💾 password salvata su DB");
+
+    await scriviLog({
+      pagina: "login",
+      azione: "MODIFICA_PASSWORD",
+      collezioneRef: "utenti",
+      documentoId: user.id,
+      dati_originali: { password: "***" },
+      dati_modificati: { password: "***" },
+      meta: { tipo: "AUTH" },
+      ripristinabile: true
+    });
+
+    console.log("🧾 log scritto");
+
+    setMessage("Password aggiornata");
+    setMode(null);
+
+  } catch (e) {
+    console.error("💥 ERRORE cambio password:", e);
+    setMessage("Errore cambio password");
+  }
+};
 
   return (
     <div style={{ padding: 20, maxWidth: 400, margin: "0 auto" }}>
