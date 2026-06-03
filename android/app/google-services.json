@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "707976831222",
+    "project_id": "gestione-carichi-metalli-231fc",
+    "storage_bucket": "gestione-carichi-metalli-231fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:707976831222:android:6963939b56f4a6e8264cd7",
+        "android_client_info": {
+          "package_name": "com.metalflow.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "707976831222-48buoi86u1mmfvo6nid0vpfkp1cr73jo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQCuALW_ifWEkc1iEai-nK1LOJyFXlJGY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "707976831222-48buoi86u1mmfvo6nid0vpfkp1cr73jo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,8 +15,9 @@ import { scriviLog } from "../utils/log"; // o dove ce l'hai
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { it } from "date-fns/locale";
-import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
-
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 const AnagraficaMovimentoFinanziario = () => {
   const [lista, setLista] = useState([]);
 const [showDisabilita, setShowDisabilita] = useState(false);
@@ -661,8 +662,7 @@ const handleStampa = async () => {
 }
     });
 
-    await salvaESharePdfCapacitor(pdf, "anagrafica-movimenti.pdf");
-    console.error("anagrafica", "movimenti");
+    pdf.save("anagrafica-movimenti.pdf");
   } catch (err) {
     console.error("Errore stampa:", err);
   }

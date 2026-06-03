@@ -1426,30 +1426,33 @@ const toOptions = (arr) =>
   ))}
         </tbody>
       </table>
-    <h3 style={{ marginTop: 20 }}>
-  Totale: {round2(
-    (scarichi
+<h3 style={{ marginTop: 20 }}>
+  Totale: {(() => {
+    const movs = scarichi
       .filter(m => modalData.movimentiIds.includes(m.id))
-      .flatMap(m => m.cer)
-      .flatMap(c => (c.righe || []))
-      .reduce((tot, r) => {
-  const kg = Number(r.netto || 0);
- const movimento = scarichi
-  .filter(m => modalData.movimentiIds.includes(m.id))
-  .filter(m => {
-    if (modalTipo === "prospetto") return m.tipo === "scarico";
-    if (modalTipo === "fattura") return m.tipo === "carico";
-    return true;
-  });
-  const tipo = movimento?.tipo;
-  const prezzo =
-    tipo === "scarico"
-      ? (r.prezzoAcquisto ?? 0)
-      : (r.prezzoVendita ?? 0);
-  return tot + kg * prezzo;
-}, 0)
-    )
-  ).toFixed(2)}
+      .filter(m => {
+        if (modalTipo === "prospetto") return m.tipo === "scarico";
+        if (modalTipo === "fattura") return m.tipo === "carico";
+        return true;
+      });
+
+    return round2(
+      movs
+        .flatMap(m => m.cer || [])
+        .flatMap(c => c.righe || [])
+        .reduce((tot, r) => {
+          const kg = Number(r.netto || 0);
+
+          // qui NON puoi usare movimento.tipo globale: serve il CER owner
+          const prezzo =
+            modalTipo === "prospetto"
+              ? (r.prezzoAcquisto ?? 0)
+              : (r.prezzoVendita ?? 0);
+
+          return tot + kg * prezzo;
+        }, 0)
+    ).toFixed(2);
+  })()}
 </h3>
 <div style={{ marginTop: 10, marginBottom: 10 }}>
   <div style={{ fontWeight: "bold", marginBottom: 5 }}>
