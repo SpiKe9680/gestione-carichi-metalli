@@ -1,4 +1,4 @@
-package com.tammarometalli.movimentazione;
+package com.metalflow.app;
 
 import com.getcapacitor.BridgeActivity;
 
