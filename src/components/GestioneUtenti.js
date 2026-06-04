@@ -120,7 +120,6 @@ setConfirmPassword(u.password || "");
   setMessage("");
 };
 
-
 useEffect(() => {
   if (!selectedUser) return;
 
@@ -129,22 +128,24 @@ useEffect(() => {
     : (selectedUser.email ? selectedUser.email.split("@")[0] : "");
 
   const origEmail = selectedUser.email || "";
+  const origRole = selectedUser.ruolo || "operatore";
 
   const dirty =
     username !== origUsername ||
     password !== (selectedUser.password || "") ||
-    (email || "") !== origEmail;
+    (email || "") !== origEmail ||
+    role !== origRole;
 
   setIsDirty(dirty);
 
-}, [username, password, email, selectedUser]);
+}, [username, password, email, role, selectedUser]);
 // -------- ANNULLA --------
 const handleAnnulla = () => {
   setSelectedUser(null);
   setUsername("");
   setPassword("");
   setEmail("");
-  setRole("operatore");
+  setRole("OPERATORE");
   setIsDirty(false);
   setMessage("");
   setConfirmPassword("");
