@@ -735,16 +735,15 @@ const eliminaRiga = async (riga) => {
     const cerTarget = movimenti[riga.cerIndex];
     if (!cerTarget) return;
 
-    const confermaTesto = cerTarget.righe?.length === 1
-      ? "⚠️ Questo è l’ULTIMO CER dello scarico. Eliminando questo CER verrà cancellato INTERAMENTE lo scarico. Continuare?"
-      : "Confermi eliminazione del CER selezionato?";
+    const confermaTesto =
+      cerTarget.righe?.length === 1
+        ? "⚠️ Questo è l’ULTIMO CER dello scarico. Eliminando verrà cancellato tutto lo scarico. Continuare?"
+        : "Confermi eliminazione del CER selezionato?";
 
-    const ok = window.confirm(confermaTesto);
-    if (!ok) return;
+    if (!window.confirm(confermaTesto)) return;
 
     const before = structuredClone(dati);
 
-    // 🔥 rimuovo riga CER
     const updatedMovimenti = movimenti
       .map((cerObj, cIdx) => {
         if (cIdx !== riga.cerIndex) return cerObj;
@@ -760,33 +759,39 @@ const eliminaRiga = async (riga) => {
       })
       .filter(cerObj => cerObj.righe && cerObj.righe.length > 0);
 
-    // 🔥 CASO 1: lo scarico è rimasto senza CER → elimina documento
-    if (updatedMovimenti.length === 0) {
-      const confermaFinale = window.confirm(
-        "🚨 ATTENZIONE: questo era l’ULTIMO CER dello scarico.\n\nEliminando continuerai a cancellare DEFINITIVAMENTE tutto lo scarico.\nProcedere?"
-      );
+    const utente = getUtenteReact();
 
-      if (!confermaFinale) return;
+    // =========================
+    // CASO 1: DELETE DOCUMENTO
+    // =========================
+    if (updatedMovimenti.length === 0) {
+      if (!window.confirm("Confermi eliminazione DEFINITIVA dello scarico?")) return;
 
       await deleteDoc(ref);
 
       await scriviLog({
-        pagina: "gestione-scarichi-dettaglio",
-        evento: "ELIMINA_INTERO_SCARICO",
+        pagina: "scarichi",
+        evento: "ELIMINA_SCARICO",
+
         riferimento: {
           collezione,
           documentoId: riga.docId
         },
+
+        utente,
+
         before,
         after: null,
-        utente: getUtenteReact(),
+
         ripristinabile: false
       });
 
       alert("🗑 Scarico eliminato completamente");
     }
 
-    // 🔥 CASO 2: rimangono altri CER → update normale
+    // =========================
+    // CASO 2: UPDATE PARZIALE
+    // =========================
     else {
       await updateDoc(ref, {
         [field]: updatedMovimenti,
@@ -794,24 +799,30 @@ const eliminaRiga = async (riga) => {
       });
 
       await scriviLog({
-        pagina: "gestione-scarichi-dettaglio",
-        evento: `ELIMINA_CER_${riga.tipo?.toUpperCase()}`,
+        pagina: "scarichi",
+        evento: "ELIMINA_CER",
+
         riferimento: {
           collezione,
           documentoId: riga.docId,
           cerIndex: riga.cerIndex,
           rIndex: riga.rIndex
         },
+
+        utente,
+
         before,
-        after: { ...dati, [field]: updatedMovimenti },
-        utente: getUtenteReact(),
+        after: {
+          ...dati,
+          [field]: updatedMovimenti
+        },
+
         ripristinabile: true
       });
 
       alert("🗑 CER eliminato con successo");
     }
 
-    // reset UI
     setEditor(null);
     setOriginalEditor(null);
     setSelectedIndex(null);
@@ -824,6 +835,7 @@ const eliminaRiga = async (riga) => {
     alert("Errore durante eliminazione");
   }
 };
+
 const reloadDati = async () => {
   try {
     const snapScarichi = await getDocs(collection(db, "scarichi"));
@@ -933,11 +945,8 @@ const modificaScarico = async (riga) => {
     }
 
     const dati = snap.data();
-    const utenteUI = getUtenteReact();
+    const utente = getUtenteReact();
 
-    // =========================
-    // NORMALIZZAZIONE DATA
-    // =========================
     const normalizeDate = (d) => {
       if (!d) return new Date();
       if (d.toDate) return d.toDate();
@@ -953,9 +962,6 @@ const modificaScarico = async (riga) => {
       safeDate.setHours(hh || 0, mm || 0, 0, 0);
     }
 
-    // =========================
-    // FOTO CLEAN
-    // =========================
     let fotoArray = [];
 
     const sorgenti = [
@@ -992,14 +998,13 @@ const modificaScarico = async (riga) => {
       dati.website ||
       "";
 
-    // =========================
-    // BEFORE SNAPSHOT
-    // =========================
-    const beforeSnapshot = structuredClone(dati);
+    const before = {
+      fornitore: dati.fornitore || "-",
+      listino: dati.listino || "-",
+      tipo: dati.tipo || "-",
+      righe: (dati.scarico || dati.carico || []).length
+    };
 
-    // =========================
-    // COSTRUZIONE UPDATE SICURO (NO OVERWRITE TOTALE)
-    // =========================
     const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
 
     const updatedField = (dati[field] || []).map((cerObj, cIdx) => {
@@ -1040,34 +1045,39 @@ const modificaScarico = async (riga) => {
       lastUpdate: serverTimestamp()
     };
 
-    // =========================
-    // UPDATE DOC (NON SETDOC)
-    // =========================
     await updateDoc(ref, updatePayload);
 
-    // =========================
-    // LOG
-    // =========================
- await scriviLog({
-  pagina: "gestione-scarichi-dettaglio",
-  evento: "AGGIORNA_SCARICO",
-  riferimento: {
-    collezione: collectionName,
-    documentoId: riga.docId
-  },
-  before: beforeSnapshot,
-  after: updatePayload,
-  utente: getUtenteReact(),
-  ripristinabile: true
-});
+    const after = {
+      fornitore: dati.fornitore || "-",
+      listino: dati.listino || "-",
+      tipo: dati.tipo || "-",
+      righe: updatedField.length
+    };
 
-    // =========================
-    // NAVIGAZIONE STABILE
-    // =========================
+    await scriviLog({
+      pagina: "scarichi",
+      evento: "MODIFICA_RIGA",
+
+      riferimento: {
+        collezione: collectionName,
+        documentoId: riga.docId,
+        cerIndex: riga.cerIndex,
+        rIndex: riga.rIndex
+      },
+
+      utente,
+
+      before,
+      after,
+
+      ripristinabile: true
+    });
+
     await salvaDraftScarico({
-  ...riga,
-  fotoURL: fotoArray
-});
+      ...riga,
+      fotoURL: fotoArray
+    });
+
     navigate("/scarichi");
 
   } catch (error) {

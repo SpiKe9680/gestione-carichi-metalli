@@ -24,9 +24,6 @@ const [mapFatture, setMapFatture] = useState({});
 const [mapProspetti, setMapProspetti] = useState({});
 const [mapScarichi, setMapScarichi] = useState({});
 
-  // --------------------------
-  // MOCK DATA (poi Firestore)
-  // --------------------------
   const [carichiScarichi, setCarichiScarichi] = useState([]);
 const toDate = (v) => {
   if (!v) return null;
@@ -37,9 +34,6 @@ const toDate = (v) => {
   const d = new Date(v);
   return isNaN(d) ? null : d;
 };
-  // --------------------------
-  // CONFIG
-  // --------------------------
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -605,62 +599,23 @@ const getOccorrenze = (item) => {
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <button onClick={goDashboard}>🏠 Dashboard</button>
-<button onClick={handlePrintPDF}>
-  🖨️ Stampa PDF
-</button>
- <button
-  onClick={() =>
-  navigate("/MovimentiFinanziari", {
-  state: { date: selectedDate.toISOString() }
-})
-  }
->
-  🔙 Calendario
-</button>
-
-        <button onClick={handleLogout}>
-          🚪 Logout ({currentUser.username || currentUser.email})
-        </button>
-      </div>
-
-      {/* TITLE */}
-      <h2>Movimento Giorno</h2>
+<button onClick={handlePrintPDF}>  🖨️ Stampa PDF</button>
+ <button  onClick={() =>  navigate("/MovimentiFinanziari", {  state: { date: selectedDate.toISOString() }})  }>  🔙 Calendario</button>        <button onClick={handleLogout}>          🚪 Logout ({currentUser.username || currentUser.email})        </button>
+      </div>      <h2>Movimento Giorno</h2>
 <div id="area-stampa">
-      <p>
-        📅 Giorno:{" "}
-        <strong>{new Date(selectedDate).toLocaleDateString("it-IT")}</strong>
-      </p>
-
+      <p>        📅 Giorno:{" "}        <strong>{new Date(selectedDate).toLocaleDateString("it-IT")}</strong>      </p>
       {giornoAvviamento && (
-        <p>
-          ⚠️ Avvio impianto:{" "}
-          <strong>{giornoAvviamento.toLocaleDateString("it-IT")}</strong>
-        </p>
+        <p>          ⚠️ Avvio impianto:{" "}          <strong>{giornoAvviamento.toLocaleDateString("it-IT")}</strong>        </p>
       )}
-
-      {/* ===================== */}
-      {/* SEZIONE 1 */}
-      {/* ===================== */}
       <h3>Carichi / Scarichi</h3>
-
       <div style={{ display: "flex", gap: 20 }}>
         {/* PAGATI */}
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
           <h4>🟢 Consuntivati</h4>
-
  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>
-    <tr>
-      <th>CONTROPARTE</th>
-      <th>DATA MOVIMENTO</th>
-      <th>IMPORTO</th>
-    </tr>
-  </thead>
+  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th>    </tr>  </thead>
   <tbody>
-    {rows.map((r, i) => {
-      const isEntrata =
-        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
-
+    {rows.map((r, i) => {      const isEntrata =        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
       return (
         <tr
           key={i}
@@ -675,11 +630,7 @@ const getOccorrenze = (item) => {
             cursor: "pointer"
           }}
         >
-          <td>{r.controparte}</td>
-          <td>
-            {toDate(r.dataMov)?.toLocaleDateString("it-IT") || ""}
-          </td>
-          <td>
+          <td>{r.controparte}</td>          <td>            {toDate(r.dataMov)?.toLocaleDateString("it-IT") || ""}          </td>          <td>
   {r.importo.toLocaleString("it-IT", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -687,28 +638,16 @@ const getOccorrenze = (item) => {
 </td>
         </tr>
       );
-    })}
-  </tbody>
-</table>
+    })}  </tbody></table>
         </div>
-
-        {/* DA PAGARE */}
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
 <h4>🔴 Da Consuntivare</h4>
-
 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>
-    <tr>
-      <th>CONTROPARTE</th>
-      <th>DATA</th>
-      <th>IMPORTO</th>
-    </tr>
-  </thead>
+  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA</th>      <th>IMPORTO</th>    </tr>  </thead>
   <tbody>
     {daConsuntivare.map((r, i) => {
       const isEntrata =
         r.tipo === "fattureCarichi";
-
       return (
         <tr
           key={i}
@@ -739,32 +678,13 @@ const getOccorrenze = (item) => {
 </table>
         </div>
       </div>
-
-     
-
-      {/* ===================== */}
-{/* ALTRI MOVIMENTI */}
-{/* ===================== */}
 <h3 style={{ marginTop: 40 }}>Altri Movimenti</h3>
-
 <div style={{ display: "flex", gap: 20 }}>
-
-  {/* ===================== */}
-  {/* CONSUNTIVATI (SINISTRA) */}
-  {/* ===================== */}
-  <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
+<div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
     <h4>🟢 Consuntivati</h4>
 
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr>
-          <th>MOVIMENTO</th>
-          <th>FREQUENZA</th>
-          <th>€</th>
-          <th>CONT.</th>
-        </tr>
-      </thead>
-
+      <thead>        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>      </thead>
       <tbody>
   {anagraficaMov.map(item => {
 
@@ -777,7 +697,6 @@ const getOccorrenze = (item) => {
   importo: m.importo,
   tipo: m.tipo
 }));
-
   if (movs.length === 0) return null;
 const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
   return (
@@ -785,7 +704,6 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
   key={item.id}
   onDoubleClick={() => {
     if (movs.length === 0) return;
-
     setContItem(item);
     setOccList(movs);
     setShowContabilizza(true);
@@ -798,16 +716,12 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
         background: item.tipo === "ENTRATA" ? "#d4edda" : "#f8d7da"
       }}
     >
-      <td>{item.nomeBreve}</td>
-      <td>{item.periodicita}</td>
-     <td>
-  {movs
+      <td>{item.nomeBreve}</td>      <td>{item.periodicita}</td>     <td>  {movs
     .reduce((sum, m) => sum + (Number(m.importo) || 0), 0)
     .toLocaleString("it-IT", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    })} €
-</td>
+    })} €</td>
       <td>{movs.length}</td>
     </tr>
   );
@@ -815,29 +729,16 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
       </tbody>
     </table>
   </div>
-
-  {/* ===================== */}
-  {/* DA CONSUNTIVARE (DESTRA) */}
-  {/* ===================== */}
   <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
     <h4>🔴 Da Consuntivare</h4>
-
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <thead>
-        <tr>
-          <th>MOVIMENTO</th>
-          <th>FREQUENZA</th>
-          <th>€</th>
-          <th>CONT.</th>
-        </tr>
+        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>
       </thead>
-
       <tbody>
         {anagraficaMov.map(item => {
           const occ = getOccorrenze(item);
-
           if (occ.length === 0) return null;
-
           return (
             <tr
               key={item.id}

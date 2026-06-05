@@ -53,6 +53,11 @@ const requestSort = (key) => {
     return { key, direction: "asc" };
   });
 };
+const getUtenteReact = () => {
+  return (
+    currentUser.username || currentUser.email 
+  );
+};
   const [nuovoListino, setNuovoListino] = useState("");
   const [listinoDaCopiare, setListinoDaCopiare] = useState("");
   const [nuovoTipoListino, setNuovoTipoListino] = useState("SCARICO");
@@ -212,60 +217,59 @@ const campoModificato = (codice) => {
   return Number(nuovoVal) !== Number(vecchioVal);
 };
 
-  // =============================
-  // ASSOCIA FORNITORE
-  // =============================
-  // =============================
-// ASSOCIA FORNITORE (corretto)
-// =============================
 const associaFornitore = async (listinoId, fornitoreId) => {
   const listino = listini.find(l => l.id === listinoId);
   const fornitore = fornitori.find(f => f.id === fornitoreId);
   if (!listino || !fornitore) return;
 
   try {
-    const datiOriginali = { listinoId, fornitoreId, predefListinoVecchio: fornitore.predefListino || null };
+    const datiOriginali = {
+      listinoId,
+      fornitoreId,
+      predefListinoVecchio: fornitore.predefListino || null
+    };
 
-    // 1. Aggiorna fornitore con nuovo listino predefinito
-    await updateDoc(doc(db, "fornitori", fornitoreId), { predefListino: listinoId });
+    await updateDoc(doc(db, "fornitori", fornitoreId), {
+      predefListino: listinoId
+    });
 
-    // 2. Rimuovi fornitore da altri listini in cui era predefinito
     for (const l of listini) {
       if ((l.predefFornitori || []).includes(fornitoreId) && l.id !== listinoId) {
         const nuoviFornitori = l.predefFornitori.filter(fid => fid !== fornitoreId);
-        await updateDoc(doc(db, "listini", l.id), { predefFornitori: nuoviFornitori });
+        await updateDoc(doc(db, "listini", l.id), {
+          predefFornitori: nuoviFornitori
+        });
       }
     }
 
-    // 3. Aggiungi fornitore al listino corrente se non presente
     const predefFornitori = listino.predefFornitori || [];
     if (!predefFornitori.includes(fornitoreId)) {
-      await updateDoc(doc(db,"listini",listinoId), { predefFornitori: [...predefFornitori, fornitoreId] });
+      await updateDoc(doc(db, "listini", listinoId), {
+        predefFornitori: [...predefFornitori, fornitoreId]
+      });
     }
 
-    // 4. Log
     await scriviLog({
+      pagina: "gestione-listini",
       evento: "ASSOCIA_FORNITORE",
-tipo: "ASSOCIA_FORNITORE",
-pagina: "gestione-listini",
-collezioneRef: "listini",
-documentoId: listinoId,
-dati_originali: datiOriginali,
-dati_modificati: { listinoId, fornitoreId },
-utente: currentUser?.username || currentUser?.email || "sconosciuto",
-timestamp: new Date()
+      riferimento: {
+        collezione: "listini",
+        documentoId: listinoId
+      },
+      before: datiOriginali,
+      after: { listinoId, fornitoreId },
+      utente: getUtenteReact(),
+      ripristinabile: true
     });
 
-    // 5. Reset dropdown e ricarica
     setFornitoreSelezionato(prev => ({ ...prev, [listinoId]: "" }));
     loadListini();
     loadFornitori();
 
-  } catch(e) {
+  } catch (e) {
     setErrori(prev => [...prev, e.message]);
   }
 };
-
 
 const generaPDFListinoConHeader = async (listino) => {
   const { pdf, startY } = await PdfHeader();
@@ -297,9 +301,6 @@ const rows = materiali.map(c => [
 
   await salvaESharePdfCapacitor(pdf, `listino_${listino.nome}.pdf`);
 };
-  // =============================
-  // SALVA LISTINO
-  // =============================
 const salvaListino = async () => {
   if (!editor) return;
 
@@ -312,9 +313,9 @@ const salvaListino = async () => {
       tipoListino: editor.tipoListino
     });
 
-    // 🔥 PROPAGAZIONE SU ALTRI LISTINI
     const altriListini = listini.filter(
-      l => l.id !== editor.id && (l.tipoListino || "SCARICO") === editor.tipoListino
+      l => l.id !== editor.id &&
+      (l.tipoListino || "SCARICO") === editor.tipoListino
     );
 
     for (const l of altriListini) {
@@ -343,21 +344,21 @@ const salvaListino = async () => {
     }
 
     await scriviLog({
-      evento: "MODIFICA_LISTINO",
-      tipo: "MODIFICA_LISTINO",
       pagina: "gestione-listini",
-      collezioneRef: "listini",
-      documentoId: editor.id,
-      dati_originali: originalEditor,
-      dati_modificati: editor,
-      utente: currentUser?.username || currentUser?.email || "sconosciuto",
-      timestamp: new Date()
+      evento: "MODIFICA_LISTINO",
+      riferimento: {
+        collezione: "listini",
+        documentoId: editor.id
+      },
+      before: originalEditor,
+      after: editor,
+      utente: getUtenteReact(),
+      ripristinabile: true
     });
 
     setEditor(null);
     setOriginalEditor(null);
     setPropagaPrezzi({});
-
     loadListini();
 
   } catch (e) {
@@ -365,49 +366,33 @@ const salvaListino = async () => {
   }
 };
 
-  // =============================
-  // CREA LISTINO
-  // =============================
 const creaNuovoListino = async () => {
-  console.log("🚀 START creaNuovoListino");
-
   try {
-
-    console.log("➡️ input:", { nuovoListino, listinoDaCopiare });
-
     if (!nuovoListino || !listinoDaCopiare) {
-      console.log("❌ campi mancanti");
       alert("Compila tutti i campi");
       return;
     }
+
     const nomePulito = nuovoListino.trim().toLowerCase();
 
-const esiste = listini.some(l =>
-  (l.nome || "").trim().toLowerCase() === nomePulito
-);
+    const esiste = listini.some(l =>
+      (l.nome || "").trim().toLowerCase() === nomePulito
+    );
 
-if (esiste) {
-  console.log("❌ listino duplicato:", nuovoListino);
-  alert("Esiste già un listino con questo nome");
-  return;
-}
+    if (esiste) {
+      alert("Esiste già un listino con questo nome");
+      return;
+    }
 
     const origine = listini.find(l => l.id === listinoDaCopiare);
-    console.log("➡️ origine:", origine);
-
     if (!origine) {
-      console.log("❌ origine non trovata");
       alert("Listino origine non trovato");
       return;
     }
 
     const prezziModificati = {};
 
-    console.log("➡️ origine.prezzi:", origine.prezzi);
-
     Object.entries(origine.prezzi || {}).forEach(([codice, valore]) => {
-      console.log("➡️ ciclo:", codice, valore);
-
       const vendita = Number(valore?.vendita) || 0;
       const acquisto = Number(valore?.acquisto) || 0;
 
@@ -415,13 +400,12 @@ if (esiste) {
       let nuovoAcquisto = acquisto;
 
       if (modificaPercentuale > 0) {
-        if (modificaAzione === "AUMENTA") {
-          nuovaVendita *= (1 + modificaPercentuale / 100);
-          nuovoAcquisto *= (1 + modificaPercentuale / 100);
-        } else {
-          nuovaVendita *= (1 - modificaPercentuale / 100);
-          nuovoAcquisto *= (1 - modificaPercentuale / 100);
-        }
+        const factor = modificaAzione === "AUMENTA"
+          ? (1 + modificaPercentuale / 100)
+          : (1 - modificaPercentuale / 100);
+
+        nuovaVendita *= factor;
+        nuovoAcquisto *= factor;
       }
 
       prezziModificati[codice] = {
@@ -430,36 +414,27 @@ if (esiste) {
       };
     });
 
-    console.log("➡️ prezziModificati:", prezziModificati);
-
-    const copia = { 
-      nome: nuovoListino, 
-      prezzi: prezziModificati, 
+    const copia = {
+      nome: nuovoListino,
+      prezzi: prezziModificati,
       predefFornitori: [],
       tipoListino: nuovoTipoListino || "SCARICO"
     };
 
-    console.log("➡️ copia finale:", copia);
-
     const docRef = await addDoc(collection(db, "listini"), copia);
 
-    console.log("✅ doc creato:", docRef.id);
-
-    console.log("➡️ scriviLog START");
-
-   await scriviLog({
-      evento: "CREAZIONE_LISTINO",
-      tipo: "CREAZIONE_LISTINO",
+    await scriviLog({
       pagina: "gestione-listini",
-      collezioneRef: "listini",
-      documentoId: docRef.id,
-      dati_originali: null,
-      dati_modificati: { id: docRef.id, ...copia },
-      utente: currentUser?.username || currentUser?.email || "sconosciuto",
-      timestamp: new Date()
+      evento: "CREAZIONE_LISTINO",
+      riferimento: {
+        collezione: "listini",
+        documentoId: docRef.id
+      },
+      before: null,
+      after: { id: docRef.id, ...copia },
+      utente: getUtenteReact(),
+      ripristinabile: true
     });
-
-    console.log("✅ scriviLog OK");
 
     setShowCreaForm(false);
     setNuovoListino("");
@@ -470,55 +445,56 @@ if (esiste) {
     alert("Listino creato con successo");
 
   } catch (e) {
-    console.error("💥 ERRORE REALE:", e);
-    console.error("💥 STACK:", e.stack);
     alert("Errore: " + e.message);
   }
 };
 
-  // =============================
-  // CANCELLA LISTINO
-  // =============================
-  const cancellaListino = async () => {
-    if (!editor) return;
+const cancellaListino = async () => {
+  if (!editor) return;
 
-    try {
-      const q = query(collection(db, "scarichi"), where("listino", "==", editor.nome));
-      const snap = await getDocs(q);
+  try {
+    const q = query(
+      collection(db, "scarichi"),
+      where("listino", "==", editor.nome)
+    );
 
-      if (!snap.empty) {
-        const numeroScarichi = snap.size;
-        if (window.confirm(`Il listino è usato in ${numeroScarichi} scarichi.\nVisualizzarli?`)) {
-          navigate(`/gestione-scarichi?listino=${encodeURIComponent(editor.nome)}`);
-        }
-        return;
+    const snap = await getDocs(q);
+
+    if (!snap.empty) {
+      const numeroScarichi = snap.size;
+
+      if (window.confirm(`Listino usato in ${numeroScarichi} scarichi.\nVisualizzarli?`)) {
+        navigate(`/gestione-scarichi?listino=${encodeURIComponent(editor.nome)}`);
       }
-
-      if (!window.confirm(`Cancellare "${editor.nome}"?`)) return;
-
-      const datiOriginali = { ...editor };
-      await deleteDoc(doc(db, "listini", editor.id));
-
-      await scriviLog({
-  evento: "CANCELLAZIONE_LISTINO",
-tipo: "CANCELLAZIONE_LISTINO",
-pagina: "gestione-listini",
-collezioneRef: "listini",
-documentoId: editor.id,
-dati_originali: datiOriginali,
-dati_modificati: null,
-utente: currentUser?.username || currentUser?.email || "sconosciuto",
-timestamp: new Date()
-});
-
-      setEditor(null);
-  
-      loadListini();
-
-    } catch (e) {
-      setErrori(prev => [...prev, e.message]);
+      return;
     }
-  };
+
+    if (!window.confirm(`Cancellare "${editor.nome}"?`)) return;
+
+    const datiOriginali = { ...editor };
+
+    await deleteDoc(doc(db, "listini", editor.id));
+
+    await scriviLog({
+      pagina: "gestione-listini",
+      evento: "CANCELLAZIONE_LISTINO",
+      riferimento: {
+        collezione: "listini",
+        documentoId: editor.id
+      },
+      before: datiOriginali,
+      after: null,
+      utente: getUtenteReact(),
+      ripristinabile: false
+    });
+
+    setEditor(null);
+    loadListini();
+
+  } catch (e) {
+    setErrori(prev => [...prev, e.message]);
+  }
+};
 
 
  
