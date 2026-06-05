@@ -45,16 +45,27 @@ const getClientIP = async () => {
   }
 };
 
+const formatDateTime = (ts) => {
+  if (!ts) return null;
+
+  const date = typeof ts?.toDate === "function"
+    ? ts.toDate()
+    : new Date(ts);
+
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+};
+
 const handleLogin = async () => {
   setMessage("");
 
-  console.log("🚀 ===== LOGIN START =====");
-  console.log("🌐 ENV:", process.env.NODE_ENV);
-  console.log("👤 INPUT USER:", inputUsername);
-  console.log("🔑 INPUT PASS:", inputPassword);
-
   if (!inputUsername || !inputPassword) {
-    console.log("❌ Input mancanti");
     setMessage("Inserisci username o email e password");
     return;
   }
@@ -62,23 +73,12 @@ const handleLogin = async () => {
   try {
     await loginAdminFirebase();
 
-    console.log("🔥 Firebase login OK");
+    const clientIP = await getClientIP();
 
     const snap = await getDocs(collection(db, "utenti"));
-
-    console.log("📦 SNAP SIZE:", snap.size);
-
     const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    console.log("👥 USERS COUNT:", users.length);
-
-    if (users.length === 0) {
-      console.log("💥 ATTENZIONE: database utenti VUOTO in produzione");
-    }
-
     const inputNormalized = inputUsername.trim().toLowerCase();
-
-    console.log("🔎 INPUT NORMALIZZATO:", inputNormalized);
 
     const userFound = users.find(u => {
       const usernameFinal = u.username
@@ -87,50 +87,31 @@ const handleLogin = async () => {
 
       const emailFinal = u.email ? u.email.toLowerCase() : "";
 
-      const match =
-        usernameFinal === inputNormalized ||
-        emailFinal === inputNormalized;
-
-      if (match) {
-        console.log("🎯 MATCH TROVATO:", u);
-      }
-
-      return match;
+      return usernameFinal === inputNormalized || emailFinal === inputNormalized;
     });
 
-    console.log("🔍 USER FOUND:", userFound);
+    const utenteLog = userFound
+      ? buildLogUser(userFound, inputUsername)
+      : "UTENTE_SCONOSCIUTO";
 
+    // =============================
+    // ❌ UTENTE NON TROVATO
+    // =============================
     if (!userFound) {
-      console.log("❌ USER NOT FOUND");
-      console.log("📊 USERS LIST:", users.map(u => ({
-        username: u.username,
-        email: u.email
-      })));
-
-      auth.signOut();
-      setMessage("Username o password errati");
-      return;
-    }
-
-    console.log("🔐 PASSWORD CHECK START");
-
-    let passwordOk = false;
-
-    if (userFound.password_hash) {
-      passwordOk = await bcrypt.compare(inputPassword, userFound.password_hash);
-      console.log("🧪 bcrypt result:", passwordOk);
-    } else {
-      passwordOk = inputPassword === userFound.password;
-      console.log("🧪 plain password result:", passwordOk);
-    }
-
-    if (!passwordOk) {
-      console.log("❌ PASSWORD ERRATA");
-
-      const failedAttempts = (userFound.failed_attempts || 0) + 1;
-
-      await updateDoc(doc(db, "utenti", userFound.id), {
-        failed_attempts: failedAttempts
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_KO",
+        riferimento: { collezione: "utenti", documentoId: null },
+        utente: utenteLog,
+        before: {
+          ip: clientIP,
+          input_digitato: inputUsername
+        },
+        after: {
+          risultato: "UTENTE_NON_TROVATO",
+          ip: clientIP
+        },
+        ripristinabile: false
       });
 
       auth.signOut();
@@ -138,7 +119,145 @@ const handleLogin = async () => {
       return;
     }
 
-    console.log("✅ LOGIN OK");
+    // =============================
+    // 🔒 BLOCCO
+    // =============================
+    if (userFound.lock_until) {
+      const now = Date.now();
+
+      const lockTime = userFound.lock_until?.toDate
+        ? userFound.lock_until.toDate().getTime()
+        : userFound.lock_until;
+
+      if (lockTime && lockTime > now) {
+        const minuti = Math.ceil((lockTime - now) / 60000);
+
+        await scriviLog({
+          pagina: "login",
+          evento: "LOGIN_BLOCCATO",
+          riferimento: { collezione: "utenti", documentoId: userFound.id },
+          utente: utenteLog,
+          before: {
+            ip: clientIP,
+            tentativi: userFound.failed_attempts,
+            bloccato_fino: formatDateTime(lockTime)
+          },
+          after: {
+            risultato: "ACCESSO_NEGATO",
+            minuti_rimanenti: minuti,
+            ip: clientIP
+          },
+          ripristinabile: false
+        });
+
+        setMessage(`Utente bloccato. Riprova tra ${minuti} minuti`);
+        return;
+      }
+    }
+
+    // =============================
+    // 🔐 PASSWORD
+    // =============================
+    let passwordOk = false;
+
+    if (userFound.password_hash) {
+      passwordOk = await bcrypt.compare(inputPassword, userFound.password_hash);
+    } else {
+      passwordOk = inputPassword === userFound.password;
+    }
+
+    // =============================
+    // ❌ LOGIN FALLITO
+    // =============================
+    if (!passwordOk) {
+      const tentativi = (userFound.failed_attempts || 0) + 1;
+
+      const now = Date.now();
+
+      let lockUntil = null;
+      let stato = userFound.stato || "ATTIVO";
+
+      if (tentativi >= 7) {
+        lockUntil = now + 86400000;
+        stato = "BLOCCATO";
+      } else if (tentativi >= 5) {
+        lockUntil = now + 3600000;
+      } else if (tentativi >= 3) {
+        lockUntil = now + 900000;
+      }
+
+      await updateDoc(doc(db, "utenti", userFound.id), {
+        failed_attempts: tentativi,
+        lock_until: lockUntil,
+        stato
+      });
+
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_KO",
+        riferimento: { collezione: "utenti", documentoId: userFound.id },
+        utente: utenteLog,
+        before: {
+          ip: clientIP,
+          tentativi_precedenti: userFound.failed_attempts || 0
+        },
+        after: {
+          risultato: "PASSWORD_ERRATA",
+          tentativi_totali: tentativi,
+          blocco_fino_a: lockUntil,
+          ip: clientIP
+        },
+        ripristinabile: false
+      });
+
+      auth.signOut();
+      setMessage("Username o password errati");
+      return;
+    }
+
+    // =============================
+    // 🔥 RESET PASSWORD
+    // =============================
+    const isDefaultPassword =
+      inputPassword === "12345" ||
+      userFound.password === "12345";
+
+    if (isDefaultPassword) {
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_RESET_PASSWORD",
+        riferimento: { collezione: "utenti", documentoId: userFound.id },
+        utente: utenteLog,
+        before: {
+          ip: clientIP,
+          stato_password: "DEFAULT"
+        },
+        after: {
+          risultato: "CAMBIO_PASSWORD_OBBLIGATORIO",
+          ip: clientIP
+        },
+        ripristinabile: false
+      });
+
+      auth.signOut();
+
+      setMessage("Cambio password obbligatorio");
+
+      setMode("password");
+      setOldUser(inputUsername);
+      setOldPass("12345");
+
+      return;
+    }
+
+    // =============================
+    // ✅ LOGIN OK
+    // =============================
+    await updateDoc(doc(db, "utenti", userFound.id), {
+      failed_attempts: 0,
+      lock_until: null,
+      stato: "ATTIVO"
+    });
 
     const ruolo = (userFound.ruolo || "OPERATORE").toUpperCase();
 
@@ -154,13 +273,16 @@ const handleLogin = async () => {
     await scriviLog({
       pagina: "login",
       evento: "LOGIN_OK",
-      riferimento: {
-        collezione: "utenti",
-        documentoId: userFound.id
+      riferimento: { collezione: "utenti", documentoId: userFound.id },
+      utente: utenteLog,
+      before: {
+        ip: clientIP,
+        username_digitato: inputUsername
       },
-      utente: `${ruolo} - ${safeUser.username}`,
-      meta: {
-        tipo: "AUTH"
+      after: {
+        risultato: "ACCESSO_CONCESSO",
+        ruolo,
+        ip: clientIP
       },
       ripristinabile: false
     });
@@ -171,10 +293,16 @@ const handleLogin = async () => {
       navigate("/scarichi", { replace: true });
     }
 
-    console.log("🏁 REDIRECT COMPLETATO");
-
   } catch (err) {
-    console.error("💥 LOGIN ERROR:", err);
+    await scriviLog({
+      pagina: "login",
+      evento: "LOGIN_KO",
+      utente: inputUsername || "UTENTE_SCONOSCIUTO",
+      before: { ip: await getClientIP() },
+      after: { risultato: "ERRORE_INTERNO" },
+      ripristinabile: false
+    });
+
     setMessage("Errore login DB");
   }
 };
@@ -242,50 +370,70 @@ useEffect(() => {
 
   loadLogo();
 }, []);
-  // =============================
-  // CAMBIO USERNAME
-  // =============================
-  const handleChangeUsername = async () => {
-    setMessage("");
+// =============================
+// CAMBIO USERNAME (FIXED)
+// =============================
+const handleChangeUsername = async () => {
+  setMessage("");
 
-    try {
-      const user = await verifyUser();
-      if (!user) return setMessage("Credenziali attuali errate");
+  try {
+    const user = await verifyUser();
+    if (!user) return setMessage("Credenziali attuali errate");
 
-      const snap = await getDocs(collection(db, "utenti"));
-    const exists = snap.docs.some(d =>
-  d.data().username?.toLowerCase() === newUsername.toLowerCase()
-);
+    const normalized = newUsername.trim().toLowerCase();
 
-      if (exists) return setMessage("Username già esistente");
-
-      await updateDoc(doc(db, "utenti", user.id), {
-        username: newUsername
-      });
-
-      await scriviLog({
-  pagina: "login",
-  azione: "MODIFICA_USERNAME",
-  collezioneRef: "utenti",
-  documentoId: user.id,
-
-  dati_originali: { username: user.username },
-  dati_modificati: { username: newUsername },
-
-  meta: {
-    tipo: "AUTH"
-  },
-
-  ripristinabile: true
-});
-
-      setMessage("Username aggiornato");
-      setMode(null);
-
-    } catch (e) {
-      setMessage("Errore cambio username");
+    if (!normalized) {
+      return setMessage("Username non valido");
     }
-  };
+
+    const snap = await getDocs(collection(db, "utenti"));
+
+    const exists = snap.docs.some((d) => {
+      const data = d.data();
+
+      const sameUser = d.id === user.id;
+      const username = (data.username || "").trim().toLowerCase();
+
+      return !sameUser && username === normalized;
+    });
+
+    if (exists) {
+      return setMessage("Username già esistente");
+    }
+
+    await updateDoc(doc(db, "utenti", user.id), {
+      username: newUsername.trim(),
+      username_lower: normalized
+    });
+
+    await scriviLog({
+      pagina: "login",
+      azione: "MODIFICA_USERNAME",
+      collezioneRef: "utenti",
+      documentoId: user.id,
+
+      dati_originali: {
+        username: user.username
+      },
+      dati_modificati: {
+        username: newUsername.trim()
+      },
+
+      meta: {
+        tipo: "AUTH"
+      },
+
+      ripristinabile: true
+    });
+
+    setMessage("Username aggiornato");
+    setMode(null);
+
+  } catch (e) {
+    console.error(e);
+    setMessage("Errore cambio username");
+  }
+};
 
 const handleChangePassword = async () => {
   console.log("🚀 START cambio password");
