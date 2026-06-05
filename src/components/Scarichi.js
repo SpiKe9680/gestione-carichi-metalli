@@ -1034,7 +1034,6 @@ const handleSave = async () => {
   console.log("🔥 HANDLE SAVE PARTITO");
 
   if (salvataggioInCorso) return;
-
   setSalvataggioInCorso(true);
 
   try {
@@ -1045,41 +1044,50 @@ const handleSave = async () => {
       return;
     }
 
-   if (
-  !selectedFornitore ||
-  !selectedListino ||
-  !scarico ||
-  scarico.length === 0
-) {
-  alert("Completa fornitore, listino e scarico");
-  return;
-}
+    if (
+      !selectedFornitore ||
+      !selectedListino ||
+      !scarico ||
+      scarico.length === 0
+    ) {
+      alert("Completa fornitore, listino e scarico");
+      return;
+    }
 
-if (
-  selectedFornitore !== "FORNITORE PRIVATO" &&
-  !firCer
-) {
-  setFirError(true);
+    const isFornitorePrivato =
+      (selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
 
-  setTimeout(() => {
-    const el = document.getElementById("fir-input");
-    if (el) el.focus();
-  }, 0);
+    // 🔥 FIX FIR PER CER (VALIDAZIONE REALE)
+    if (!isFornitorePrivato) {
+      const missingFir = (scarico || []).some(
+        (c) => !c.fir || c.fir.trim() === ""
+      );
 
-  return;
-}
+      if (missingFir) {
+        setFirError(true);
+        alert("FIR mancante per alcuni codici CER");
 
-   const isFornitorePrivato =
-  (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
+        setTimeout(() => {
+          const el = document.getElementById("fir-input");
+          if (el) el.focus();
+        }, 0);
 
-const hasImages =
-  (fotoFile && fotoFile.length > 0) ||
-  (previewFoto && previewFoto.some(p => typeof p === "string" && !p.startsWith("blob:")));
+        return;
+      }
+    }
 
-if (!isFornitorePrivato && !hasImages) {
-  alert("Devi caricare almeno un'immagine prima di salvare");
-  return;
-}
+    const hasImages =
+      (fotoFile && fotoFile.length > 0) ||
+      (previewFoto &&
+        previewFoto.some(
+          (p) => typeof p === "string" && !p.startsWith("blob:")
+        ));
+
+    if (!isFornitorePrivato && !hasImages) {
+      alert("Devi caricare almeno un'immagine prima di salvare");
+      return;
+    }
+
     const draftRef = doc(db, "scarichi_draft", utenteNome);
     const draftSnap = await getDoc(draftRef);
 
@@ -1092,9 +1100,7 @@ if (!isFornitorePrivato && !hasImages) {
       inModifica = !!d.inModifica;
 
       docIdOriginaleState =
-        d.docIdOriginale ||
-        docIdOriginale ||
-        null;
+        d.docIdOriginale || docIdOriginale || null;
 
       sourceCollection = d.sourceCollection || "scarichi";
     }
@@ -1142,9 +1148,9 @@ if (!isFornitorePrivato && !hasImages) {
 
       data: usaOra
         ? new Date()
-        : (dataScaricoStr && oraStr
-            ? parseDataOra(dataScaricoStr, oraStr)
-            : new Date()),
+        : dataScaricoStr && oraStr
+        ? parseDataOra(dataScaricoStr, oraStr)
+        : new Date(),
 
       fotoURL: fotoURLs,
       note: note || "",
@@ -1173,12 +1179,7 @@ if (!isFornitorePrivato && !hasImages) {
       isUpdate = false;
     }
 
-    const refDocFinale = doc(
-      db,
-      targetCollection,
-      docIdOriginaleState
-    );
-
+    const refDocFinale = doc(db, targetCollection, docIdOriginaleState);
     const snapFinale = await getDoc(refDocFinale);
     const after = snapFinale.exists() ? snapFinale.data() : payload;
 
@@ -1197,7 +1198,6 @@ if (!isFornitorePrivato && !hasImages) {
 
     await deleteDoc(doc(db, "scarichi_draft", utenteNome));
 
-    // reset UI
     setScarico([]);
     setFotoFile([]);
     setPreviewFoto([]);
@@ -1213,13 +1213,11 @@ if (!isFornitorePrivato && !hasImages) {
 
     console.log("✅ SALVATAGGIO COMPLETATO");
 
-    // 🔥 NUOVA LOGICA: STAMPA
     const vuoleStampare = window.confirm("Vuoi stampare il movimento in PDF?");
 
     if (vuoleStampare) {
       await handlePrint(docIdOriginaleState, tipoMovimento);
     }
-
   } catch (err) {
     console.error("❌ ERRORE SAVE:", err);
     alert("Errore salvataggio");
@@ -1526,7 +1524,6 @@ onChange={async (e) => {
  disabled={
   salvataggioInCorso ||
   firExists ||
-  (!isFornitorePrivato && !firCer) ||
   !listinoValid ||
   !dirty
 }
