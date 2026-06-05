@@ -440,67 +440,201 @@ const handleChangePassword = async () => {
 
   setMessage("");
 
+  const utenteFallback = oldUser || "UTENTE_SCONOSCIUTO";
+  console.log("👤 utenteFallback:", utenteFallback);
+
+  // =========================
+  // CHECK PASSWORD MATCH
+  // =========================
   if (newPassword !== confirmPassword) {
-    console.log("❌ password non coincidono");
+    console.log("❌ PASSWORD NON COINCIDONO");
+
+    const logPayload = {
+      pagina: "login",
+      evento: "MODIFICA_PASSWORD",
+      utente: utenteFallback,
+      before: {
+        username: oldUser,
+        esito: "PASSWORD_MISMATCH"
+      },
+      after: {
+        risultato: "BLOCCATO"
+      },
+      meta: { tipo: "AUTH" },
+      ripristinabile: false
+    };
+
+    console.log("🧾 LOG PASSWORD_MISMATCH:", logPayload);
+    await scriviLog(logPayload);
+
     return setMessage("Le password non coincidono");
   }
 
   try {
-    console.log("🔍 verifico utente...");
+    console.log("🔍 verifyUser() START");
     const user = await verifyUser();
+    console.log("👤 USER TROVATO:", user);
 
-    console.log("👤 risultato verifyUser:", user);
+    const utenteLog = user
+      ? `${user.ruolo || "OPERATORE"} - ${user.username || user.email}`
+      : utenteFallback;
 
+    console.log("🧾 utenteLog:", utenteLog);
+
+    // =========================
+    // UTENTE NON TROVATO
+    // =========================
     if (!user) {
-      console.log("❌ utente NON trovato o password errata");
+      console.log("❌ UTENTE NON TROVATO");
+
+      const logPayload = {
+        pagina: "login",
+        evento: "MODIFICA_PASSWORD",
+        utente: utenteLog,
+        riferimento: {
+          collezione: "utenti",
+          documentoId: null
+        },
+        before: {
+          username: oldUser,
+          esito: "UTENTE_NON_TROVATO"
+        },
+        after: {
+          risultato: "RIFIUTATO"
+        },
+        meta: { tipo: "AUTH" },
+        ripristinabile: false
+      };
+
+      console.log("🧾 LOG UTENTE NON TROVATO:", logPayload);
+      await scriviLog(logPayload);
+
       return setMessage("Credenziali attuali errate");
     }
 
-    console.log("🔐 password attuale inserita:", oldPass);
-    console.log("🔐 hash salvato:", user.password_hash);
+    // =========================
+    // PASSWORD CHECK
+    // =========================
+    console.log("🔐 CHECK PASSWORD");
+
+    let passwordOk = true;
 
     if (user.password_hash) {
-      const compareTest = await bcrypt.compare(oldPass, user.password_hash);
-      console.log("🧪 test bcrypt compare:", compareTest);
+      passwordOk = await bcrypt.compare(oldPass, user.password_hash);
+      console.log("🧪 bcrypt compare:", passwordOk);
     } else {
-      console.log("⚠️ utente ha password in chiaro");
+      passwordOk = user.password === oldPass;
+      console.log("🧪 plaintext compare:", passwordOk);
     }
 
-    console.log("🆕 nuova password:", newPassword);
+    // =========================
+    // PASSWORD ERRATA
+    // =========================
+    if (!passwordOk) {
+      console.log("❌ PASSWORD ERRATA");
+
+      const logPayload = {
+        pagina: "login",
+        evento: "MODIFICA_PASSWORD",
+        utente: utenteLog,
+        riferimento: {
+          collezione: "utenti",
+          documentoId: user.id
+        },
+        before: {
+          username: oldUser,
+          esito: "PASSWORD_ERRATA"
+        },
+        after: {
+          risultato: "NEGATO"
+        },
+        meta: { tipo: "AUTH" },
+        ripristinabile: false
+      };
+
+      console.log("🧾 LOG PASSWORD ERRATA:", logPayload);
+      await scriviLog(logPayload);
+
+      return setMessage("Credenziali attuali errate");
+    }
+
+    // =========================
+    // HASH PASSWORD
+    // =========================
+    console.log("🆕 GENERO HASH");
 
     const hashed = await bcrypt.hash(newPassword, 10);
+    console.log("🔐 HASH OK");
 
-    console.log("🔐 nuovo hash generato:", hashed);
+    // =========================
+    // UPDATE FIRESTORE
+    // =========================
+    console.log("💾 UPDATE FIRESTORE");
 
     await updateDoc(doc(db, "utenti", user.id), {
       password_hash: hashed,
       password: null
     });
 
-    console.log("💾 password salvata su DB");
+    console.log("💾 UPDATE OK");
 
-    await scriviLog({
+    // =========================
+    // SUCCESS
+    // =========================
+    const logPayload = {
       pagina: "login",
-      azione: "MODIFICA_PASSWORD",
-      collezioneRef: "utenti",
-      documentoId: user.id,
-      dati_originali: { password: "***" },
-      dati_modificati: { password: "***" },
+      evento: "MODIFICA_PASSWORD",
+      utente: utenteLog,
+      riferimento: {
+        collezione: "utenti",
+        documentoId: user.id
+      },
+      before: {
+        username: user.username || user.email
+      },
+      after: {
+        risultato: "PASSWORD_AGGIORNATA"
+      },
       meta: { tipo: "AUTH" },
       ripristinabile: true
-    });
+    };
 
-    console.log("🧾 log scritto");
+    console.log("🧾 LOG SUCCESS:", logPayload);
+    await scriviLog(logPayload);
+
+    console.log("✅ COMPLETATO");
 
     setMessage("Password aggiornata");
     setMode(null);
 
   } catch (e) {
-    console.error("💥 ERRORE cambio password:", e);
+    console.error("💥 ERRORE:", e);
+
+    const logPayload = {
+      pagina: "login",
+      evento: "MODIFICA_PASSWORD",
+      utente: utenteFallback,
+      riferimento: {
+        collezione: "utenti",
+        documentoId: null
+      },
+      before: {
+        username: oldUser,
+        errore: e?.message || "UNKNOWN"
+      },
+      after: {
+        risultato: "ERRORE"
+      },
+      meta: { tipo: "AUTH" },
+      ripristinabile: false
+    };
+
+    console.log("🧾 LOG ERRORE:", logPayload);
+    await scriviLog(logPayload);
+
     setMessage("Errore cambio password");
   }
 };
-
   return (
     <div style={{ padding: 20, maxWidth: 400, margin: "0 auto" }}>
    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

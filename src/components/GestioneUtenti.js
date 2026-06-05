@@ -44,6 +44,27 @@ const fetchUsers = async () => {
   setUsers(data);
 };
 
+const getClientIP = async () => {
+  try {
+    const res = await fetch("https://api.ipify.org?format=json");
+    const data = await res.json();
+    return data.ip || "NON_DISPONIBILE";
+  } catch (e) {
+    return "NON_DISPONIBILE";
+  }
+};
+const buildLogUser = (user, fallback = "ADMIN") => {
+  const ruolo = user?.ruolo || fallback;
+
+  const username =
+    user?.username?.trim() ||
+    (user?.email ? user.email.split("@")[0] : null) ||
+    "UTENTE_SCONOSCIUTO";
+
+  return `${ruolo} - ${username}`;
+};
+
+
 const handleUnlockUser = async (u) => {
   if (!window.confirm(`Sbloccare ${u.username || u.email}?`)) return;
 
@@ -53,25 +74,39 @@ const handleUnlockUser = async (u) => {
       failed_attempts: 0
     });
 
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
+
     await scriviLog({
       pagina: "gestione-utenti",
-      azione: "SBLOCCA_UTENTE",
-      collezioneRef: "utenti",
-      documentoId: u.id,
-      dati_originali: {
-        lock_until: u.lock_until,
-        failed_attempts: u.failed_attempts
+      evento: "SBLOCCO_UTENTE",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: u.id
       },
-      dati_modificati: {
+     utente: buildLogUser(currentUser, "ADMIN"),
+      before: {
+        stato: "BLOCCATO",
+        lock_until: u.lock_until
+          ? new Date(u.lock_until).toLocaleString("it-IT")
+          : null,
+        tentativi_falliti: u.failed_attempts || 0
+      },
+
+      after: {
+        stato: "ABILITATO",
         lock_until: null,
-        failed_attempts: 0
+        tentativi_falliti: 0
       },
-      meta: { tipo: "UTENTE" },
+
+      meta: {
+        tipo: "UTENTE",
+        ip: clientIP
+      },
+
       ripristinabile: true
     });
 
     setMessage(`Utente ${u.username || u.email} sbloccato`);
-
     fetchUsers();
 
   } catch (err) {
@@ -146,10 +181,12 @@ const handleAnnulla = () => {
   setPassword("");
   setEmail("");
   setRole("OPERATORE");
+  
   setIsDirty(false);
   setMessage("");
   setConfirmPassword("");
 };
+
 const handleUpdateUser = async () => {
   if (!selectedUser) return;
 
@@ -163,37 +200,48 @@ const handleUpdateUser = async () => {
 
     const emailFinale = email || adminEmail || null;
 
-    // =============================
-    // COSTRUZIONE UTENTE AGGIORNATO
-    // =============================
     const updated = {
       ...selectedUser,
-      username: username,
+      username,
       email: emailFinale,
       ruolo: role
     };
 
-    // =============================
-    // PASSWORD MANAGEMENT
-    // =============================
     if (password && password.trim() !== "") {
       updated.password_hash = await bcrypt.hash(password, 10);
       delete updated.password;
     }
 
-    await setDoc(doc(db, "utenti", selectedUser.uid), updated);
+    await setDoc(doc(db, "utenti", selectedUser.id), updated);
+
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
 
     await scriviLog({
       pagina: "gestione-utenti",
-      azione: "MODIFICA",
-      collezioneRef: "utenti",
-      documentoId: selectedUser.uid,
+      evento: "MODIFICA_UTENTE",
 
-      dati_originali: orig,
-      dati_modificati: updated,
+      riferimento: {
+        collezione: "utenti",
+        documentoId: selectedUser.id
+      },
+
+      utente: buildLogUser(currentUser, "ADMIN"),
+
+      before: {
+        username: orig.username || "-",
+        email: orig.email || "-",
+        ruolo: orig.ruolo || "OPERATORE"
+      },
+
+      after: {
+        username: updated.username || "-",
+        email: updated.email || "-",
+        ruolo: updated.ruolo || "OPERATORE"
+      },
 
       meta: {
-        tipo: "UTENTE"
+        tipo: "UTENTE",
+        ip: clientIP
       },
 
       ripristinabile: true
@@ -219,25 +267,40 @@ const handleResetPassword = async (u) => {
   if (!window.confirm(`Reset password per ${u.username || u.email}?`)) return;
 
   try {
-    const updatedUser = {
-      ...u,
-      password_hash: await bcrypt.hash("12345", 10)
-    };
+    const hashed = await bcrypt.hash("12345", 10);
 
-    delete updatedUser.password;
+    await updateDoc(doc(db, "utenti", u.id), {
+      password_hash: hashed,
+      password: null
+    });
 
-    await setDoc(doc(db, "utenti", u.uid), updatedUser);
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
 
     await scriviLog({
       pagina: "gestione-utenti",
-      azione: "RESET_PASSWORD",
-      collezioneRef: "utenti",
-      documentoId: u.uid,
+      evento: "RESET_PASSWORD",
 
-      dati_originali: { password: "***" },
-      dati_modificati: { password: "***" },
+      riferimento: {
+        collezione: "utenti",
+        documentoId: u.id
+      },
 
-      meta: { tipo: "UTENTE" },
+      utente: buildLogUser(u, currentUser),
+
+      before: {
+        username: u.username || (u.email ? u.email.split("@")[0] : "-")
+      },
+
+      after: {
+        risultato: "PASSWORD_RESET",
+        nuova_password: "12345"
+      },
+
+      meta: {
+        tipo: "UTENTE",
+        ip: clientIP
+      },
+
       ripristinabile: true
     });
 
@@ -318,17 +381,31 @@ const handleAddUser = async () => {
 
     await setDoc(doc(db, "utenti", uid), newUser);
 
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
+
     await scriviLog({
       pagina: "gestione-utenti",
-      azione: "CREAZIONE",
-      collezioneRef: "utenti",
-      documentoId: uid,
+      evento: "CREAZIONE_UTENTE",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: uid
+      },
 
-      dati_originali: null,
-      dati_modificati: newUser,
+      utente: buildLogUser(currentUser, "ADMIN"),
+
+      before: null,
+
+      after: {
+        username,
+        email: emailFinale,
+        ruolo: role,
+        stato: "ATTIVO",
+        tentativi_falliti: 0
+      },
 
       meta: {
-        tipo: "UTENTE"
+        tipo: "UTENTE",
+        ip: clientIP
       },
 
       ripristinabile: true
@@ -349,42 +426,60 @@ const handleAddUser = async () => {
   }
 };
   // -------- ELIMINA UTENTE --------
-  const handleDeleteUser = async (utente) => {
-    if (utente.uid === auth.currentUser?.uid) { alert("Non puoi eliminare l'utente loggato!"); return; }
-    if (!window.confirm("Sei sicuro di eliminare questo utente?")) return;
+const handleDeleteUser = async (utente) => {
+  if (utente.uid === auth.currentUser?.uid) {
+    alert("Non puoi eliminare l'utente loggato!");
+    return;
+  }
 
-    try {
-      // Log con password in chiaro per eventuale ripristino
-      await scriviLog({
-  pagina: "gestione-utenti",
-  azione: "CANCELLAZIONE",
-  collezioneRef: "utenti",
-  documentoId: utente.uid,
+  if (!window.confirm("Sei sicuro di eliminare questo utente?")) return;
 
-  dati_originali: utente,
-  dati_modificati: null,
+  try {
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
 
-  meta: {
-    tipo: "UTENTE"
-  },
+    await scriviLog({
+      pagina: "gestione-utenti",
+      evento: "ELIMINAZIONE_UTENTE",
 
-  ripristinabile: true
-});
+      riferimento: {
+        collezione: "utenti",
+        documentoId: utente.id
+      },
 
-      await deleteDoc(doc(db, "utenti", utente.uid));
-      const usernameFinale = utente.username
-  ? utente.username
-  : (utente.email ? utente.email.split("@")[0] : "Sconosciuto");
+      utente: buildLogUser(currentUser, "ADMIN"),
 
-setMessage(`Utente ${usernameFinale} eliminato!`);
-      fetchUsers();
+      before: {
+        username: utente.username || "-",
+        email: utente.email || "-",
+        ruolo: utente.ruolo || "OPERATORE"
+      },
 
-    } catch (err) {
-      console.error(err);
-      setMessage("Errore eliminazione utente");
-    }
-  };
+      after: {
+        stato: "ELIMINATO"
+      },
 
+      meta: {
+        tipo: "UTENTE",
+        ip: clientIP
+      },
+
+      ripristinabile: false
+    });
+
+    await deleteDoc(doc(db, "utenti", utente.id));
+
+    const usernameFinale = utente.username
+      ? utente.username
+      : (utente.email ? utente.email.split("@")[0] : "UTENTE");
+
+    setMessage(`Utente ${usernameFinale} eliminato!`);
+    fetchUsers();
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore eliminazione utente");
+  }
+};
   // -------- RIPRISTINA UTENTE --------
   const handleRipristina = async (log) => {
     try {

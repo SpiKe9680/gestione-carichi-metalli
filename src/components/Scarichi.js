@@ -129,6 +129,27 @@ const checkFirExists = async (value) => {
     setFirCheckLoading(false);
   }
 };
+
+const getClientIP = async () => {
+  try {
+    const res = await fetch("https://api.ipify.org?format=json");
+    const data = await res.json();
+    return data.ip || "NON_DISPONIBILE";
+  } catch (e) {
+    return "NON_DISPONIBILE";
+  }
+};
+const buildLogUser = (user, fallback = "ADMIN") => {
+  const ruolo = user?.ruolo || fallback;
+
+  const username =
+    user?.username?.trim() ||
+    (user?.email ? user.email.split("@")[0] : null) ||
+    "UTENTE_SCONOSCIUTO";
+
+  return `${ruolo} - ${username}`;
+};
+
   const formattaOra24 = (date) => {
   if (!date) return "";
 
@@ -1183,16 +1204,34 @@ const handleSave = async () => {
     const snapFinale = await getDoc(refDocFinale);
     const after = snapFinale.exists() ? snapFinale.data() : payload;
 
+const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
+
     await scriviLog({
       pagina: targetCollection,
-      evento: isUpdate ? "AGGIORNA" : "CREA",
+      evento: isUpdate ? "MODIFICA_MOVIMENTO" : "CREAZIONE_MOVIMENTO",
+
       riferimento: {
         collezione: targetCollection,
         documentoId: docIdOriginaleState
       },
-      utente: getLogUser(),
-      before: isUpdate ? before : null,
-      after,
+
+      utente: buildLogUser(activeUser, "OPERATORE"),
+
+      before: isUpdate
+        ? {
+            fornitore: before?.fornitore || "-",
+            listino: before?.listino || "-",
+            tipo: before?.tipo || "-"
+          }
+        : null,
+
+      after: {
+        fornitore: after?.fornitore || "-",
+        listino: after?.listino || "-",
+        tipo: after?.tipo || "-",
+        righe: (after?.scarico || after?.carico || []).length
+      },
+
       ripristinabile: !!before
     });
 
