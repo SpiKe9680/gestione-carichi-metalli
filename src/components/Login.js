@@ -650,21 +650,26 @@ const handleChangePassword = async () => {
 
       {message && <p style={{ color: "red" }}>{message}</p>}
 
-      {/* LOGIN */}
-      <input
-        placeholder="Nome utente o email"
-        value={inputUsername}
-        onChange={e => setInputUsername(e.target.value)}
-        style={{ width: "100%", marginBottom: 10, padding: 8 }}
-      />
+     <input
+  placeholder="Nome utente o email"
+  value={inputUsername}
+  onChange={e => setInputUsername(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") handleLogin();
+  }}
+  style={{ width: "100%", marginBottom: 10, padding: 8 }}
+/>
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={inputPassword}
-        onChange={e => setInputPassword(e.target.value)}
-        style={{ width: "100%", marginBottom: 10, padding: 8 }}
-      />
+<input
+  type="password"
+  placeholder="Password"
+  value={inputPassword}
+  onChange={e => setInputPassword(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") handleLogin();
+  }}
+  style={{ width: "100%", marginBottom: 10, padding: 8 }}
+/>
 
       <button onClick={handleLogin} style={{ width: "100%", padding: 10 }}>
         Accedi

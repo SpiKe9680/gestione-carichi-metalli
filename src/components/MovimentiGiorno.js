@@ -23,7 +23,7 @@ const [movFin, setMovFin] = useState([]);
 const [mapFatture, setMapFatture] = useState({});
 const [mapProspetti, setMapProspetti] = useState({});
 const [mapScarichi, setMapScarichi] = useState({});
-
+const [globalLoading, setGlobalLoading] = useState(false);
   const [carichiScarichi, setCarichiScarichi] = useState([]);
 const toDate = (v) => {
   if (!v) return null;
@@ -98,46 +98,51 @@ const fin = finSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   fetchAll();
 }, []);
+const runSafe = async (fn) => {
+  if (globalLoading) return; // 🔥 blocca doppio click
 
-const refreshAll = async () => {
+  setGlobalLoading(true);
   try {
-    const [
-      finSnap,
-      fattureSnap,
-      prospettiSnap,
-      scarichiSnap
-    ] = await Promise.all([
-      getDocs(collection(db, "MovimentoFinanziario")),
-      getDocs(collection(db, "fattureCarichi")),
-      getDocs(collection(db, "prospettiFattura")),
-      getDocs(collection(db, "scarichi"))
-    ]);
-
-    const fin = finSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    const fattureMap = {};
-    fattureSnap.docs.forEach(d => {
-      fattureMap[d.id] = { id: d.id, ...d.data() };
-    });
-
-    const prospettiMap = {};
-    prospettiSnap.docs.forEach(d => {
-      prospettiMap[d.id] = { id: d.id, ...d.data() };
-    });
-
-    const scarichiMap = {};
-    scarichiSnap.docs.forEach(d => {
-      scarichiMap[d.id] = { id: d.id, ...d.data() };
-    });
-
-    setMovFin(fin);
-    setMapFatture(fattureMap);
-    setMapProspetti(prospettiMap);
-    setMapScarichi(scarichiMap);
-
-  } catch (err) {
-    console.error(err);
+    await fn();
+    await refreshAll();
+  } finally {
+    setGlobalLoading(false);
   }
+};
+const refreshAll = async () => {
+  const [
+    finSnap,
+    fattureSnap,
+    prospettiSnap,
+    scarichiSnap
+  ] = await Promise.all([
+    getDocs(collection(db, "MovimentoFinanziario")),
+    getDocs(collection(db, "fattureCarichi")),
+    getDocs(collection(db, "prospettiFattura")),
+    getDocs(collection(db, "scarichi"))
+  ]);
+
+  const fin = finSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const fattureMap = {};
+  fattureSnap.docs.forEach(d => {
+    fattureMap[d.id] = { id: d.id, ...d.data() };
+  });
+
+  const prospettiMap = {};
+  prospettiSnap.docs.forEach(d => {
+    prospettiMap[d.id] = { id: d.id, ...d.data() };
+  });
+
+  const scarichiMap = {};
+  scarichiSnap.docs.forEach(d => {
+    scarichiMap[d.id] = { id: d.id, ...d.data() };
+  });
+
+  setMovFin(fin);
+  setMapFatture(fattureMap);
+  setMapProspetti(prospettiMap);
+  setMapScarichi(scarichiMap);
 };
 
   // --------------------------
@@ -337,13 +342,11 @@ const handlePrintPDF = async () => {
 };
 
 const handleConsuntiva = async (row) => {
-  const ok = window.confirm(
-    `Confermare consuntivazione per ${row.controparte}?`
-  );
+  const ok = window.confirm(`Confermare consuntivazione per ${row.controparte}?`);
   if (!ok) return;
 
-  try {
-    // 1. crea MovimentoFinanziario
+  await runSafe(async () => {
+
     const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
       anagraficaId: row.anagraficaId || row.id,
       data: selectedDate,
@@ -354,131 +357,133 @@ const handleConsuntiva = async (row) => {
 
     const movimentoId = movRef.id;
 
-    // =========================
-    // 🔥 FATTURE CARICHI
-    // =========================
     if (row.tipo === "fattureCarichi") {
-
-      // documento
       await updateDoc(doc(db, "fattureCarichi", row.id), {
         movimentoFinanziarioId: movimentoId
       });
-
-      // 🔥 PROPAGAZIONE SU CARICHI
-      const fattura = mapFatture[row.id];
-
-      if (fattura?.movimentiIds?.length) {
-        for (const id of fattura.movimentiIds) {
-          await updateDoc(doc(db, "carichi", id), {
-            movimentoFinanziarioId: movimentoId
-          });
-        }
-      }
     }
 
-    // =========================
-    // 🔥 PROSPETTI → SCARICHI
-    // =========================
     if (row.tipo === "prospettiFattura") {
-
-      // documento
       await updateDoc(doc(db, "prospettiFattura", row.id), {
         movimentoFinanziarioId: movimentoId
       });
-
-      // 🔥 PROPAGAZIONE SU SCARICHI
-      const prospetto = mapProspetti[row.id];
-
-      if (prospetto?.movimentiIds?.length) {
-        for (const id of prospetto.movimentiIds) {
-          await updateDoc(doc(db, "scarichi", id), {
-            movimentoFinanziarioId: movimentoId
-          });
-        }
-      }
     }
 
-    // =========================
-    // 🔥 PRIVATI (scarico singolo)
-    // =========================
     if (row.tipo === "PRIVATI") {
       await updateDoc(doc(db, "scarichi", row.id), {
         movimentoFinanziarioId: movimentoId
       });
     }
 
-    await refreshAll();
-
-  } catch (err) {
-    console.error(err);
-  }
+  });
 };
 
 
-
 const handleDeleteFin = async (row) => {
+  console.log("🧨 STORNO START =======================");
+  console.log("ROW COMPLETA:", row);
+
   const ok = window.confirm(
-    `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${row.importo.toFixed(2)}?`
+    `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${row.importo}`
   );
-  if (!ok) return;
+
+  if (!ok) {
+    console.log("❌ UTENTE HA ANNULLATO");
+    return;
+  }
 
   try {
-    // 1. elimina MovimentoFinanziario
-    await deleteDoc(doc(db, "MovimentoFinanziario", row.id));
+    console.log("🧾 STEP 1 - DELETE MovimentoFinanziario");
+    console.log("ID da eliminare:", row.id);
+
+    const movRef = doc(db, "MovimentoFinanziario", row.id);
+    await deleteDoc(movRef);
+
+    console.log("✅ MovimentoFinanziario eliminato");
+
+    console.log("📦 TYPE:", row.tipo);
+    console.log("🔑 anagraficaId:", row.anagraficaId);
 
     // =========================
-    // 🔥 FATTURE CARICHI
+    // FATTURE
     // =========================
     if (row.tipo === "fattureCarichi") {
+      console.log("➡️ BLOCCO FATTURE");
 
-      await updateDoc(doc(db, "fattureCarichi", row.anagraficaId), {
-        movimentoFinanziarioId: null
-      });
+      const ref = doc(db, "fattureCarichi", row.anagraficaId);
+      console.log("FATTURA REF:", ref.path);
 
-      const fattura = mapFatture[row.anagraficaId];
+      const snap = await getDoc(ref);
+      console.log("FATTURA EXISTS:", snap.exists());
 
-      if (fattura?.movimentiIds?.length) {
-        for (const id of fattura.movimentiIds) {
-          await updateDoc(doc(db, "carichi", id), {
-            movimentoFinanziarioId: null
-          });
-        }
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          movimentoFinanziarioId: null
+        });
+        console.log("✅ FATTURA aggiornato");
+      } else {
+        console.warn("⚠️ FATTURA NON ESISTE");
       }
     }
 
     // =========================
-    // 🔥 PROSPETTI
+    // PROSPETTI
     // =========================
     if (row.tipo === "prospettiFattura") {
+      console.log("➡️ BLOCCO PROSPETTI");
 
-      await updateDoc(doc(db, "prospettiFattura", row.anagraficaId), {
-        movimentoFinanziarioId: null
-      });
+      const ref = doc(db, "prospettiFattura", row.anagraficaId);
+      console.log("PROSPETTO REF:", ref.path);
 
-      const prospetto = mapProspetti[row.anagraficaId];
+      const snap = await getDoc(ref);
+      console.log("PROSPETTO EXISTS:", snap.exists());
 
-      if (prospetto?.movimentiIds?.length) {
-        for (const id of prospetto.movimentiIds) {
-          await updateDoc(doc(db, "scarichi", id), {
-            movimentoFinanziarioId: null
-          });
-        }
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          movimentoFinanziarioId: null
+        });
+        console.log("✅ PROSPETTO aggiornato");
+      } else {
+        console.warn("⚠️ PROSPETTO NON ESISTE");
       }
     }
 
     // =========================
-    // 🔥 PRIVATI
+    // PRIVATI / SCARICHI
     // =========================
     if (row.tipo === "PRIVATI") {
-      await updateDoc(doc(db, "scarichi", row.anagraficaId), {
-        movimentoFinanziarioId: null
-      });
+      console.log("➡️ BLOCCO PRIVATI / SCARICHI");
+
+      const id = row.anagraficaId;
+      console.log("SCARICO ID:", id);
+
+      if (!id) {
+        console.warn("⚠️ anagraficaId MANCANTE");
+        return;
+      }
+
+      const ref = doc(db, "scarichi", id);
+      console.log("SCARICO REF:", ref.path);
+
+      const snap = await getDoc(ref);
+      console.log("SCARICO EXISTS:", snap.exists());
+
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          movimentoFinanziarioId: null
+        });
+        console.log("✅ SCARICO aggiornato");
+      } else {
+        console.error("❌ SCARICO NON ESISTE → QUI NASCE IL BUG");
+      }
     }
 
+    console.log("🔄 REFRESH ALL");
     await refreshAll();
 
+    console.log("🧨 STORNO END =======================");
   } catch (err) {
-    console.error(err);
+    console.error("💥 ERRORE STORNO FIN:", err);
   }
 };
 
@@ -594,7 +599,26 @@ const getOccorrenze = (item) => {
   // UI
   // --------------------------
  return (
+  
   <div style={{ padding: 20 }}>
+    {globalLoading && (
+  <div style={{
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 99999,
+    color: "white",
+    fontSize: 20
+  }}>
+    ⏳ Operazione in corso...
+  </div>
+)}
     
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -699,7 +723,9 @@ const getOccorrenze = (item) => {
 }));
   if (movs.length === 0) return null;
 const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
+
   return (
+    
     <tr
   key={item.id}
   onDoubleClick={() => {
@@ -818,33 +844,26 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
           color: "white"
         }}
         disabled={loadingBulk}
-        onClick={async () => {
-          const ok = window.confirm("Confermi consuntivazione totale?");
-          if (!ok) return;
+onClick={async () => {
+  const ok = window.confirm("Confermi consuntivazione totale?");
+  if (!ok) return;
 
-          setLoadingBulk(true);
+  await runSafe(async () => {
+    for (const o of occList) {
+      await addDoc(collection(db, "MovimentoFinanziario"), {
+        anagraficaId: contItem.id,
+        data: selectedDate,
+        dataDocumento: o.data,
+        importo: contItem.importo,
+        tipo: contItem.tipo
+      });
+    }
+  });
 
-          try {
-            for (const o of occList) {
-              await addDoc(collection(db, "MovimentoFinanziario"), {
-                anagraficaId: contItem.id,
-                data: selectedDate,
-                dataDocumento: o.data,
-                importo: contItem.importo,
-                tipo: contItem.tipo
-              });
-            }
-
-            await refreshAll();
-
-            setShowModal(false);
-            setContItem(null);
-            setOccList([]);
-
-          } finally {
-            setLoadingBulk(false);
-          }
-        }}
+  setShowModal(false);
+  setContItem(null);
+  setOccList([]);
+}}
       >
         CONSUNTIVA TUTTO
       </button>
@@ -941,27 +960,20 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
           color: "white"
         }}
         disabled={loadingBulk}
-        onClick={async () => {
-          const ok = window.confirm("Confermi STORNO TOTALE?");
-          if (!ok) return;
+onClick={async () => {
+  const ok = window.confirm("Confermi STORNO TOTALE?");
+  if (!ok) return;
 
-          setLoadingBulk(true);
+  await runSafe(async () => {
+    for (const o of occList) {
+      await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
+    }
+  });
 
-          try {
-            for (const o of occList) {
-              await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
-            }
-
-            await refreshAll();
-
-            setShowContabilizza(false);
-            setContItem(null);
-            setOccList([]);
-
-          } finally {
-            setLoadingBulk(false);
-          }
-        }}
+  setShowContabilizza(false);
+  setContItem(null);
+  setOccList([]);
+}}
       >
         🔄 STORNA TUTTO
       </button>

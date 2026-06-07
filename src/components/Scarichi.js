@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import {  PdfHeader } from "../utils/dateUtils";
+import {  PdfHeader , loadConfigAzienda } from "../utils/dateUtils";
 import Select from "react-select";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -76,9 +76,26 @@ const [docIdOriginale, setDocIdOriginale] = useState(null);
   const [usaOra, setUsaOra] = useState(true);
   const [dataScaricoStr, setDataScaricoStr] = useState("");
   const [oraStr, setOraStr] = useState("");
-
+const headerBtnStyle = {
+  height: "38px",
+  padding: "0 12px",
+  borderRadius: "6px",
+  fontSize: "13px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  whiteSpace: "nowrap"
+};
   const [userEmail, setUserEmail] = useState(null);
+const [configAzienda, setConfigAzienda] = useState(null);
 
+useEffect(() => {
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+  load();
+}, []);
   const formattaDataItaliana = (date) => {
     const gg = String(date.getDate()).padStart(2, "0");
     const mese = mesiItaliani[date.getMonth()];
@@ -1312,34 +1329,67 @@ const materialiOptions = materialiFiltrati.map(m => ({
 
   return (
     <div className="scarichi-container">
-      <div className="scarichi-header">
-       <h2 key={tipoMovimento + (docIdOriginale ? "_edit" : "_new")}>
-  {docIdOriginale
-    ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
-    : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
-  }
-</h2>
+      <div className="scarichi-header" style={{
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between"
+}}>
+<div style={{
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "8px",
+  marginBottom: "15px"
+}}>
+  
+  {configAzienda?.logoBase64 && (
+    <img
+      src={`data:image/png;base64,${configAzienda.logoBase64}`}
+      alt="logo"
+      style={{
+        height: "150px",
+        maxWidth: "300px",
+        objectFit: "contain"
+      }}
+    />
+  )}
+
+  <h2 style={{ margin: 0 }}>
+    {docIdOriginale
+      ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
+      : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
+    }
+  </h2>
+
+</div>
         <div>
         {["admin", "manager"].includes(
   (activeUserRole || role || "").toLowerCase().trim()
 ) && (
-  <button onClick={handleGoToDashboard}>
+  <div style={{ display: "flex", gap: "8px" }}>
+  <button style={headerBtnStyle}  onClick={handleGoToDashboard}>
     Torna alla Dashboard
   </button>
+  </div>
 )}
-         <button onClick={logout}>
+<div style={{ display: "flex", gap: "8px" }}>
+         <button style={headerBtnStyle}  onClick={logout}>
   🚪Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
 </button>
+</div>
          {/* --- PULSANTE STAMPA ULTIMO SCARICO --- */}
     
-  <div style={{ marginLeft: "15px" }}>
-  <button onClick={() => stampaUltimoMovimento("scarico")}>
+  <div style={{ display: "flex", gap: "8px" }}>
+  <button style={headerBtnStyle}  onClick={() => stampaUltimoMovimento("scarico")}>
     Stampa Ultimo Scarico
-  </button>
-  <button onClick={() => stampaUltimoMovimento("carico")} style={{ marginLeft: "8px" }}>
+  </button></div><div style={{ display: "flex", gap: "8px" }}>
+  <button style={headerBtnStyle}  onClick={() => stampaUltimoMovimento("carico")} style={{ marginLeft: "8px" }}>
     Stampa Ultimo Carico
   </button>
 </div>
+<div style={{ display: "flex", gap: "8px" }}>
+       <button onClick={handleReset} style={{ marginLeft: "15px" }}>    {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
+  </button></div>
        </div>
       </div>
       <div>
@@ -1473,8 +1523,7 @@ localStorage.setItem("fornitore_prefill_nome", "");
   }}
 />
         
-        <button onClick={handleReset} style={{ marginLeft: "15px" }}>    {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
-  </button>
+ 
         {listinoBloccato && (
           <>
            <label>Foto scarico:</label>

@@ -23,11 +23,13 @@ const GestioneLog = () => {
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
-
+const [currentPage, setCurrentPage] = useState(1);
+const pageSize = 50;
   const navigate = useNavigate();
 
   // NAV
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
+  
   const goHome = () => navigate("/admin");
 const logRipristinabile = (log) => {
   return (
@@ -59,38 +61,60 @@ const logRipristinabile = (log) => {
   useEffect(() => { fetchLogs(); }, []);
 
   // DATE DEFAULT
-  useEffect(() => {
-    if (minDataDB && maxDataDB) {
-      setDal(minDataDB);
-      setAl(maxDataDB);
-    }
-  }, [minDataDB, maxDataDB]);
+ useEffect(() => {
+  if (maxDataDB) {
+    const end = new Date(maxDataDB);
+    const start = new Date(maxDataDB);
 
-  // FILTRI
-  useEffect(() => {
+    start.setDate(start.getDate() - 2); // 🔥 ultimi 2 giorni
+
+    setDal(start);
+    setAl(end);
+  }
+}, [maxDataDB]);
+
+useEffect(() => {
+  const computeFiltered = () => {
     let dati = [...logs];
 
     if (!tutti && dal && al) {
       const start = new Date(dal);
       const end = new Date(al);
-      end.setHours(23,59,59,999);
-      dati = dati.filter(l => l.timestamp?.toDate && l.timestamp.toDate() >= start && l.timestamp.toDate() <= end);
+      end.setHours(23, 59, 59, 999);
+
+      dati = dati.filter(l =>
+        l.timestamp?.toDate &&
+        l.timestamp.toDate() >= start &&
+        l.timestamp.toDate() <= end
+      );
     }
-    if (paginaFilter !== "tutte") dati = dati.filter(l => l.pagina === paginaFilter);
-    if (utenteFilter !== "tutti") dati = dati.filter(l => l.utente === utenteFilter);
-  if (tipoFilter !== "tutte") {
-  dati = dati.filter(l => l.evento === tipoFilter);
-}
-  
 
+    if (paginaFilter !== "tutte") {
+      dati = dati.filter(l => l.pagina === paginaFilter);
+    }
 
-    setFilteredLogs(dati);
-    setPagineDisponibili([...new Set(dati.map(l=>l.pagina || "sconosciuta"))]);
-    setUtentiDisponibili([...new Set(dati.map(l=>l.utente || "sconosciuto"))]);
- setTipiDisponibili([
-  ...new Set(dati.map(l => l.evento).filter(Boolean))
-]);
-  }, [logs, dal, al, tutti, paginaFilter, utenteFilter, tipoFilter]);
+    if (utenteFilter !== "tutti") {
+      dati = dati.filter(l => l.utente === utenteFilter);
+    }
+
+    if (tipoFilter !== "tutte") {
+      dati = dati.filter(l => l.evento === tipoFilter);
+    }
+
+    return dati;
+  };
+
+  const risultati = computeFiltered();
+setCurrentPage(1);
+  // ✅ SOLO QUESTO
+  setFilteredLogs(risultati);
+
+  setPagineDisponibili([...new Set(risultati.map(l => l.pagina || "sconosciuta"))]);
+  setUtentiDisponibili([...new Set(risultati.map(l => l.utente || "sconosciuto"))]);
+  setTipiDisponibili([...new Set(risultati.map(l => l.evento).filter(Boolean))]);
+
+}, [logs, dal, al, tutti, paginaFilter, utenteFilter, tipoFilter]);
+
 
   const apriDettagli = (log) => navigate("/dettagli-log", { state: { log } });
   const formattaData = ts => ts?.toDate ? `${ts.toDate().toLocaleDateString("it-IT")} ${ts.toDate().toLocaleTimeString("it-IT")}` : "";
@@ -98,6 +122,33 @@ const selectStyle = {
   control: (base) => ({ ...base, minWidth: 200 }),
   menu: (base) => ({ ...base, zIndex: 9999 })
 };
+
+
+const computeBaseForDropdowns = () => {
+  let dati = [...logs];
+
+  if (!tutti && dal && al) {
+    const start = new Date(dal);
+    const end = new Date(al);
+    end.setHours(23, 59, 59, 999);
+
+    dati = dati.filter(l =>
+      l.timestamp?.toDate &&
+      l.timestamp.toDate() >= start &&
+      l.timestamp.toDate() <= end
+    );
+  }
+
+  return dati;
+};
+
+const totalPages = Math.ceil(filteredLogs.length / pageSize);
+
+const paginatedLogs = filteredLogs.slice(
+  (currentPage - 1) * pageSize,
+  currentPage * pageSize
+);
+
   return (
     <div className="gestione-log-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -116,7 +167,7 @@ const selectStyle = {
 
         {!tutti && (
           <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
-            <label>
+            <label className="filter-item">
               Dal:
               <DatePicker
                 selected={dal}
@@ -214,7 +265,7 @@ const selectStyle = {
           </tr>
         </thead>
         <tbody>
-          {filteredLogs.map(log=>(
+          {paginatedLogs.map(log=>(
             <tr key={log.id} style={{background: log.ripristinato ? "#ddd" : "transparent"}}>
               <td>{formattaData(log.timestamp)}</td>
               <td>{log.pagina || "sconosciuta"}</td>
@@ -242,6 +293,25 @@ const selectStyle = {
           ))}
         </tbody>
       </table>
+      <div style={{ marginTop: 20, display: "flex", justifyContent: "center", gap: 10 }}>
+  <button
+    disabled={currentPage === 1}
+    onClick={() => setCurrentPage(p => p - 1)}
+  >
+    ⬅️ Prev
+  </button>
+
+  <span>
+    Pagina {currentPage} / {totalPages || 1}
+  </span>
+
+  <button
+    disabled={currentPage === totalPages}
+    onClick={() => setCurrentPage(p => p + 1)}
+  >
+    Next ➡️
+  </button>
+</div>
     </div>
   );
 };

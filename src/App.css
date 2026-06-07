@@ -95,3 +95,75 @@
   overflow-x: auto;
   font-size: 13px;
 }
+
+.filtri {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* OGNI FILTRO È UN BLOCCHETTO VERTICALE */
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+/* INPUT E SELECT SEMPRE A LARGHEZZA COMPLETA */
+.filter-item input,
+.filter-item select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+}
+
+/* REACT-SELECT FIX */
+.filter-item .css-1uccc91-singleValue,
+.filter-item .react-select__control {
+  width: 100% !important;
+}
+
+/* MOBILE = FULL STACK */
+@media (max-width: 768px) {
+  .filtri {
+    flex-direction: column;
+  }
+
+  .filter-item {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
+.header-btn {
+  height: 38px;
+  min-width: 160px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #f8f8f8;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.header-btn:hover {
+  background: #eee;
+}
+
+.header-btn-danger {
+  background: #f44336;
+  color: white;
+  border: none;
+}
+
+.header-btn-primary {
+  background: #4CAF50;
+  color: white;
+  border: none;
+}

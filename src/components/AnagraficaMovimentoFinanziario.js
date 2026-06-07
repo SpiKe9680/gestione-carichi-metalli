@@ -105,6 +105,12 @@ setMovimentiCache(movimenti);
   );
 };
 
+
+const getKey = (d) => {
+  const date = d?.toDate ? d.toDate() : new Date(d);
+  return date.toISOString().split("T")[0]; // YYYY-MM-DD stabile
+};
+
 const aggiornaMovimentiConsuntivati = async (anagraficaId, nuoviDati, before) => {
   const snap = await getDocs(collection(db, "MovimentoFinanziario"));
 
@@ -300,17 +306,24 @@ function getDataLimite(item) {
 }
 const apriContabilizza = async (item) => {
   const oggi = getDataLimite(item);
-  const start = item.createdAt?.toDate ? item.createdAt.toDate() : new Date();
+  const start = item.createdAt?.toDate
+    ? item.createdAt.toDate()
+    : new Date(item.createdAt);
 
-  // 🔴 prendi movimenti già contabilizzati
   const snap = await getDocs(collection(db, "MovimentoFinanziario"));
-  const pagati = snap.docs
-    .map((d) => d.data())
-    .filter((m) => m.anagraficaId === item.id)
+  const movs = snap.docs.map((d) => d.data());
+
+  // 🔥 FIX: blocco coerente con MovimentiGiorno
+  const pagati = movs
+    .filter(
+      (m) =>
+        m.anagraficaId === item.id &&
+        m.tipo === item.tipo
+    )
     .map((m) =>
-      m.data?.toDate
-        ? m.data.toDate().toDateString()
-        : new Date(m.data).toDateString()
+      m.dataDocumento?.toDate
+        ? m.dataDocumento.toDate().toDateString()
+        : new Date(m.dataDocumento || m.data).toDateString()
     );
 
   const occorrenze = [];
@@ -319,9 +332,9 @@ const apriContabilizza = async (item) => {
   for (let i = 0; i < 200; i++) {
     if (cursor > oggi) break;
 
-    const key = new Date(cursor).toDateString();
+    const key = cursor.toDateString();
 
-    // 🔥 SOLO NON PAGATI
+    // 🔥 FIX: confronto identico all'altra pagina
     if (!pagati.includes(key)) {
       occorrenze.push({
         data: new Date(cursor),
@@ -348,7 +361,6 @@ const apriContabilizza = async (item) => {
     }
   }
 
-  // 🔴 se NON c'è nulla → NON aprire popup
   if (occorrenze.length === 0) {
     alert("Nessun movimento da contabilizzare");
     return;
@@ -356,8 +368,8 @@ const apriContabilizza = async (item) => {
 
   setContItem(item);
   setOccList(
-  occorrenze.sort((a, b) => new Date(a.data) - new Date(b.data))
-);
+    occorrenze.sort((a, b) => new Date(a.data) - new Date(b.data))
+  );
   setShowContabilizza(true);
 };
 
@@ -726,48 +738,60 @@ setDataDisForm(new Date());
  
   </div>
 {!showForm && !uiLocked && (
-  <div>
-     {/* SEARCH */}
-    <input
-      placeholder="Cerca Movimento"
-      value={searchText}
-      onChange={(e) => setSearchText(e.target.value)}
-    />
+  <div className="toolbar-filtri">
 
-    {/* TIPO */}
-    <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
-      <option value="TUTTI">TUTTI</option>
-      <option value="ENTRATA">ENTRATA</option>
-      <option value="USCITA">USCITA</option>
-    </select>
+  {/* SEARCH */}
+  <input
+    className="filter-item"
+    placeholder="Cerca Movimento"
+    value={searchText}
+    onChange={(e) => setSearchText(e.target.value)}
+  />
 
-    {/* PERIODICITA */}
-    <select value={filterPeriodicita} onChange={(e) => setFilterPeriodicita(e.target.value)}>
-      <option value="TUTTE">TUTTE</option>
-      <option value="SINGOLO">SINGOLO</option>
-      <option value="GIORNALIERO">GIORNALIERO</option>
-      <option value="SETTIMANALE">SETTIMANALE</option>
-      <option value="MENSILE">MENSILE</option>
-      <option value="ANNUALE">ANNUALE</option>
-    </select>
+  {/* TIPO */}
+  <select
+    className="filter-item"
+    value={filterTipo}
+    onChange={(e) => setFilterTipo(e.target.value)}
+  >
+    <option value="TUTTI">TUTTI</option>
+    <option value="ENTRATA">ENTRATA</option>
+    <option value="USCITA">USCITA</option>
+  </select>
+
+  {/* PERIODICITA */}
+  <select
+    className="filter-item"
+    value={filterPeriodicita}
+    onChange={(e) => setFilterPeriodicita(e.target.value)}
+  >
+    <option value="TUTTE">TUTTE</option>
+    <option value="SINGOLO">SINGOLO</option>
+    <option value="GIORNALIERO">GIORNALIERO</option>
+    <option value="SETTIMANALE">SETTIMANALE</option>
+    <option value="MENSILE">MENSILE</option>
+    <option value="ANNUALE">ANNUALE</option>
+  </select>
 
   {hasActiveFilters && !uiLocked && (
-  <button
-    onClick={resetFiltri}
-    style={{
-      background: "#e74c3c",
-      color: "white",
-      marginRight: 8,
-    }}
-  >
-    ♻ Reset Filtri
-  </button>
-)}
-{!uiLocked && (
-<button onClick={handleStampa}>
-  🖨 Stampa
-</button>
-)}  
+    <button
+      className="filter-item"
+      onClick={resetFiltri}
+      style={{
+        background: "#e74c3c",
+        color: "white"
+      }}
+    >
+      ♻ Reset Filtri
+    </button>
+  )}
+
+  {!uiLocked && (
+    <button className="filter-item" onClick={handleStampa}>
+      🖨 Stampa
+    </button>
+  )}
+
 </div>
 )}
   {/* FORM SOLO SE VISIBILE */}
@@ -1336,65 +1360,63 @@ if (item.periodicita !== "SINGOLO") {
           <span>{Number(occ.importo).toFixed(2)} €</span>
 
           <button
-            onClick={async () => {
-
-              const conferma = window.confirm(
-  contItem.modalMode === "STORNO"
-    ? "Confermi lo STORNO?"
-    : contItem.tipo === "USCITA"
-    ? "Confermi il pagamento?"
-    : "Confermi l'incasso?"
-);
-
-              if (!conferma) return;
-
-              const snap = await getDocs(collection(db, "MovimentoFinanziario"));
-
-              const match = snap.docs.find(d => {
-                const m = d.data();
-                if (m.anagraficaId !== contItem.id) return false;
-
-                const d1 = m.data?.toDate
-                  ? m.data.toDate()
-                  : new Date(m.data);
-
-                return d1.toDateString() === occ.data.toDateString();
-              });
-
-            if (contItem.modalMode === "STORNO") {
-  if (match) {
-    await deleteDoc(doc(db, "MovimentoFinanziario", match.id));
-  }
-} else {
-  if (!match) {
-    await addDoc(collection(db, "MovimentoFinanziario"), {
-      anagraficaId: contItem.id,
-      data: Timestamp.fromDate(occ.data),
-      importo: occ.importo,
-      tipo: contItem.tipo,
-    });
-  }
-}
-
-             setOccList(prev => {
-  const nuova = prev.filter(
-    x => x.data.toDateString() !== occ.data.toDateString()
+onClick={async () => {
+  const conferma = window.confirm(
+    contItem.modalMode === "STORNO"
+      ? "Confermi lo STORNO TOTALE?"
+      : contItem.tipo === "USCITA"
+      ? "Confermi il pagamento TUTTO?"
+      : "Confermi l'incasso TUTTO?"
   );
 
-  // 🔥 CHIUSURA AUTOMATICA POPUP
-  if (nuova.length === 0) {
-    setTimeout(() => {
-      setShowContabilizza(false);
-      setContItem(null);
-      setOccList([]);
-    }, 0);
+  if (!conferma) return;
+
+  setLoadingBulk(true);
+
+  try {
+    const snap = await getDocs(collection(db, "MovimentoFinanziario"));
+
+    // 🔥 PREPARO MAP UNA SOLA VOLTA (FIX VERO)
+  const movimenti = snap.docs.map(d => ({
+  id: d.id,
+  ...d.data(),
+  key: getKey(d.data().dataDocumento), // 👈 QUI LA DIFFERENZA VERA
+}));
+
+    for (const occ of occList) {
+   const occKey = getKey(occ.data);
+
+const match = movimenti.find(m =>
+  m.anagraficaId === contItem.id &&
+  m.key === occKey
+);
+
+      if (contItem.modalMode === "STORNO") {
+        if (match) {
+          await deleteDoc(doc(db, "MovimentoFinanziario", match.id));
+        }
+      } else {
+        if (!match) {
+          await addDoc(collection(db, "MovimentoFinanziario"), {
+            anagraficaId: contItem.id,
+            data: Timestamp.fromDate(occ.data),
+            importo: occ.importo,
+            tipo: contItem.tipo,
+          });
+        }
+      }
+    }
+
+    await fetchData();
+
+    setOccList([]);
+    setShowContabilizza(false);
+    setContItem(null);
+
+  } finally {
+    setLoadingBulk(false);
   }
-
-  return nuova;
-});
-
-fetchData();
-            }}
+}}
           >
            {contItem.modalMode === "STORNO" ? "STORNA" : contItem.tipo === "USCITA" ? "PAGA" : "INCASSA"}
           </button>
