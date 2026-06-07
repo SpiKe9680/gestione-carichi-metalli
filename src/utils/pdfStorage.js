@@ -4,41 +4,55 @@ import { Share } from "@capacitor/share";
 
 export const salvaESharePdfCapacitor = async (pdf, filename) => {
   try {
-    const isNative = Capacitor.isNativePlatform();
     const safeFilename = filename.replace(/\s+/g, "_");
 
-    // 🌐 BROWSER
-    if (!isNative) {
+    // 🌐 WEB
+    if (!Capacitor.isNativePlatform()) {
       pdf.save(safeFilename);
       return;
     }
 
     // 📄 ANDROID / IOS
-    const blob = pdf.output("blob");
+    const base64 = pdf.output("datauristring").split(",")[1];
 
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const path = `pdf_${Date.now()}_${safeFilename}`;
 
-    const file = await Filesystem.writeFile({
-      path: `pdf/${safeFilename}`,
+    const savedFile = await Filesystem.writeFile({
+      path,
       data: base64,
-      directory: Directory.Documents,
-      recursive: true,
+      directory: Directory.Cache, // 🔥 IMPORTANTISSIMO
     });
 
     await Share.share({
-      title: "Documento PDF",
-      text: safeFilename,
-      url: file.uri,
+      title: safeFilename,
+      text: "Documento PDF",
+      url: savedFile.uri, // 🔥 file vero
       dialogTitle: "Condividi PDF",
     });
 
+    // 🧹 cleanup opzionale (dopo share)
+    setTimeout(() => {
+      Filesystem.deleteFile({
+        path,
+        directory: Directory.Cache,
+      }).catch(() => {});
+    }, 5000);
+
   } catch (err) {
-    console.error("PDF SAVE ERROR:", err);
-    alert("Errore salvataggio PDF:\n" + (err?.message || err));
+  const msg = (err?.message || "").toLowerCase();
+
+  const isShareCanceled =
+    msg.includes("canceled") ||
+    msg.includes("cancelled") ||
+    err?.code === "USER_CANCELLED" ||
+    err?.code === "Share canceled";
+
+  if (isShareCanceled) {
+    console.log("Share annullata dall'utente");
+    return;
   }
+
+  console.error("PDF Errore nel Salvataggio: ", err);
+  alert("Errore PDF:\n" + (err?.message || err));
+}
 };

@@ -1104,67 +1104,80 @@ const selectStyle = {
 )}
 
 
-      <div style={{margin:"20px 0", display:"flex", gap:"12px", alignItems:"center"}}>
-        <label>
-          Materiale:
-<Select
-  styles={selectStyle}
-  value={{ value: filtroMateriale, label: filtroMateriale }}
-  onChange={(opt) => setFiltroMateriale(opt.value)}
-  options={materialiDropdown.map(m => ({ value: m, label: m }))}
-/>
-        </label>
+<div className="filtri">
 
-        <label>
-          Codice CER:
-<Select
-  styles={selectStyle}
-  value={{ value: filtroCER, label: filtroCER }}
-  onChange={(opt) => setFiltroCER(opt.value)}
-  options={cerDropdown.map(c => ({ value: c, label: c }))}
-/>
-        </label>
+  <label className="filter-item">
+    Materiale:
+    <Select
+      styles={selectStyle}
+      value={{ value: filtroMateriale, label: filtroMateriale }}
+      onChange={(opt) => setFiltroMateriale(opt.value)}
+      options={materialiDropdown.map(m => ({ value: m, label: m }))}
+    />
+  </label>
 
-        <label>
-          <input type="checkbox" checked={tutti} onChange={e=>setTutti(e.target.checked)} /> Disabilita filtro date
-        </label>
+  <label className="filter-item">
+    Codice CER:
+    <Select
+      styles={selectStyle}
+      value={{ value: filtroCER, label: filtroCER }}
+      onChange={(opt) => setFiltroCER(opt.value)}
+      options={cerDropdown.map(c => ({ value: c, label: c }))}
+    />
+  </label>
+<div>
+   <label className="filter-item">
+        Tipo Movimento:
+        <select
+          value={filtroTipoMovimento}
+          onChange={e => setFiltroTipoMovimento(e.target.value)}
+        >
+          <option value="TUTTI">TUTTI</option>
+          <option value="SCARICO">SCARICO</option>
+          <option value="CARICO">CARICO</option>
+        </select>
+      </label>
+</div><div>
+  <label className="filter-item">
+    <input
+      type="checkbox"
+      checked={tutti}
+      onChange={e => setTutti(e.target.checked)}
+    />
+    Disabilita filtro date
+  </label>
 
-        {!tutti && (
-          <>
-            <label>
-              Dal:
-              <DatePicker
-                selected={dal}
-                onChange={setDal}
-                minDate={minDataDB || null}
-                maxDate={al || maxDataDB || new Date()}
-                dateFormat="dd/MM/yyyy"
-                placeholderText="gg/mm/yyyy"
-              />
-            </label>
+  {!tutti && (
+    <>
+      <label className="filter-item">
+        Dal:
+        <DatePicker
+          selected={dal}
+          onChange={setDal}
+          minDate={minDataDB || null}
+          maxDate={al || maxDataDB || new Date()}
+          dateFormat="dd/MM/yyyy"
+          placeholderText="gg/mm/yyyy"
+        />
+      </label>
 
-            <label>
-              Al:
-              <DatePicker
-                selected={al}
-                onChange={setAl}
-                minDate={dal || minDataDB || null}
-                maxDate={maxDataDB || new Date()}
-                dateFormat="dd/MM/yyyy"
-                placeholderText="gg/mm/yyyy"
-              />
-            </label>
-            <label>
-  Tipo Movimento:
-  <select value={filtroTipoMovimento} onChange={e => setFiltroTipoMovimento(e.target.value)}>
-    <option value="TUTTI">TUTTI</option>
-    <option value="SCARICO">SCARICO</option>
-    <option value="CARICO">CARICO</option>
-  </select>
-</label>
-          </>
-        )}
-      </div>
+      <label className="filter-item">
+        Al:
+        <DatePicker
+          selected={al}
+          onChange={setAl}
+          minDate={dal || minDataDB || null}
+          maxDate={maxDataDB || new Date()}
+          dateFormat="dd/MM/yyyy"
+          placeholderText="gg/mm/yyyy"
+        />
+      </label>
+
+     
+    </>
+  )}
+</div>
+</div>
 
       <table>
       <thead>

@@ -19,8 +19,9 @@ const [adminEmail, setAdminEmail] = useState(""); // mail di recupero globale
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   // stato
 const [username, setUsername] = useState("");
-
 const [selectedUser, setSelectedUser] = useState(null);
+
+
 const [isDirty, setIsDirty] = useState(false);
 const [confirmPassword, setConfirmPassword] = useState("");
   // -------- FETCH UTENTI --------
@@ -53,6 +54,7 @@ const getClientIP = async () => {
     return "NON_DISPONIBILE";
   }
 };
+const [mode, setMode] = useState(null); 
 const buildLogUser = (user, fallback = "ADMIN") => {
   const ruolo = user?.ruolo || fallback;
 
@@ -116,7 +118,11 @@ const handleUnlockUser = async (u) => {
 };
 
   // -------- LOGOUT --------
-  const handleLogout = async () => { await signOut(auth); navigate("/login"); };
+ const handleLogout = async () => {
+  await signOut(auth);
+  sessionStorage.clear();
+  navigate("/login", { replace: true });
+};
 
   // -------- DASHBOARD --------
   const goHome = () => navigate("/admin");
@@ -136,6 +142,7 @@ const requestSort = (key) => {
 };
 
 const handleSelectUser = (u) => {
+  setMode("edit");
   setSelectedUser(u);
 
   const usernameFinale = u.username
@@ -143,17 +150,16 @@ const handleSelectUser = (u) => {
     : (u.email ? u.email.split("@")[0] : "");
 
   setUsername(usernameFinale);
-  setPassword(u.password || "");
-setConfirmPassword(u.password || "");
-  // email sempre dal DB oppure fallback admin
-  setEmail(u.email || adminEmail || "");
+  setPassword("");
+  setConfirmPassword("");
 
-  // 🔥 AGGIUNGI QUI
-  setRole(u.ruolo || "operatore");
+  setEmail(u.email || "");
+  setRole(u.ruolo || "OPERATORE");
 
   setIsDirty(false);
-  setMessage("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 };
+
 
 useEffect(() => {
   if (!selectedUser) return;
@@ -163,34 +169,36 @@ useEffect(() => {
     : (selectedUser.email ? selectedUser.email.split("@")[0] : "");
 
   const origEmail = selectedUser.email || "";
-  const origRole = selectedUser.ruolo || "operatore";
+  const origRole = selectedUser.ruolo || "OPERATORE";
 
   const dirty =
     username !== origUsername ||
-    password !== (selectedUser.password || "") ||
-    (email || "") !== origEmail ||
-    role !== origRole;
+    email !== origEmail ||
+    role !== origRole ||
+    password.length > 0;
 
   setIsDirty(dirty);
 
 }, [username, password, email, role, selectedUser]);
 // -------- ANNULLA --------
 const handleAnnulla = () => {
+  resetForm();
+  setMessage("");
+};
+const resetForm = () => {
   setSelectedUser(null);
   setUsername("");
   setPassword("");
   setEmail("");
   setRole("OPERATORE");
-  
-  setIsDirty(false);
-  setMessage("");
   setConfirmPassword("");
+  setIsDirty(false);
+  setMode(null);
 };
-
 const handleUpdateUser = async () => {
   if (!selectedUser) return;
 
-  if (password !== confirmPassword) {
+  if (password && password !== confirmPassword) {
     setMessage("Le password non coincidono");
     return;
   }
@@ -256,6 +264,7 @@ const handleUpdateUser = async () => {
     setConfirmPassword("");
 
     fetchUsers();
+    resetForm();
 
   } catch (err) {
     console.error(err);
@@ -312,6 +321,11 @@ const handleResetPassword = async (u) => {
     setMessage("Errore reset password");
   }
 };
+useEffect(() => {
+  if (mode === null) {
+    setSelectedUser(null);
+  }
+}, [mode]);
 
 useEffect(() => {
   const fetchAdminEmail = async () => {
@@ -419,7 +433,7 @@ const handleAddUser = async () => {
     setConfirmPassword("");
 
     fetchUsers();
-
+resetForm();
   } catch (error) {
     console.error(error);
     setMessage("Errore nella creazione utente");
@@ -534,54 +548,91 @@ if (sortConfig.key) {
 
       <h2>Gestione Utenti</h2>
       {message && <p style={{ color: "green" }}>{message}</p>}
+<div style={{ marginBottom: 15 }}>
+  <button
+    onClick={() => {
+      setMode("add");
+      setSelectedUser(null);
+      setUsername("");
+      setPassword("");
+      setEmail("");
+      setRole("OPERATORE");
+      setConfirmPassword("");
+      setIsDirty(false);
+    }}
+    style={{ background: "#4caf50", color: "white" }}
+  >
+    ➕ Nuovo Utente
+  </button>
+</div>
+{/* FORM COMPATTO UTENTI (MOBILE FRIENDLY) */}
 
-      {/* FORM AGGIUNGI */}
-      <div className="form" style={{ marginBottom: 20, display: "flex", gap: "10px" }}>
-  <input
-    placeholder="Username (4-10)"
-    value={username}
-    onChange={e => setUsername(e.target.value)}
-  />
-  <input
-    type="password"
-    placeholder="Password"
-    value={password}
-    onChange={e => setPassword(e.target.value)}
-  />
-  <input
-  type="password"
-  placeholder="Conferma Password"
-  value={confirmPassword}
-  onChange={e => setConfirmPassword(e.target.value)}
-/>
- <input
-  type="email"
-  placeholder="Mail recupero (opzionale)"
-  value={email}
-  onChange={e => setEmail(e.target.value)}
-/>
-<select
-  value={role}
-  onChange={e => setRole(e.target.value)}
->
-  <option value="OPERATORE">Operatore</option>
-  <option value="MANAGER">Manager</option>
-  <option value="ADMIN">Admin</option>
-</select>
-{selectedUser ? (
-  <>
-    <button onClick={handleUpdateUser} disabled={!isDirty}>
-      Modifica
+{(mode === "add" || mode === "edit") && (
+<div style={{ marginBottom: 20, padding: 10, border: "1px solid #ddd" }}>
+
+  <div className="filter-item">
+
+    <input
+      placeholder="Username"
+      value={username}
+      onChange={e => setUsername(e.target.value)}
+    />
+
+    <input
+      type="password"
+      placeholder="Password"
+      value={password}
+      onChange={e => setPassword(e.target.value)}
+    />
+
+    <input
+      type="password"
+      placeholder="Conferma"
+      value={confirmPassword}
+      onChange={e => setConfirmPassword(e.target.value)}
+    />
+
+    <select value={role} onChange={e => setRole(e.target.value)}>
+      <option value="OPERATORE">Operatore</option>
+      <option value="MANAGER">Manager</option>
+      <option value="ADMIN">Admin</option>
+    </select>
+
+    <input
+      type="email"
+      placeholder="Mail recupero"
+      value={email}
+      onChange={e => setEmail(e.target.value)}
+      style={{ minWidth: 250 }}
+    />
+  </div>
+
+  <div style={{ marginTop: 10, display: "flex", gap: "10px" }}>
+
+    <button
+      onClick={async () => {
+        if (mode === "edit") {
+          await handleUpdateUser();
+        } else {
+          await handleAddUser();
+        }
+      }}
+      disabled={
+  !username ||
+  password !== confirmPassword ||
+  (mode === "add" && !password)
+}
+    >
+      {mode === "edit" ? "💾 Modifica Utente" : "➕ Aggiungi Utente"}
     </button>
-    <button onClick={handleAnnulla} style={{ backgroundColor: "#ccc" }}>
+
+    <button onClick={handleAnnulla} style={{ background: "#ccc" }}>
       Annulla
     </button>
-  </>
-) : (
-  <button onClick={handleAddUser}>Aggiungi Utente</button>
-)}
-</div>
 
+  </div>
+</div>
+)}
       {/* TABELLA UTENTI */}
 {/* TABELLA UTENTI */}
 {/* TABELLA UTENTI */}

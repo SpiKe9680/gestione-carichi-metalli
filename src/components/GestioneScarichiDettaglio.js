@@ -20,6 +20,7 @@ const formattaDataItaliana = (date) => {
   const yyyy = date.getFullYear();
   return `${gg} ${mese} ${yyyy}`;
 };
+
 const formattaOra24 = (date) =>
   `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
 const getUtenteReact = () => {
@@ -51,6 +52,7 @@ const [labelModifica, setLabelModifica] = useState(null);
   const [originalEditor, setOriginalEditor] = useState(null);
   const [errori, setErrori] = useState([]);
   const [rowsPerPage, setRowsPerPage] = useState(6);
+  const [showFiltri, setShowFiltri] = useState(false);
  const [currentPageCarichi, setCurrentPageCarichi] = useState(1);
 const [currentPageScarichi, setCurrentPageScarichi] = useState(1);
   const [filtroOra, setFiltroOra] = useState("tutti");
@@ -1265,67 +1267,131 @@ const trovaRigaIndex = (riga) =>
   <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
 </div>
 
-      <div style={{margin:"10px 0", display:"flex", gap:"10px"}}>
-        <label>Utente: 
-          <select value={filtroUtente} onChange={e=>{setFiltroUtente(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}}>
-            {valoriUtente.map(v=><option key={v} value={v}>{v}</option>)}
-          </select>
-        </label>
-        <label>Ora:
-          <select value={filtroOra} onChange={e=>{setFiltroOra(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}}>
-            {valoriOra.map(v=><option key={v} value={v}>{v}</option>)}
-          </select>
-        </label>
-       <label>{getLabelFornDest()}:
-  <select value={filtroFornitore} onChange={e=>{setFiltroFornitore(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}}>
-    {valoriFornitore.map(v=><option key={v} value={v}>{v}</option>)}
-  </select>
-</label>
-        <label>CER:
-          <select value={filtroCER} onChange={e=>{setFiltroCER(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}}>
-            {valoriCER.map(v=><option key={v} value={v}>{v}</option>)}
-          </select>
-        </label>
-        <label>Listino:
-          <select value={filtroListino} onChange={e=>{setFiltroListino(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}}>
-            {valoriListino.map(v=><option key={v} value={v}>{v}</option>)}
-          </select>
-        </label>
-        <label>FIR:
-  <select value={filtroFIR} onChange={e => { setFiltroFIR(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1); }}>
-    {valoriFIR.map(v => <option key={v} value={v}>{v || "(vuoto)"}</option>)}
-  </select>
-</label>
+     {/* ===== FILTRI HEADER ===== */}
+<div style={{ margin: "10px 0" }}>
+  <button onClick={() => setShowFiltri(p => !p)}>
+    {showFiltri ? "🔽 Nascondi Filtri" : "🔎  Filtra"}
+  </button>
 
-<label>Materiale:
-  <select value={filtroMateriale} onChange={e => { setFiltroMateriale(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1); }}>
-    {valoriMateriale.map(v => <option key={v} value={v}>{v}</option>)}
-  </select>
-</label>
-<label>Tipo:
-  <select
-    value={filtroTipo}
-    onChange={e => { setFiltroTipo(e.target.value); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1); }}
+  <button onClick={handleStampa} style={{ marginLeft: 10 }}>
+    🖨 Stampa
+  </button>
+</div>
+
+{/* ===== FILTRI PANEL ===== */}
+{showFiltri && (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      padding: "10px",
+      border: "1px solid #ccc",
+      borderRadius: 8,
+      background: "#f9f9f9"
+    }}
   >
-    {valoriTipo.map(v => <option key={v} value={v}>{v}</option>)}
-  </select>
-</label>
-        <label>Mostra:
-          <select value={rowsPerPage} onChange={e=>{setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value)); setCurrentPageCarichi(1);
-setCurrentPageScarichi(1);}} style={{marginLeft:5}}>
-            <option value={6}>6</option><option value={12}>12</option><option value={24}>24</option><option value="tutte">Tutte</option>
-          </select> righe
-        </label>
-        <button onClick={handleStampa} style={{marginLeft:10}}>🖨 Stampa</button>
-      </div>
+
+    <label>Utente:
+      <select value={filtroUtente} onChange={e=>{
+        setFiltroUtente(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriUtente.map(v=><option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>Ora:
+      <select value={filtroOra} onChange={e=>{
+        setFiltroOra(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriOra.map(v=><option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>{getLabelFornDest()}:
+      <select value={filtroFornitore} onChange={e=>{
+        setFiltroFornitore(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriFornitore.map(v=><option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>CER:
+      <select value={filtroCER} onChange={e=>{
+        setFiltroCER(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriCER.map(v=><option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>Listino:
+      <select value={filtroListino} onChange={e=>{
+        setFiltroListino(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriListino.map(v=><option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>FIR:
+      <select value={filtroFIR} onChange={e=>{
+        setFiltroFIR(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriFIR.map(v => <option key={v} value={v}>{v || "(vuoto)"}</option>)}
+      </select>
+    </label>
+
+    <label>Materiale:
+      <select value={filtroMateriale} onChange={e=>{
+        setFiltroMateriale(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriMateriale.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+    <label>Tipo:
+      <select value={filtroTipo} onChange={e=>{
+        setFiltroTipo(e.target.value);
+        setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+      }}>
+        {valoriTipo.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+    </label>
+
+   
+
+  </div>
+)}
+
+ <label>Mostra:
+      <select
+        value={rowsPerPage}
+        onChange={e=>{
+          setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value));
+          setCurrentPageCarichi(1);
+          setCurrentPageScarichi(1);
+        }}
+      >
+        <option value={6}>6</option>
+        <option value={12}>12</option>
+        <option value={24}>24</option>
+        <option value="tutte">Tutte</option>
+      </select> righe
+    </label>
 {nessunMovimento && (
   <div style={{ marginTop: 40, textAlign: "center", fontSize: 18 }}>
     Nessun movimento per questo giorno

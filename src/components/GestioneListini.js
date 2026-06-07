@@ -18,7 +18,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 import { loadConfigAzienda, getDataOraStampa, PdfHeader } from "../utils/dateUtils";
-
+import { signOut } from "firebase/auth";
 const GestioneListini = () => {
 let currentUser = {};
 
@@ -72,7 +72,13 @@ const [tipoFiltroListino, setTipoFiltroListino] = useState("SCARICO");
   // =============================
   // NAV
   // =============================
-  const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
+  // -------- LOGOUT --------
+ const handleLogout = async () => {
+  await signOut(auth);
+  sessionStorage.clear();
+  navigate("/login", { replace: true });
+};
+
   const goHome = () => navigate("/admin");
 
   // =============================
@@ -589,10 +595,10 @@ if (sortConfig.key) {
   </select>
 </div>
 
-      <div style={{display:"flex",gap:"10px",marginBottom:"15px"}}>
-        <button onClick={stampaTuttiListini}>🖨 Stampa tutti i listini</button>
-        <button onClick={stampaListinoSelezionato} disabled={!editor}>🖨 Stampa listino selezionato</button>
-        <button onClick={()=>setShowCreaForm(true)}>➕ Crea Nuovo Listino</button>
+      <div>
+        <button onClick={stampaTuttiListini} width="100%">🖨 Stampa tutti i listini</button></div><div>
+        <button onClick={stampaListinoSelezionato} width="100%" disabled={!editor}>🖨 Stampa listino selezionato</button>
+        </div><div><button width="100%" onClick={()=>setShowCreaForm(true)}>➕ Crea Nuovo Listino</button>
       </div>
 
       {showCreaForm && (

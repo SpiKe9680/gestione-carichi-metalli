@@ -1,12 +1,12 @@
 // src/components/ConfigurazioniGenerali.js
 import React, { useState, useEffect } from "react";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { it } from "date-fns/locale";
-
+import { signOut } from "firebase/auth";
 const ConfigurazioniGenerali = ({ logout }) => {
   const navigate = useNavigate();
 
@@ -25,7 +25,11 @@ const ConfigurazioniGenerali = ({ logout }) => {
 
   const currentUser =
     JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-
+ const handleLogout = async () => {
+  await signOut(auth);
+  sessionStorage.clear();
+  navigate("/login", { replace: true });
+};
   // -------- LOAD CONFIG --------
   useEffect(() => {
     const fetchConfig = async () => {
@@ -123,9 +127,9 @@ const ConfigurazioniGenerali = ({ logout }) => {
             🏠 Dashboard
           </button>
 
-          <button onClick={logout}>
-            🚪 Logout ({currentUser.email || currentUser.username})
-          </button>
+          <button onClick={handleLogout}>
+  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+</button>
         </div>
       </div>
 

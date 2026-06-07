@@ -293,213 +293,123 @@ totale = round2(totale);
 };
 const handleStampaDocumento = async () => {
   const isFattura = modalTipo === "fattura";
+
   const snap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
   const config = snap.exists() ? snap.data() : {};
-  const win = window.open("", "_blank");
+
   const isConsuntivato = (v) =>
     v !== null && v !== undefined && String(v).trim() !== "";
+
   const movimenti = filteredScarichi.filter(
     (m) =>
       modalData.movimentiIds.includes(m.id) &&
       !isConsuntivato(m.movimentoFinanziarioId)
   );
+
   let totale = 0;
-  let rows = "";
-  const buildGruppi = (useVendita) => {    const gruppi = {};
-    movimenti.forEach((m) => {      const dataMov =
+
+  const buildGruppi = (useVendita) => {
+    const gruppi = {};
+
+    movimenti.forEach((m) => {
+      const dataMov =
         m.dataScarico || m.data || m.dataCreazione || null;
+
       (m.cer || []).forEach((c) => {
         const firKey = c.fir || "SENZA FIR";
+
         if (!gruppi[firKey]) {
           gruppi[firKey] = {
             data: dataMov,
             righe: [],
           };
         }
+
         if (!gruppi[firKey].data && dataMov) {
           gruppi[firKey].data = dataMov;
         }
+
         (c.righe || []).forEach((r) => {
           gruppi[firKey].righe.push({
             cer: c.cer,
             materiale: r.materiale,
             kg: Number(r.netto || 0),
             prezzo: Number(
-  r.prezzo ??
-  (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
-  0
-),
+              r.prezzo ??
+              (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
+              0
+            ),
           });
         });
       });
     });
+
     return gruppi;
   };
+
   const gruppi = buildGruppi(isFattura);
+
+  // 🔥 PDF
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  const { pdf, startY } = await PdfHeader();
+
+  pdf.setFontSize(14);
+  pdf.text(isFattura ? "FATTURA" : "PROSPETTO FATTURA", 14, startY - 10);
+
+  // 🔥 dati azienda (se vuoi già pronti)
+  if (config?.ragioneSociale) {
+    pdf.setFontSize(10);
+    pdf.text(config.ragioneSociale, 14, startY - 2);
+  }
+
+  let body = [];
+
   Object.keys(gruppi).forEach((fir) => {
     const gruppo = gruppi[fir];
-   const dataTxt = gruppo.data
-      ? new Date(gruppo.data).toLocaleDateString("it-IT")
-      : "-";
-    rows += `
-      <tr>
-        <td colspan="6" style="padding:0;border:none;">
-          <div style="
-            background:#eee;
-            font-weight:bold;
-            padding:10px;
-            display:flex;
-            justify-content:space-between;
-            page-break-inside: avoid;
-            break-inside: avoid;
-          ">
-            <span>FIR: ${fir}</span>
-            <span>${isFattura ? "Data carico" : "Data scarico"}: ${dataTxt}</span>
-          </div>
-        </td>
-      </tr>
-    `;
 
     gruppo.righe.forEach((r) => {
       const tot = r.kg * r.prezzo;
       totale += tot;
 
-      rows += `
-        <tr>
-          <td></td>
-          <td>${r.cer || "-"}</td>
-          <td>${r.materiale || "-"}</td>
-          <td class="num">${r.kg.toFixed(2)}</td>
-          <td class="num">€ ${r.prezzo.toFixed(2)}</td>
-          <td class="num">€ ${tot.toFixed(2)}</td>
-        </tr>
-      `;
+      body.push([
+        fir,
+        r.cer || "-",
+        r.materiale || "-",
+        r.kg.toFixed(2),
+        r.prezzo.toFixed(2),
+        tot.toFixed(2),
+      ]);
     });
   });
 
-  const html = `
-  <html>
-  <head>
-    <title>${isFattura ? "Fattura" : "Prospetto Fattura"}</title>
+  autoTable(pdf, {
+    startY: startY,
+    head: [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]],
+    body,
+    styles: { fontSize: 9 },
+  });
 
-    <style>
-      body {
-        font-family: Arial;
-        padding: 30px;
-        color: #333;
-      }
+  pdf.text(
+    `Totale: € ${totale.toFixed(2)}`,
+    14,
+    pdf.lastAutoTable.finalY + 10
+  );
 
-      .header {
-        display: flex;
-        justify-content: space-between;
-      }
+  // 🔥 nome file cliente + data
+  const nomeCliente = (modalData.cliente || "cliente")
+    .replace(/[^a-zA-Z0-9]/g, "_")
+    .toLowerCase();
 
-      .logo { max-height: 60px; }
+  const today = new Date()
+    .toLocaleDateString("it-IT")
+    .replace(/\//g, "-");
 
-      .azienda {
-        text-align: right;
-        font-size: 12px;
-      }
-
-      h1 {
-        text-align: center;
-        margin-top: 20px;
-      }
-
-      .info {
-        margin: 20px 0;
-        font-size: 14px;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      th {
-        background: #222;
-        color: #fff;
-        padding: 8px;
-        font-size: 13px;
-      }
-
-      td {
-        padding: 8px;
-        border-bottom: 1px solid #ddd;
-        font-size: 13px;
-      }
-
-      .num { text-align: right; }
-
-      tr {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-
-      .totale {
-        margin-top: 20px;
-        text-align: right;
-        font-size: 18px;
-        font-weight: bold;
-      }
-
-      @media print {
-        thead { display: table-header-group; }
-      }
-    </style>
-  </head>
-
-  <body>
-
-    <div class="header">
-      ${
-        config?.logoBase64
-          ? `<img class="logo" src="data:image/png;base64,${config.logoBase64}" />`
-          : ""
-      }
-
-      <div class="azienda">
-        <strong>${config?.ragioneSociale || ""}</strong><br/>
-        ${config?.indirizzo || ""}<br/>
-        ${config?.capCitta || ""}<br/>
-        P.IVA: ${config?.piva || "-"}
-      </div>
-    </div>
-
-    <h1>${isFattura ? "FATTURA" : "PROSPETTO FATTURA"}</h1>
-
-    <div class="info">
-      <strong>Controparte:</strong> ${modalData.cliente || "-"}<br/>
-      <strong>Data:</strong> ${new Date().toLocaleDateString("it-IT")}
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>FIR</th>
-          <th>CER</th>
-          <th>Materiale</th>
-          <th>Kg</th>
-          <th>Prezzo</th>
-          <th>Totale</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows}
-      </tbody>
-    </table>
-
-    <div class="totale">
-      TOTALE: € ${totale.toFixed(2)}
-    </div>
-
-  </body>
-  </html>
-  `;
-
-  win.document.write(html);
-  win.document.close();
-  win.print();
+  await salvaESharePdfCapacitor(
+    pdf,
+    `${isFattura ? "fattura" : "prospetto"}_${nomeCliente}_${today}.pdf`
+  );
 };
 useEffect(() => {
   if (location.state?.refresh) {
@@ -1003,24 +913,86 @@ const confermaSalvataggioProspetto = async () => {
   setModalProspetto(false);
  await salvaProspettoUnificato(modalData, modalTipo === "prospetto" ? "prospetto" : "fattura");
 };
-const stampaSoloProspetto = () => {
+const stampaSoloProspetto = async () => {
   setModalProspetto(false);
+
   const righe = [];
+
   righeOrdinate.forEach(g => {
     const movimentiDelGiorno = filteredScarichi.filter(s => {
-      const dataObj =        s.data instanceof Date          ? s.data          : s.data?.toDate?.() || null;
+      const dataObj =
+        s.data instanceof Date
+          ? s.data
+          : s.data?.toDate?.() || null;
+
       if (!dataObj) return false;
-      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;    });
+
+      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;
+    });
+
     movimentiDelGiorno.forEach(m => {
       if (m.tipo !== "scarico") return;
+
       (m.cer || []).forEach(c => {
         (c.righe || []).forEach(r => {
           righe.push({
-            fir: c.fir || "",            materiale: r.materiale || "",            peso: Number(r.peso || 0),
-            calo: Number(r.calo || 0),            netto: Number(r.netto || 0),            prezzoKg: Number(r.prezzoAcquisto || 0),            fornitore: m.fornitore || ""
-          });        });      });    });  });
-  const fornitoreFinale =    filtroFornitore && filtroFornitore !== "tutti"      ? filtroFornitore      : righe[0]?.fornitore || "";
-  stampaProspettoFatturaScarichi(righe, fornitoreFinale);
+            fir: c.fir || "",
+            materiale: r.materiale || "",
+            peso: Number(r.peso || 0),
+            calo: Number(r.calo || 0),
+            netto: Number(r.netto || 0),
+            prezzoKg: Number(r.prezzoAcquisto || 0),
+            fornitore: m.fornitore || ""
+          });
+        });
+      });
+    });
+  });
+
+  const fornitoreFinale =
+    filtroFornitore && filtroFornitore !== "tutti"
+      ? filtroFornitore
+      : righe[0]?.fornitore || "";
+
+  // 🔥 PDF
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  const { pdf, startY } = await PdfHeader();
+
+  pdf.setFontSize(14);
+  pdf.text("Prospetto Fattura", 14, startY - 10);
+
+  autoTable(pdf, {
+    startY: startY,
+    head: [["FIR", "Materiale", "Peso", "Prezzo", "Totale"]],
+    body: righe.map(r => {
+      const tot = r.netto * r.prezzoKg;
+
+      return [
+        r.fir || "-",
+        r.materiale || "-",
+        r.netto.toFixed(2),
+        r.prezzoKg.toFixed(2),
+        tot.toFixed(2)
+      ];
+    }),
+    styles: { fontSize: 9 }
+  });
+
+  // 🔥 nome file pulito + data
+  const nomePulito = (fornitoreFinale || "sconosciuto")
+    .replace(/[^a-zA-Z0-9]/g, "_")
+    .toLowerCase();
+
+  const today = new Date()
+    .toLocaleDateString("it-IT")
+    .replace(/\//g, "-");
+
+  await salvaESharePdfCapacitor(
+    pdf,
+    `prospetto_${nomePulito}_${today}.pdf`
+  );
 };
 const resetFiltri = () => {
   setFiltroFornitore("tutti");  setFiltroListino("tutti");
@@ -1105,122 +1077,151 @@ const toOptions = (arr) =>
     <span>Già Fatturati</span>
   </div>
 </div>
-      <div className="filtri">
-        <button onClick={resetFiltri} style={{marginLeft:"12px"}}>🔄 Reset filtri</button>
-        <label style={{display:"flex",alignItems:"center"}}>
-          <input
-  type="checkbox"
-  checked={tutti}
-  onChange={(e) => {
-    const checked = e.target.checked;
-    const estimated = estimateResults();
-    if (checked && estimated > 2000) {
-      const ok = window.confirm(
-        "⚠️ Attenzione: questa ricerca restituirà circa " +
-        estimated +
-        " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
-      );
-      if (!ok) return;
-    }
-    setTutti(checked);
-  }}
-/>   Disabilita filtro date        </label>
-       {!tutti && (
-  <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-    <label>
-  Dal:
-  <DatePicker    selected={dal}    onChange={(date) => setDal(date)}
-    minDate={minDataDB || new Date(2000,0,1)}    maxDate={maxDataDB || new Date()}
-    dateFormat="dd/MM/yyyy"    placeholderText="gg/mm/yyyy"  />
-</label>
-<label>  Al:  <DatePicker
-    selected={al}    onChange={(date) => setAl(date)}
-    minDate={dal instanceof Date ? dal : minDataDB || new Date(2000,0,1)}
-   maxDate={maxDataDB || new Date()}    dateFormat="dd/MM/yyyy"    placeholderText="gg/mm/yyyy"
-  />
-</label>
-<label style={{ display: "flex", alignItems: "center", gap: "4px" }}>  FIR/DDT:
-  <input    type="text"    placeholder="Scrivi per filtrare..."
-    value={filtroFIR}    onChange={e => setFiltroFIR(e.target.value)}    style={{ padding: "4px 6px", width: "150px" }}
-  />
-</label>
- <label style={{ marginLeft: "12px" }}>          Codice CER:
-<Select
-  value={
-    filtroCER === "tutti"
-      ? null
-      : { value: filtroCER, label: filtroCER }
-  }
-  onChange={(opt) => setFiltroCER(opt ? opt.value : "tutti")}
-  options={[
-    { value: "tutti", label: "Tutti" },
-    ...toOptions(cerDisponibili)
-  ]}
-  isClearable
-  placeholder="CER"
-/>
-        </label>
-  </div>
-)}
-        <label style={{marginLeft:"12px"}}>
-         {getLabelFornDest()}:
-<Select
-  value={
-    filtroFornitore === "tutti"
-      ? null
-      : { value: filtroFornitore, label: filtroFornitore }
-  }
-  onChange={(opt) => setFiltroFornitore(opt ? opt.value : "tutti")}
-  options={[
-    { value: "tutti", label: "Tutti" },
-    ...toOptions(fornitoriDisponibili)
-  ]}
-  isClearable
-  placeholder="Fornitore / Smaltitore"
-/>
-        </label>
-        <label style={{marginLeft:"12px"}}>
-          Listino:
-<Select
-  value={
-    filtroListino === "tutti"
-      ? null
-      : { value: filtroListino, label: filtroListino }
-  }
-  onChange={(opt) => setFiltroListino(opt ? opt.value : "tutti")}
-  options={[
-    { value: "tutti", label: "Tutti" },
-    ...toOptions(listiniDisponibili)
-  ]}
-  isClearable
-  placeholder="Listino"
-/>
-        </label>
-        <label style={{marginLeft:"12px"}}>
-          Utente:
-<Select
-  value={
-    filtroUtente === "tutti"
-      ? null
-      : { value: filtroUtente, label: filtroUtente }
-  }
-  onChange={(opt) => setFiltroUtente(opt ? opt.value : "tutti")}
-  options={[
-    { value: "tutti", label: "Tutti" },
-    ...toOptions(utentiDisponibili)
-  ]}
-  isClearable
-  placeholder="Utente"
-/>
-        </label>
-        <label style={{marginLeft:"12px"}}>  Tipo:
-  <select value={tipoMovimento} onChange={e => setTipoMovimento(e.target.value)}>
-    <option value="tutti">Tutti</option>
-    <option value="scarico">Scarico</option>
-    <option value="carico">Carico</option>
-  </select>
-</label>
-      </div>
+<div className="filtri">
+
+  <button onClick={resetFiltri} className="filter-item">🔄 Reset filtri</button>
+
+  <label className="filter-item">
+    <input
+      type="checkbox"
+      checked={tutti}
+      onChange={(e) => {
+        const checked = e.target.checked;
+        const estimated = estimateResults();
+        if (checked && estimated > 2000) {
+          const ok = window.confirm(
+            "⚠️ Attenzione: questa ricerca restituirà circa " +
+            estimated +
+            " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
+          );
+          if (!ok) return;
+        }
+        setTutti(checked);
+      }}
+    />
+    Disabilita filtro date
+  </label>
+
+  {!tutti && (
+    <div className="filtri-group">
+<div>
+      <label className="filter-item">
+        Dal:
+        <DatePicker
+          selected={dal}
+          onChange={(date) => setDal(date)}
+          minDate={minDataDB || new Date(2000, 0, 1)}
+          maxDate={maxDataDB || new Date()}
+          dateFormat="dd/MM/yyyy"
+          placeholderText="gg/mm/yyyy"
+        />
+      </label>
+</div><div>
+      <label className="filter-item">
+        Al:
+        <DatePicker
+          selected={al}
+          onChange={(date) => setAl(date)}
+          minDate={dal instanceof Date ? dal : minDataDB || new Date(2000, 0, 1)}
+          maxDate={maxDataDB || new Date()}
+          dateFormat="dd/MM/yyyy"
+          placeholderText="gg/mm/yyyy"
+        />
+      </label></div>
+
+    </div>
+  )}
+<div>
+      <label className="filter-item">
+        FIR/DDT:
+        <input
+          type="text"
+          placeholder="Scrivi per filtrare..."
+          value={filtroFIR} width="100%"
+          onChange={e => setFiltroFIR(e.target.value)}
+        />
+      </label></div><div>
+      <label className="filter-item">
+        Codice CER:
+        <Select
+          value={
+            filtroCER === "tutti"
+              ? null
+              : { value: filtroCER, label: filtroCER }
+          }
+          onChange={(opt) => setFiltroCER(opt ? opt.value : "tutti")}
+          options={[
+            { value: "tutti", label: "Tutti" },
+            ...toOptions(cerDisponibili)
+          ]}
+          isClearable
+          placeholder="CER"
+        />
+      </label></div>
+  <label className="filter-item">
+    {getLabelFornDest()}:
+    <Select
+      value={
+        filtroFornitore === "tutti"
+          ? null
+          : { value: filtroFornitore, label: filtroFornitore }
+      }
+      onChange={(opt) => setFiltroFornitore(opt ? opt.value : "tutti")}
+      options={[
+        { value: "tutti", label: "Tutti" },
+        ...toOptions(fornitoriDisponibili)
+      ]}
+      isClearable
+      placeholder="Fornitore / Smaltitore"
+    />
+  </label>
+
+  <label className="filter-item">
+    Listino:
+    <Select
+      value={
+        filtroListino === "tutti"
+          ? null
+          : { value: filtroListino, label: filtroListino }
+      }
+      onChange={(opt) => setFiltroListino(opt ? opt.value : "tutti")}
+      options={[
+        { value: "tutti", label: "Tutti" },
+        ...toOptions(listiniDisponibili)
+      ]}
+      isClearable
+      placeholder="Listino"
+    />
+  </label>
+
+  <label className="filter-item">
+    Utente:
+    <Select
+      value={
+        filtroUtente === "tutti"
+          ? null
+          : { value: filtroUtente, label: filtroUtente }
+      }
+      onChange={(opt) => setFiltroUtente(opt ? opt.value : "tutti")}
+      options={[
+        { value: "tutti", label: "Tutti" },
+        ...toOptions(utentiDisponibili)
+      ]}
+      isClearable
+      placeholder="Utente"
+    />
+  </label>
+
+  <label className="filter-item">
+    Tipo:
+    <select value={tipoMovimento} onChange={e => setTipoMovimento(e.target.value)}>
+      <option value="tutti">Tutti</option>
+      <option value="scarico">Scarico</option>
+      <option value="carico">Carico</option>
+    </select>
+  </label>
+
+</div>
 <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
   <span>Movimenti:</span>
   <span style={{
