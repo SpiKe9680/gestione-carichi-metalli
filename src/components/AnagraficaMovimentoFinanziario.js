@@ -62,9 +62,79 @@ const [deletableMap, setDeletableMap] = useState({});
     await auth.signOut();
     navigate("/login");
   };
+const normalizeMovimentoDate = (m) => {
+  const raw = m.dataDocumento || m.data || m.createdAt;
 
+  const date = raw?.toDate ? raw.toDate() : new Date(raw || null);
+
+  return isNaN(date.getTime()) ? null : date;
+};
   const goHome = () => navigate("/admin");
+const handleBulkMovimenti = async () => {
+  const conferma = window.confirm(
+    contItem.modalMode === "STORNO"
+      ? "Confermi lo STORNO?"
+      : contItem.tipo === "USCITA"
+      ? "Confermi PAGAMENTO?"
+      : "Confermi INCASSO?"
+  );
 
+  if (!conferma) return;
+
+  setLoadingBulk(true);
+
+  try {
+    const snap = await getDocs(collection(db, "MovimentoFinanziario"));
+
+    const movimenti = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        anagraficaId: data.anagraficaId,
+       key: getKey(data.dataDocumento || data.data || data.createdAt),
+      };
+    });
+
+    for (const occ of occList) {
+      const occKey = getKey(occ.data);
+
+    const match = movimenti.find((m) => {
+  const sameAnag = m.anagraficaId === contItem.id;
+
+  const sameDate =
+    m.key === occKey ||
+    getKey(m.dataDocumento) === occKey ||
+    getKey(m.data) === occKey;
+
+  return sameAnag && sameDate;
+});
+
+      if (contItem.modalMode === "STORNO") {
+        if (match) {
+          await deleteDoc(doc(db, "MovimentoFinanziario", match.id));
+        }
+      } else {
+        if (!match) {
+          await addDoc(collection(db, "MovimentoFinanziario"), {
+            anagraficaId: contItem.id,
+            data: Timestamp.fromDate(occ.data),
+            importo: occ.importo,
+            tipo: contItem.tipo,
+          });
+        }
+      }
+    }
+
+    await fetchData();
+
+    setOccList([]);
+    setShowContabilizza(false);
+    setContItem(null);
+
+  } finally {
+    setLoadingBulk(false);
+  }
+};
   const fetchData = async () => {
   try {
     const snap = await getDocs(
@@ -106,9 +176,11 @@ setMovimentiCache(movimenti);
 };
 
 
-const getKey = (d) => {
-  const date = d?.toDate ? d.toDate() : new Date(d);
-  return date.toISOString().split("T")[0]; // YYYY-MM-DD stabile
+const getKey = (date) => {
+  const d = date?.toDate ? date.toDate() : new Date(date);
+  if (isNaN(d.getTime())) return null;
+
+  return d.toISOString().split("T")[0];
 };
 
 const aggiornaMovimentiConsuntivati = async (anagraficaId, nuoviDati, before) => {
@@ -304,37 +376,38 @@ function getDataLimite(item) {
     ? dataFine
     : oggiReale;
 }
+
+
 const apriContabilizza = async (item) => {
   const oggi = getDataLimite(item);
+
   const start = item.createdAt?.toDate
     ? item.createdAt.toDate()
     : new Date(item.createdAt);
 
   const snap = await getDocs(collection(db, "MovimentoFinanziario"));
-  const movs = snap.docs.map((d) => d.data());
 
-  // 🔥 FIX: blocco coerente con MovimentiGiorno
+  const movs = snap.docs.map(d => d.data());
+
   const pagati = movs
-    .filter(
-      (m) =>
-        m.anagraficaId === item.id &&
-        m.tipo === item.tipo
+    .filter(m =>
+      m.anagraficaId === item.id &&
+      m.tipo === item.tipo
     )
-    .map((m) =>
-      m.dataDocumento?.toDate
-        ? m.dataDocumento.toDate().toDateString()
-        : new Date(m.dataDocumento || m.data).toDateString()
-    );
+    .map(m => {
+      const date = normalizeMovimentoDate(m);
+      return date ? date.toDateString() : null;
+    })
+    .filter(Boolean);
 
   const occorrenze = [];
   let cursor = new Date(start);
 
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 500; i++) {
     if (cursor > oggi) break;
 
     const key = cursor.toDateString();
 
-    // 🔥 FIX: confronto identico all'altra pagina
     if (!pagati.includes(key)) {
       occorrenze.push({
         data: new Date(cursor),
@@ -357,19 +430,16 @@ const apriContabilizza = async (item) => {
         break;
       default:
         i = 999;
-        break;
     }
   }
 
-  if (occorrenze.length === 0) {
+  if (!occorrenze.length) {
     alert("Nessun movimento da contabilizzare");
     return;
   }
 
   setContItem(item);
-  setOccList(
-    occorrenze.sort((a, b) => new Date(a.data) - new Date(b.data))
-  );
+  setOccList(occorrenze.sort((a, b) => a.data - b.data));
   setShowContabilizza(true);
 };
 
@@ -494,45 +564,37 @@ const isFormValid =
   importoNum > 0;
 
 function getNextOccurrence(item) {
-  if (!item.dataInizio) return null;
-
   const limite = getDataLimite(item);
 
-  let cursor = item.dataInizio?.toDate
-    ? item.dataInizio.toDate()
-    : new Date(item.dataInizio);
+  let cursor = item.createdAt?.toDate
+    ? item.createdAt.toDate()
+    : new Date(item.createdAt);
 
   const freq = item.periodicita;
+
+  if (!freq) return null;
 
   while (cursor <= limite) {
     switch (freq) {
       case "GIORNALIERO":
         cursor.setDate(cursor.getDate() + 1);
         break;
-
       case "SETTIMANALE":
         cursor.setDate(cursor.getDate() + 7);
         break;
-
       case "MENSILE":
         cursor.setMonth(cursor.getMonth() + 1);
         break;
-
       case "ANNUALE":
         cursor.setFullYear(cursor.getFullYear() + 1);
         break;
-
       default:
         return null;
     }
   }
 
-  // 🔥 SE abbiamo superato il limite → nessuna prossima occorrenza
-  if (cursor > limite) return null;
-
-  return cursor;
+  return cursor > limite ? null : cursor;
 }
-
 
 const handleStampa = async () => {
   try {
@@ -1276,60 +1338,7 @@ if (item.periodicita !== "SINGOLO") {
     pointerEvents: loadingBulk ? "none" : "auto",
   }}
   disabled={loadingBulk}
-  onClick={async () => {
-    const conferma = window.confirm(
-      contItem.modalMode === "STORNO"
-        ? "Confermi lo STORNO TOTALE?"
-        : contItem.tipo === "USCITA"
-        ? "Confermi il pagamento TUTTO?"
-        : "Confermi l'incasso TUTTO?"
-    );
-
-    if (!conferma) return;
-
-    setLoadingBulk(true);
-
-    try {
-      const snap = await getDocs(collection(db, "MovimentoFinanziario"));
-
-      for (const occ of occList) {
-        const match = snap.docs.find(d => {
-          const m = d.data();
-          if (m.anagraficaId !== contItem.id) return false;
-
-          const d1 = m.data?.toDate
-            ? m.data.toDate()
-            : new Date(m.data);
-
-          return d1.toDateString() === occ.data.toDateString();
-        });
-
-        if (contItem.modalMode === "STORNO") {
-          if (match) {
-            await deleteDoc(doc(db, "MovimentoFinanziario", match.id));
-          }
-        } else {
-          if (!match) {
-            await addDoc(collection(db, "MovimentoFinanziario"), {
-              anagraficaId: contItem.id,
-              data: Timestamp.fromDate(occ.data),
-              importo: occ.importo,
-              tipo: contItem.tipo,
-            });
-          }
-        }
-      }
-
-      setOccList([]);
-      setShowContabilizza(false);
-      setContItem(null);
-
-      await fetchData();
-
-    } finally {
-      setLoadingBulk(false);
-    }
-  }}
+onClick={handleBulkMovimenti}
 >
   {loadingBulk
     ? "⏳ Elaborazione..."
@@ -1360,63 +1369,7 @@ if (item.periodicita !== "SINGOLO") {
           <span>{Number(occ.importo).toFixed(2)} €</span>
 
           <button
-onClick={async () => {
-  const conferma = window.confirm(
-    contItem.modalMode === "STORNO"
-      ? "Confermi lo STORNO TOTALE?"
-      : contItem.tipo === "USCITA"
-      ? "Confermi il pagamento TUTTO?"
-      : "Confermi l'incasso TUTTO?"
-  );
-
-  if (!conferma) return;
-
-  setLoadingBulk(true);
-
-  try {
-    const snap = await getDocs(collection(db, "MovimentoFinanziario"));
-
-    // 🔥 PREPARO MAP UNA SOLA VOLTA (FIX VERO)
-  const movimenti = snap.docs.map(d => ({
-  id: d.id,
-  ...d.data(),
-  key: getKey(d.data().dataDocumento), // 👈 QUI LA DIFFERENZA VERA
-}));
-
-    for (const occ of occList) {
-   const occKey = getKey(occ.data);
-
-const match = movimenti.find(m =>
-  m.anagraficaId === contItem.id &&
-  m.key === occKey
-);
-
-      if (contItem.modalMode === "STORNO") {
-        if (match) {
-          await deleteDoc(doc(db, "MovimentoFinanziario", match.id));
-        }
-      } else {
-        if (!match) {
-          await addDoc(collection(db, "MovimentoFinanziario"), {
-            anagraficaId: contItem.id,
-            data: Timestamp.fromDate(occ.data),
-            importo: occ.importo,
-            tipo: contItem.tipo,
-          });
-        }
-      }
-    }
-
-    await fetchData();
-
-    setOccList([]);
-    setShowContabilizza(false);
-    setContItem(null);
-
-  } finally {
-    setLoadingBulk(false);
-  }
-}}
+onClick={handleBulkMovimenti}
           >
            {contItem.modalMode === "STORNO" ? "STORNA" : contItem.tipo === "USCITA" ? "PAGA" : "INCASSA"}
           </button>
