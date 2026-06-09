@@ -7,7 +7,7 @@ import { ripristinaLog } from "../utils/log";
 import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const GestioneLog = () => {
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
@@ -124,26 +124,144 @@ const selectStyle = {
 };
 
 
-const computeBaseForDropdowns = () => {
-  let dati = [...logs];
 
-  if (!tutti && dal && al) {
-    const start = new Date(dal);
-    const end = new Date(al);
-    end.setHours(23, 59, 59, 999);
-
-    dati = dati.filter(l =>
-      l.timestamp?.toDate &&
-      l.timestamp.toDate() >= start &&
-      l.timestamp.toDate() <= end
-    );
-  }
-
-  return dati;
-};
 
 const totalPages = Math.ceil(filteredLogs.length / pageSize);
+const handlePrintLogs = async () => {
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
 
+  const { pdf, startY } = await PdfHeader();
+
+  const dati = filteredLogs || [];
+
+  // =========================
+  // TITOLO
+  // =========================
+  pdf.setFontSize(14);
+  pdf.text("GESTIONE LOG OPERAZIONI", 14, startY);
+
+  // =========================
+  // FILTRI
+  // =========================
+  pdf.setFontSize(9);
+
+  const filtri = [
+    `Dal: ${dal ? dal.toLocaleDateString("it-IT") : "-"}`,
+    `Al: ${al ? al.toLocaleDateString("it-IT") : "-"}`,
+    `Pagina filtro: ${paginaFilter || "-"}`,
+    `Utente: ${utenteFilter || "-"}`,
+    `Tipo: ${tipoFilter || "-"}`,
+    `Totale record: ${dati.length}`
+  ];
+
+  let y = startY + 10;
+
+  filtri.forEach(f => {
+    pdf.text(String(f), 14, y);
+    y += 5;
+  });
+
+  // =========================
+  // SAFE FORMATTER
+  // =========================
+  const safeFormatObj = (obj) => {
+    if (!obj || typeof obj !== "object") return "-";
+
+    return Object.entries(obj)
+      .map(([k, v]) => {
+        if (v === null || v === undefined) return `${k}: -`;
+
+        if (typeof v === "object") {
+          try {
+            return `${k}: ${JSON.stringify(v)}`;
+          } catch {
+            return `${k}: [object]`;
+          }
+        }
+
+        return `${k}: ${String(v)}`;
+      })
+      .join(" | ");
+  };
+
+  // =========================
+  // BUILD BODY SAFE
+  // =========================
+  const body = [];
+
+  dati.forEach(l => {
+    const data =
+      l?.timestamp?.toDate
+        ? l.timestamp.toDate().toLocaleString("it-IT")
+        : "-";
+
+    const mainRow = [
+      data,
+      l?.pagina || "-",
+      l?.utente || "-",
+      l?.evento || "-"
+    ];
+
+    body.push(mainRow);
+
+    if (l?.before || l?.after) {
+      body.push([
+        {
+          content:
+            `Dati originali: ${safeFormatObj(l.before)}\n` +
+            `Dati modificati: ${safeFormatObj(l.after)}`,
+          colSpan: 4,
+          styles: {
+            fontSize: 6,
+            textColor: [120, 120, 120]
+          }
+        }
+      ]);
+    }
+  });
+
+  // =========================
+  // TABELLA
+  // =========================
+  autoTable(pdf, {
+    startY: y + 5,
+
+    head: [["Data", "Pagina", "Utente", "Tipo"]],
+    body,
+
+    styles: {
+      fontSize: 7,
+      overflow: "linebreak"
+    },
+
+    headStyles: {
+      fillColor: [30, 30, 30]
+    },
+
+    didDrawPage: function () {
+      const pageSize = pdf.internal.pageSize;
+
+      pdf.setFontSize(8);
+
+      pdf.text(
+        `Pagina ${pdf.internal.getCurrentPageInfo().pageNumber}`,
+        pageSize.getWidth() - 30,
+        pageSize.getHeight() - 10
+      );
+    }
+  });
+
+  // =========================
+  // EXPORT
+  // =========================
+  await salvaESharePdfCapacitor(
+    pdf,
+    `LOG_${new Date()
+  .toLocaleDateString("it-IT")
+  .replace(/\//g, "-")}.pdf`
+  );
+};
 const paginatedLogs = filteredLogs.slice(
   (currentPage - 1) * pageSize,
   currentPage * pageSize
@@ -155,7 +273,11 @@ const paginatedLogs = filteredLogs.slice(
         <button onClick={goHome}>🏠 Dashboard</button>
        <button onClick={handleLogout}>
   🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>  </div>
+</button>  
+<button onClick={handlePrintLogs}>
+  🖨️ Stampa
+</button>
+</div>
 
       <h2>Gestione Log Operazioni</h2>
 

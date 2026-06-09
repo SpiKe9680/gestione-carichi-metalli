@@ -6,6 +6,7 @@ import { signOut } from "firebase/auth";
 import { collection, getDocs, updateDoc, doc, getDoc, deleteDoc, addDoc } from "firebase/firestore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { scriviLog } from "../utils/log"; 
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const MovimentiGiorno = () => {
   const navigate = useNavigate();
@@ -33,6 +34,16 @@ const toDate = (v) => {
 
   const d = new Date(v);
   return isNaN(d) ? null : d;
+};
+
+const formatDate = (d) => {
+  if (!d) return "-";
+
+  const date = d?.toDate ? d.toDate() : new Date(d);
+
+  if (isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("it-IT");
 };
   useEffect(() => {
     const fetchConfig = async () => {
@@ -504,27 +515,6 @@ const entrateUsciteBottom = anagraficaMov.flatMap(item => {
     }));
 });
 
-const allMovimentiGiorno = [
-  ...entrateUsciteTop,
-  ...entrateUsciteBottom
-];
-
-const introitiTot = allMovimentiGiorno
-  .filter(m =>
-    m.tipo === "fattureCarichi" ||
-    m.tipo === "ENTRATA"
-  )
-  .reduce((s, m) => s + m.importo, 0);
-
-const speseTot = allMovimentiGiorno
-  .filter(m =>
-    m.tipo === "PRIVATI" ||
-     m.tipo === "prospettiFattura" ||
-    m.tipo === "USCITA"
-  )
-  .reduce((s, m) => s + m.importo, 0);
-
-const guadagno = introitiTot - speseTot;
 const getDataLimite = (item) => {
   const oggi = new Date();
 
@@ -534,6 +524,7 @@ const getDataLimite = (item) => {
 
   return fine && fine < oggi ? fine : oggi;
 };
+
 
 const getOccorrenze = (item) => {
   const start = item.createdAt?.toDate
@@ -594,7 +585,53 @@ const getOccorrenze = (item) => {
   return occ;
 };
 
+const attivitaDaConsuntivare = anagraficaMov.flatMap(item => {
+  return getOccorrenze(item).map(o => ({
+    tipo: item.tipo,
+    importo: Number(o.importo) || 0
+  }));
+});
+const allMovimentiGiorno = [
+  ...entrateUsciteTop,
+  ...entrateUsciteBottom,
+  ...attivitaDaConsuntivare
+];
+const introitiTot = allMovimentiGiorno
+  .filter(m =>
+    m.tipo === "fattureCarichi" ||
+    m.tipo === "ENTRATA"
+  )
+  .reduce((s, m) => s + m.importo, 0);
 
+const speseTot = allMovimentiGiorno
+  .filter(m =>
+    m.tipo === "PRIVATI" ||
+     m.tipo === "prospettiFattura" ||
+    m.tipo === "USCITA"
+  )
+  .reduce((s, m) => s + m.importo, 0);
+
+const guadagno = introitiTot - speseTot;
+
+
+const attivitaDaCons = anagraficaMov.flatMap(item =>
+  getOccorrenze(item)
+    .filter(o => isSameDay(o.data, selectedDate))
+    .map(o => ({
+      tipo: item.tipo,
+      importo: Number(o.importo) || 0
+    }))
+);
+
+const introitiAttDaCons = attivitaDaCons
+  .filter(m => m.tipo === "fattureCarichi" || m.tipo === "ENTRATA")
+  .reduce((s, m) => s + m.importo, 0);
+
+const speseAttDaCons = attivitaDaCons
+  .filter(m => m.tipo === "PRIVATI" || m.tipo === "prospettiFattura" || m.tipo === "USCITA")
+  .reduce((s, m) => s + m.importo, 0);
+
+const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
   // --------------------------
   // UI
   // --------------------------
@@ -731,7 +768,13 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
   onDoubleClick={() => {
     if (movs.length === 0) return;
     setContItem(item);
-    setOccList(movs);
+    setOccList(
+  [...movs].sort((a, b) => {
+    const da = a.data ? new Date(a.data) : new Date(0);
+    const db = b.data ? new Date(b.data) : new Date(0);
+    return da - db;
+  })
+);
     setShowContabilizza(true);
   }}
    title={`effettua doppio click per Stornare il movimento ${item.nomeBreve} di ${totale.toLocaleString("it-IT", {
@@ -800,7 +843,16 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
       <p>Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
 <p>Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
 <p>Guadagno: {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+
+<h4>📌 Da Consuntivare (Attività)</h4>
+<p>Introiti: {introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+<p>Spese: {speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+<p>Guadagno: {guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+
       </div>
+
+
+      
       {showModal && contItem && (
   <div style={{
     position: "fixed",
@@ -859,7 +911,28 @@ onClick={async () => {
       });
     }
   });
+await scriviLog({
+  pagina: "movimenti-giorno",
+  evento: "CONTABILIZZAZIONE_MASSIVA",
 
+  riferimento: {
+    anagraficaId: contItem.id
+  },
+
+  before: null,
+
+  after: {
+    dataInizio: formatDate(occList[0]?.data),
+    dataFine: formatDate(occList[occList.length - 1]?.data),
+    importoSingolo: contItem.importo,
+    numeroOperazioni: occList.length,
+    importoTotale: contItem.importo * occList.length,
+    descrizione: contItem.nomeBreve
+  },
+
+  utente: currentUser.username || currentUser.email,
+  ripristinabile: false
+});
   setShowModal(false);
   setContItem(null);
   setOccList([]);
@@ -904,7 +977,25 @@ onClick={async () => {
 
                 return next;
               });
+await scriviLog({
+  pagina: "movimenti-giorno",
+  evento: "CONTABILIZZA_SINGOLO",
 
+  
+
+  before: null,
+
+  after: {
+    data: formatDate(selectedDate),
+    dataDocumento: formatDate(o.data),
+    importo: contItem.importo,
+    descrizione: contItem.nomeBreve
+  },
+
+  utente: currentUser.username || currentUser.email,
+  ripristinabile: false
+});
+//console.log("🔥 contItem SELECTED:", contItem);
               await refreshAll();
             }}
           >
@@ -969,7 +1060,27 @@ onClick={async () => {
       await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
     }
   });
+await scriviLog({
+  pagina: "movimenti-giorno",
+  evento: "STORNO_MASSIVO",
 
+  riferimento: {
+    anagraficaId: contItem.id
+  },
+
+  before: {
+    dataInizio: formatDate(occList[0]?.data),
+    dataFine: formatDate(occList[occList.length - 1]?.data),
+    numeroOperazioni: occList.length,
+    importoTotale: contItem.importo*occList.length,
+     importoSingolo: contItem.importo,
+  },
+
+  after: null,
+
+  utente: currentUser.username || currentUser.email,
+  ripristinabile: false
+});
   setShowContabilizza(false);
   setContItem(null);
   setOccList([]);
@@ -1006,7 +1117,26 @@ onClick={async () => {
 
                 return next;
               });
+await scriviLog({
+  pagina: "movimenti-giorno",
+  evento: "STORNO_SINGOLO",
 
+  riferimento: {
+    anagraficaId: contItem.id,
+    movimentoId: o.id
+  },
+
+  before: {
+    dataDocumento: formatDate(o.data),
+    importo: o.importo
+  },
+
+  after: null,
+
+  utente: currentUser.username || currentUser.email,
+  ripristinabile: false
+});
+console.log('log: ',o);
               await refreshAll();
             }}
           >
