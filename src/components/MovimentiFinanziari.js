@@ -229,49 +229,140 @@ const goToDetail = (day) => {
     }
   });
 };
-
-
 const handlePrintPDF = async () => {
-  const input = document.getElementById("area-stampa");
-  if (!input) return;
-
-  const canvas = await html2canvas(input, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff"
-  });
-
-  const imgData = canvas.toDataURL("image/png");
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
 
   const pdf = new jsPDF({
     orientation: "landscape",
     unit: "mm",
-    format: "a4"
+    format: "a4",
   });
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  let y = 10;
 
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  // =========================
+  // HEADER
+  // =========================
+  pdf.setFontSize(14);
+  pdf.text("Movimenti Finanziari - Settimana", 10, y);
+  y += 6;
 
-  let heightLeft = imgHeight;
-  let position = 0;
+  pdf.setFontSize(10);
+  pdf.text(
+    `Periodo: ${weekDays?.[0]?.dataString || ""} → ${weekDays?.[6]?.dataString || ""}`,
+    10,
+    y
+  );
+  y += 8;
 
-  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
+  // =========================
+  // TABELLA CON COLORI RIGA (FIX OK)
+  // =========================
+  autoTable(pdf, {
+    startY: y,
+    head: [
+      [
+        "Giorno",
+        "Data",
+        "Spese #",
+        "Introiti #",
+        "Tot Spese",
+        "Tot Introiti",
+        "Guadagno",
+      ],
+    ],
+    body: weekDays.map((d) => {
+      const guadagno = d.totaleIntroiti - d.totaleSpese;
 
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-  }
+      return [
+        d.giorno,
+        d.dataString,
+        d.spese,
+        d.introiti,
+        formatEuro(d.totaleSpese) + " €",
+        formatEuro(d.totaleIntroiti) + " €",
+        formatEuro(guadagno) + " €",
+      ];
+    }),
 
- 
-   await salvaESharePdfCapacitor(pdf,  `Movimenti_Settimana_${new Date().toLocaleDateString("it-IT")}.pdf`);
+    theme: "grid",
+
+    styles: {
+      fontSize: 8,
+      textColor: [0, 0, 0],
+    },
+
+    headStyles: {
+      fillColor: [52, 152, 219],
+      textColor: [255, 255, 255],
+    },
+
+    // =========================
+    // 🔥 FIX COLORI RIGA
+    // =========================
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+
+      const rowIndex = data.row.index;
+      const d = weekDays[rowIndex];
+
+      if (!d) return;
+
+      const guadagno = d.totaleIntroiti - d.totaleSpese;
+
+      let fillColor = [255, 255, 255];
+      let textColor = [0, 0, 0];
+
+      if (guadagno > 0) {
+        fillColor = [220, 255, 220]; // verde chiaro
+        textColor = [0, 80, 0];
+      } else if (guadagno < 0) {
+        fillColor = [255, 220, 220]; // rosso chiaro
+        textColor = [120, 0, 0];
+      }
+
+      // 🔥 FIX IMPORTANTE: cell safe
+      if (data.cell && data.cell.styles) {
+        data.cell.styles.fillColor = fillColor;
+        data.cell.styles.textColor = textColor;
+      }
+    },
+  });
+
+  y = pdf.lastAutoTable.finalY + 8;
+
+  // =========================
+  // TOTALI
+  // =========================
+  let totSpese = 0;
+  let totIntroiti = 0;
+
+  weekDays.forEach((d) => {
+    totSpese += Number(d.totaleSpese) || 0;
+    totIntroiti += Number(d.totaleIntroiti) || 0;
+  });
+
+  const guadagno = totIntroiti - totSpese;
+
+  pdf.setFontSize(11);
+  pdf.text(`Spese settimana: ${formatEuro(totSpese)} €`, 10, y);
+  y += 6;
+
+  pdf.text(`Incassi settimana: ${formatEuro(totIntroiti)} €`, 10, y);
+  y += 6;
+
+  pdf.text(`Guadagno: ${formatEuro(guadagno)} €`, 10, y);
+
+  // =========================
+  // SAVE
+  // =========================
+  const dataSafe = new Date()
+    .toLocaleDateString("it-IT")
+    .replace(/\//g, "-");
+
+  await salvaESharePdfCapacitor(pdf, `Movimenti_${dataSafe}.pdf`);
 };
-
   return (
     <div style={{ padding: "20px" }}>
       {/* NAV */}

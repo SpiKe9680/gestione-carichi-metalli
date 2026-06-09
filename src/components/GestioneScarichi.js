@@ -313,7 +313,11 @@ const handleStampaDocumento = async () => {
 
     movimenti.forEach((m) => {
       const dataMov =
-        m.dataScarico || m.data || m.dataCreazione || null;
+        m.dataDocumento ||
+        m.dataScarico ||
+        m.dataCreazione ||
+        m.data ||
+        null;
 
       (m.cer || []).forEach((c) => {
         const firKey = c.fir || "SENZA FIR";
@@ -339,6 +343,7 @@ const handleStampaDocumento = async () => {
               (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
               0
             ),
+            dataDocumento: dataMov, // 🔥 FIX
           });
         });
       });
@@ -349,16 +354,18 @@ const handleStampaDocumento = async () => {
 
   const gruppi = buildGruppi(isFattura);
 
-  // 🔥 PDF
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
 
   const { pdf, startY } = await PdfHeader();
 
   pdf.setFontSize(14);
-  pdf.text(isFattura ? "FATTURA" : "PROSPETTO FATTURA", 14, startY - 10);
+  pdf.text(
+    isFattura ? "FATTURA" : "PROSPETTO FATTURA",
+    14,
+    startY - 10
+  );
 
-  // 🔥 dati azienda (se vuoi già pronti)
   if (config?.ragioneSociale) {
     pdf.setFontSize(10);
     pdf.text(config.ragioneSociale, 14, startY - 2);
@@ -375,6 +382,9 @@ const handleStampaDocumento = async () => {
 
       body.push([
         fir,
+        r.dataDocumento
+          ? new Date(r.dataDocumento).toLocaleDateString("it-IT")
+          : "-",
         r.cer || "-",
         r.materiale || "-",
         r.kg.toFixed(2),
@@ -386,7 +396,7 @@ const handleStampaDocumento = async () => {
 
   autoTable(pdf, {
     startY: startY,
-    head: [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]],
+    head: [["FIR", "DATA", "CER", "Materiale", "Kg", "Prezzo", "Totale"]],
     body,
     styles: { fontSize: 9 },
   });
@@ -397,7 +407,6 @@ const handleStampaDocumento = async () => {
     pdf.lastAutoTable.finalY + 10
   );
 
-  // 🔥 nome file cliente + data
   const nomeCliente = (modalData.cliente || "cliente")
     .replace(/[^a-zA-Z0-9]/g, "_")
     .toLowerCase();
@@ -1393,19 +1402,32 @@ const toOptions = (arr) =>
     if (modalTipo === "fattura") return m.tipo === "carico";
     return true;
   })
-  .flatMap(m =>
-    (m.cer || []).map(c => ({
+.flatMap(m =>
+  (m.cer || []).map(c => {
+    const dataDocumento =
+      m.dataDocumento ||
+      m.dataScarico ||
+      m.dataCreazione ||
+      m.data ||
+      null;
+
+    return {
       fir: c.fir || m.fir || "-",
       cer: c.cer || c.codiceCER || "-",
       tipo: m.tipo,
+      dataDocumento, // 🔥 FIX CHIAVE
       righe: c.righe || []
-    }))
-  )
+    };
+  })
+)
   .map((b, i) => (
     <React.Fragment key={i}>
       <tr>
         <td colSpan="4" style={{ background: "#eee", fontWeight: "bold" }}>
-          FIR: {b.fir} | CER: {b.cer}
+          FIR: {b.fir} | CER: {b.cer} | DATA:{" "}
+  {b.dataDocumento
+    ? new Date(b.dataDocumento).toLocaleDateString("it-IT")
+    : "-"}
         </td>
       </tr>
       {b.righe.map((r, j) => {

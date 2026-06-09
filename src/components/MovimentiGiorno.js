@@ -257,16 +257,22 @@ Object.values(mapProspetti).forEach(p => {
 // =====================
 // PRIVATI (scarichi)
 // =====================
-// 🔥 porta la data a fine giornata
 
-
-// 🔥 filtra solo FORNITORE PRIVATO
+// filtro solo FORNITORE PRIVATO
 const scarichiPrivati = Object.values(mapScarichi).filter(s => {
   return (s.fornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
 });
 
 scarichiPrivati.forEach(s => {
-  // 🔥 conversione robusta Firestore Timestamp → Date
+  // 🔥 FIX DUPLICAZIONE: evita reinserimento se già consuntivato
+  if (
+    alreadyConsuntivati.has(`PRIVATI_${s.id}`) ||
+    movFin.some(m => m.tipo === "PRIVATI" && m.anagraficaId === s.id)
+  ) {
+    return;
+  }
+
+  // conversione data robusta
   let data = null;
 
   if (s.data?.seconds) {
@@ -277,10 +283,10 @@ scarichiPrivati.forEach(s => {
 
   if (!data) return;
 
-  // 🔥 confronto corretto (fine giornata)
+  // limite giornata
   if (data.getTime() > endOfDay.getTime()) return;
 
-  // 🔥 pagamento (gestione completa casi)
+  // controllo pagamento
   const pagato =
     s.DataPagamento ??
     s.dataPagamento ??
@@ -288,7 +294,7 @@ scarichiPrivati.forEach(s => {
 
   if (pagato) return;
 
-  // 🔥 calcolo totale
+  // calcolo importo
   let totale = 0;
 
   (s.scarico || []).forEach(b => {
@@ -313,45 +319,212 @@ daConsuntivare.sort((a, b) => a.dataMov - b.dataMov);
   const goDashboard = () => navigate("/admin");
 
 const handlePrintPDF = async () => {
-  const input = document.getElementById("area-stampa");
-  if (!input) return;
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
 
-  const canvas = await html2canvas(input, {
-    scale: 2,
-    useCORS: true
+  const { pdf, startY } = await PdfHeader();
+
+  let y = startY;
+
+  // =========================
+  // HEADER IDENTICO UI
+  // =========================
+  pdf.setFontSize(14);
+  pdf.text("Movimento Giorno", 14, y);
+  y += 6;
+
+  pdf.setFontSize(10);
+  pdf.text(
+    `Giorno: ${new Date(selectedDate).toLocaleDateString("it-IT")}`,
+    14,
+    y
+  );
+  y += 8;
+
+  // =========================
+  // 1. CARICHI / SCARICHI - CONSUNTIVATI (rows)
+  // =========================
+  autoTable(pdf, {
+    startY: y,
+    head: [["CONTROPARTE", "DATA MOVIMENTO", "IMPORTO"]],
+    body: rows.map(r => [
+      r.controparte,
+      toDate(r.dataMov)?.toLocaleDateString("it-IT") || "",
+      `${Number(r.importo).toLocaleString("it-IT", {
+        minimumFractionDigits: 2
+      })} €`
+    ]),
+    theme: "grid",
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [39, 174, 96] },
   });
 
-  const imgData = canvas.toDataURL("image/png");
+  y = pdf.lastAutoTable.finalY + 6;
 
-  const pdf = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4"
+  // =========================
+  // 2. DA CONSUNTIVARE
+  // =========================
+  autoTable(pdf, {
+    startY: y,
+    head: [["CONTROPARTE", "DATA", "IMPORTO"]],
+    body: daConsuntivare.map(r => [
+      r.controparte,
+      new Date(r.dataMov).toLocaleDateString("it-IT"),
+      `${Number(r.importo).toLocaleString("it-IT", {
+        minimumFractionDigits: 2
+      })} €`
+    ]),
+    theme: "grid",
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [231, 76, 60] },
   });
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  y = pdf.lastAutoTable.finalY + 10;
 
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  // =========================
+  // 3. ALTRI MOVIMENTI - CONSUNTIVATI (IDENTICO UI)
+  // =========================
+  const consuntivatiAltri = anagraficaMov
+    .map(item => {
+      const movs = movFin.filter(m =>
+        m.anagraficaId === item.id &&
+        isSameDay(m.data, selectedDate)
+      );
 
-  let heightLeft = imgHeight;
-  let position = 0;
+      if (movs.length === 0) return null;
 
-  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
+      const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
 
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-  }
+      return [
+        item.nomeBreve,
+        item.periodicita,
+        `${totale.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+        movs.length
+      ];
+    })
+    .filter(Boolean);
 
- 
-   await salvaESharePdfCapacitor(pdf, `Movimenti_${new Date(selectedDate).toLocaleDateString("it-IT")}.pdf`);
+  autoTable(pdf, {
+    startY: y,
+    head: [["MOVIMENTO", "FREQUENZA", "€", "CONT."]],
+    body: consuntivatiAltri,
+    theme: "grid",
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [39, 174, 96] },
+  });
+
+  y = pdf.lastAutoTable.finalY + 10;
+
+  // =========================
+  // 4. ALTRI MOVIMENTI - DA CONSUNTIVARE (IDENTICO UI)
+  // ⚠️ NIENTE FILTRO SULLA DATA (come UI)
+  // =========================
+  const daConsAltri = anagraficaMov
+    .map(item => {
+      const occ = getOccorrenze(item);
+
+      if (!occ.length) return null;
+
+      return [
+        item.nomeBreve,
+        item.periodicita,
+        `${item.importo.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+        occ.length
+      ];
+    })
+    .filter(Boolean);
+
+  autoTable(pdf, {
+    startY: y,
+    head: [["MOVIMENTO", "FREQUENZA", "€", "CONT."]],
+    body: daConsAltri,
+    theme: "grid",
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [231, 76, 60] },
+  });
+
+  y = pdf.lastAutoTable.finalY + 10;
+
+  // =========================
+  // FOOTER IDENTICO UI
+  // =========================
+  pdf.setFontSize(10);
+
+  pdf.text(
+    `Introiti: ${introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+  y += 5;
+
+  pdf.text(
+    `Spese: ${speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+  y += 5;
+
+  pdf.text(
+    `Guadagno: ${guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+
+  y += 8;
+
+  pdf.text(
+    `Introiti (Attività): ${introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+  y += 5;
+
+  pdf.text(
+    `Spese (Attività): ${speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+  y += 5;
+
+  pdf.text(
+    `Guadagno (Attività): ${guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+
+  
+const pageWidth = pdf.internal.pageSize.getWidth();
+const pageHeight = pdf.internal.pageSize.getHeight();
+
+const totalPages = pdf.getNumberOfPages();
+pdf.setPage(totalPages);
+
+pdf.setFontSize(10);
+
+// posizione bottom-right
+const x = pageWidth - 70;
+ y = pageHeight - 20;
+
+// 🟢 verde
+pdf.setTextColor(0, 128, 0);
+pdf.text("Consuntivati", x, y);
+
+// 🔴 rosso
+pdf.setTextColor(200, 0, 0);
+pdf.text("Da Consuntivare", x, y + 6);
+
+// reset
+pdf.setTextColor(0, 0, 0);
+  // =========================
+  // SAVE
+  // =========================
+  const dataSafe = new Date()
+    .toLocaleDateString("it-IT")
+    .replace(/\//g, "-");
+
+  await salvaESharePdfCapacitor(pdf, `Movimenti_${dataSafe}.pdf`);
 };
-
 const handleConsuntiva = async (row) => {
   const ok = window.confirm(`Confermare consuntivazione per ${row.controparte}?`);
   if (!ok) return;
@@ -498,22 +671,7 @@ const handleDeleteFin = async (row) => {
   }
 };
 
-const entrateUsciteTop = rows.map(r => ({
-  tipo: r.tipo,
-  importo: Number(r.importo) || 0
-}));
 
-const entrateUsciteBottom = anagraficaMov.flatMap(item => {
-  return movFin
-    .filter(m =>
-      m.anagraficaId === item.id &&
-      isSameDay(m.data, selectedDate)
-    )
-    .map(m => ({
-      tipo: item.tipo, // oppure m.tipo se affidabile
-      importo: Number(m.importo) || 0
-    }));
-});
 
 const getDataLimite = (item) => {
   const oggi = new Date();
@@ -585,53 +743,77 @@ const getOccorrenze = (item) => {
   return occ;
 };
 
-const attivitaDaConsuntivare = anagraficaMov.flatMap(item => {
-  return getOccorrenze(item).map(o => ({
-    tipo: item.tipo,
-    importo: Number(o.importo) || 0
-  }));
+const isEntrata = (tipo) => {
+  return tipo === "fattureCarichi" || tipo === "ENTRATA";
+};
+
+
+// CARICHI/SCARICHI (rows)
+const introitiCS = rows
+  .filter(r => isEntrata(r.tipo))
+  .reduce((s, r) => s + Number(r.importo || 0), 0);
+
+const speseCS = rows
+  .filter(r => !isEntrata(r.tipo))
+  .reduce((s, r) => s + Number(r.importo || 0), 0);
+
+// ALTRI MOVIMENTI (consuntivati)
+const altriCons = anagraficaMov.flatMap(item => {
+  return movFin
+    .filter(m =>
+      m.anagraficaId === item.id &&
+      isSameDay(m.data, selectedDate)
+    )
+    .map(m => ({
+      tipo: item.tipo,
+      importo: Number(m.importo || 0)
+    }));
 });
-const allMovimentiGiorno = [
-  ...entrateUsciteTop,
-  ...entrateUsciteBottom,
-  ...attivitaDaConsuntivare
-];
-const introitiTot = allMovimentiGiorno
-  .filter(m =>
-    m.tipo === "fattureCarichi" ||
-    m.tipo === "ENTRATA"
-  )
+
+const introitiAltri = altriCons
+  .filter(m => isEntrata(m.tipo))
   .reduce((s, m) => s + m.importo, 0);
 
-const speseTot = allMovimentiGiorno
-  .filter(m =>
-    m.tipo === "PRIVATI" ||
-     m.tipo === "prospettiFattura" ||
-    m.tipo === "USCITA"
-  )
+const speseAltri = altriCons
+  .filter(m => !isEntrata(m.tipo))
   .reduce((s, m) => s + m.importo, 0);
 
+// TOTALI FINALI CONSUNTIVATI
+const introitiTot = introitiCS + introitiAltri;
+const speseTot = speseCS + speseAltri;
 const guadagno = introitiTot - speseTot;
 
+// CARICHI/SCARICHI
+const introitiCS_Da = daConsuntivare
+  .filter(r => isEntrata(r.tipo))
+  .reduce((s, r) => s + Number(r.importo || 0), 0);
 
-const attivitaDaCons = anagraficaMov.flatMap(item =>
-  getOccorrenze(item)
-    .filter(o => isSameDay(o.data, selectedDate))
-    .map(o => ({
-      tipo: item.tipo,
-      importo: Number(o.importo) || 0
-    }))
-);
+const speseCS_Da = daConsuntivare
+  .filter(r => !isEntrata(r.tipo))
+  .reduce((s, r) => s + Number(r.importo || 0), 0);
 
-const introitiAttDaCons = attivitaDaCons
-  .filter(m => m.tipo === "fattureCarichi" || m.tipo === "ENTRATA")
+// ALTRI MOVIMENTI (OCCORRENZE)
+const altriDa = anagraficaMov.flatMap(item => {
+  return getOccorrenze(item).map(o => ({
+    tipo: item.tipo,
+    importo: Number(item.importo || 0)
+  }));
+});
+
+const introitiAltri_Da = altriDa
+  .filter(m => isEntrata(m.tipo))
   .reduce((s, m) => s + m.importo, 0);
 
-const speseAttDaCons = attivitaDaCons
-  .filter(m => m.tipo === "PRIVATI" || m.tipo === "prospettiFattura" || m.tipo === "USCITA")
+const speseAltri_Da = altriDa
+  .filter(m => !isEntrata(m.tipo))
   .reduce((s, m) => s + m.importo, 0);
 
+// TOTALI FINALI DA CONSUNTIVARE
+const introitiAttDaCons = introitiCS_Da + introitiAltri_Da;
+const speseAttDaCons = speseCS_Da + speseAltri_Da;
 const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
+
+
   // --------------------------
   // UI
   // --------------------------
@@ -674,7 +856,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
           <h4>🟢 Consuntivati</h4>
  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th>    </tr>  </thead>
+  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th> <th>Tipo</th>   </tr>  </thead>
   <tbody>
     {rows.map((r, i) => {      const isEntrata =        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
       return (
@@ -696,7 +878,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} €
-</td>
+</td><td>{r.tipo}</td>
         </tr>
       );
     })}  </tbody></table>
@@ -704,7 +886,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
 <h4>🔴 Da Consuntivare</h4>
 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA</th>      <th>IMPORTO</th>    </tr>  </thead>
+  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA</th>      <th>IMPORTO</th> <th>Tipo</th>    </tr> </thead>
   <tbody>
     {daConsuntivare.map((r, i) => {
       const isEntrata =
@@ -731,7 +913,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} €
-</td>
+</td><td>{r.tipo}</td>
         </tr>
       );
     })}
@@ -745,7 +927,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
     <h4>🟢 Consuntivati</h4>
 
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>      </thead>
+      <thead>        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>     <th>Tipo</th>   </tr>      </thead>
       <tbody>
   {anagraficaMov.map(item => {
 
@@ -792,6 +974,7 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
       maximumFractionDigits: 2
     })} €</td>
       <td>{movs.length}</td>
+      <td>{item.tipo}</td>
     </tr>
   );
 })}
@@ -802,7 +985,7 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
     <h4>🔴 Da Consuntivare</h4>
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <thead>
-        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>
+        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>    <th>Tipo</th>    </tr>
       </thead>
       <tbody>
         {anagraficaMov.map(item => {
@@ -826,6 +1009,7 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
               <td>{item.periodicita}</td>
               <td>{item.importo} €</td>
               <td>{occ.length}</td>
+              <td>{item.tipo}</td>
             </tr>
           );
         })}

@@ -246,7 +246,9 @@ const resetFiltri = () => {
   setFilterPeriodicita("TUTTE");
 };
 
-  const disabilita = (item) => {
+const disabilita = (item) => {
+  if (item.periodicita === "SINGOLO") return; // 🔥 BLOCCO HARD
+
   setItemSelezionato(item);
   setDataDisabilitazione("");
   setShowDisabilita(true);
@@ -372,7 +374,7 @@ const apriContabilizza = async (item) => {
 
 const confermaDisabilitazione = async () => {
   if (!dataDisabilitazione || !itemSelezionato) return;
-
+ if (itemSelezionato.periodicita === "SINGOLO") return; // 🔥 EXTRA SAFE
   const dataCreazione = itemSelezionato.createdAt?.toDate();
 
   const scelta = new Date(dataDisabilitazione);
@@ -799,7 +801,18 @@ setDataDisForm(new Date());
         <option value="USCITA">USCITA</option>
       </select>
 
-      <select value={periodicita} onChange={(e) => setPeriodicita(e.target.value)}>
+      <select
+  value={periodicita}
+  onChange={(e) => {
+    const val = e.target.value;
+    setPeriodicita(val);
+
+    if (val === "SINGOLO") {
+      setDisableChecked(false);
+      setDataDisForm(new Date());
+    }
+  }}
+>
         <option value="SINGOLO">SINGOLO</option>
         <option value="GIORNALIERO">GIORNALIERO</option>
         <option value="SETTIMANALE">SETTIMANALE</option>
@@ -834,36 +847,38 @@ setDataDisForm(new Date());
     />
   </div>
 
-  <div style={{ marginTop: 10 }}>
-    <label>
-      <input
-        type="checkbox"
-        checked={disableChecked}
-        onChange={(e) => setDisableChecked(e.target.checked)}
-      />
-      {" "}Disabilita
-    </label>
-  </div>
-
-  {disableChecked && (
-    <div style={{ marginTop: 8 }}>
-      <label style={{ fontWeight: "bold" }}>
-        Data di disabilitazione:
-      </label>
-
-      <div>
-        <DatePicker
-          selected={dataDisForm}
-          onChange={(date) => setDataDisForm(date)}
-          dateFormat="dd MMM yyyy"
-          locale={it}
-          minDate={
-            new Date(dataAttivazione.getTime() + 86400000)
-          }
+{periodicita !== "SINGOLO" && (
+  <>
+    <div style={{ marginTop: 10 }}>
+      <label>
+        <input
+          type="checkbox"
+          checked={disableChecked}
+          onChange={(e) => setDisableChecked(e.target.checked)}
         />
-      </div>
+        {" "}Disabilita
+      </label>
     </div>
-  )}
+
+    {disableChecked && (
+      <div style={{ marginTop: 8 }}>
+        <label style={{ fontWeight: "bold" }}>
+          Data di disabilitazione:
+        </label>
+
+        <div>
+          <DatePicker
+            selected={dataDisForm}
+            onChange={(date) => setDataDisForm(date)}
+            dateFormat="dd MMM yyyy"
+            locale={it}
+            minDate={new Date(dataAttivazione.getTime() + 86400000)}
+          />
+        </div>
+      </div>
+    )}
+  </>
+)}
 
 </div>
       <button
@@ -1037,11 +1052,11 @@ if (item.periodicita !== "SINGOLO") {
           </td>
 
           <td>
-            {!item.dataDisabilitazione && (
-              <button onClick={() => disabilita(item)}>
-                Disabilita
-              </button>
-            )}
+{item.periodicita !== "SINGOLO" && !item.dataDisabilitazione && (
+  <button onClick={() => disabilita(item)}>
+    Disabilita
+  </button>
+)}
 
             <button onClick={() => modifica(item)}>
               ✏️ Modifica
