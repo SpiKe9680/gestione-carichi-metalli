@@ -874,7 +874,7 @@ const reloadDati = async () => {
   const annullaModifiche = ()=>{ setSelectedIndex(null); setEditor(null); setOriginalEditor(null); };
   const handleLogout = async ()=>{ await auth.signOut(); navigate("/login"); };
   const goHome = ()=>navigate("/admin");
-  const vaiGestioneListini = ()=>navigate("/gestione-scarichi", { state: { refresh: true } });
+  const vaiGestioneListini = ()=>navigate("/gestione-listini", { state: { refresh: true } });
 
 const salvaDraftScarico = async (riga) => {
   try {

@@ -89,6 +89,8 @@ const [filteredScarichi, setFilteredScarichi] = useState([]);
 const [filtroFIR, setFiltroFIR] = useState(""); // filtro dropdown FIR
 const [firDisponibili, setFirDisponibili] = useState([]); // lista FIR disponibili per il filtro
 const [firSearch, setFirSearch] = useState(""); // testo digitato per FIR
+
+const vaiScarichi= ()=>navigate("/scarichi", { state: { refresh: true } });
 const [dataSalvataggio, setDataSalvataggio] = useState(new Date());
 const [minDataSalvataggio, setMinDataSalvataggio] = useState(null);
 const [dal, setDal] = useState(null);   // oggetto Date
@@ -1045,6 +1047,7 @@ const toOptions = (arr) =>
   🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
 </button>
         <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
+        <button onClick={vaiScarichi} style={{marginLeft:10}}>⚙ Nuovo Carico/Scarico</button>
 <button
   onClick={handleApriDocumento}
   disabled={isDocumentoDisabled()}

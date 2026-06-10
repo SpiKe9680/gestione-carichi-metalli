@@ -32,7 +32,7 @@ const requestSort = (key) => {
     return { key, direction: "asc" };
   });
 };
-
+const isSingolo = (m) => m?.tipoMovimento === "SINGOLO";
 const [showMergeUI, setShowMergeUI] = useState(false);
 const [merge1, setMerge1] = useState("");
 const [merge2, setMerge2] = useState("");

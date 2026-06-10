@@ -58,6 +58,11 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
           Definizione Listini
         </button>
 
+       <button onClick={() => navigate("/fornitori")}>
+          <FaTruck style={{ marginRight: "8px" }} />
+          Controparti
+        </button>
+
         {role === "ADMIN" && (
   <button
     onClick={() => navigate("/MovimentiFinanziari")}
@@ -96,10 +101,7 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
   </button>
 )}
 
-        <button onClick={() => navigate("/fornitori")}>
-          <FaTruck style={{ marginRight: "8px" }} />
-          Controparti
-        </button>
+ 
 
 
     {role === "ADMIN" && (
