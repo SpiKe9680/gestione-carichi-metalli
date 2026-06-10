@@ -1,7 +1,7 @@
 // src/components/GestioneUtenti.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, setDoc, doc, deleteDoc,getDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, setDoc, doc, deleteDoc, getDoc, updateDoc, addDoc, query, where, limit, Timestamp } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
@@ -17,20 +17,41 @@ const GestioneUtenti = () => {
 const [adminEmail, setAdminEmail] = useState(""); // mail di recupero globale
   const navigate = useNavigate();
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-  // stato
+const [searchTerm, setSearchTerm] = useState("");
+const [historyIndex, setHistoryIndex] = useState({});
 const [username, setUsername] = useState("");
 const [selectedUser, setSelectedUser] = useState(null);
-
-
+const [showHistoryModal, setShowHistoryModal] = useState(false);
+const [usernameHistory, setUsernameHistory] = useState([]);
 const [isDirty, setIsDirty] = useState(false);
 const [confirmPassword, setConfirmPassword] = useState("");
   // -------- FETCH UTENTI --------
   useEffect(() => { fetchUsers(); }, []);
 
 const fetchUsers = async () => {
-  const snap = await getDocs(collection(db, "utenti"));
+  const [usersSnap, historySnap] = await Promise.all([
+    getDocs(collection(db, "utenti")),
+    getDocs(collection(db, "username_history"))
+  ]);
 
-  const data = snap.docs.map(d => {
+  // 🔥 INDEX: userId -> lista username storici
+  const index = {};
+
+  historySnap.docs.forEach(d => {
+    const data = d.data();
+    if (!data.userId) return;
+
+    if (!index[data.userId]) index[data.userId] = [];
+
+    if (data.username) {
+      index[data.userId].push(data.username.toLowerCase());
+    }
+  });
+
+  setHistoryIndex(index);
+
+  // 🔥 set utenti
+  const data = usersSnap.docs.map(d => {
     const u = { id: d.id, ...d.data() };
 
     const isBlocked =
@@ -38,6 +59,7 @@ const fetchUsers = async () => {
 
     return {
       ...u,
+      hasHistory: !!index[u.id]?.length,
       stato: isBlocked ? "BLOCCATO" : "ABILITATO"
     };
   });
@@ -195,6 +217,7 @@ const resetForm = () => {
   setIsDirty(false);
   setMode(null);
 };
+
 const handleUpdateUser = async () => {
   if (!selectedUser) return;
 
@@ -207,10 +230,108 @@ const handleUpdateUser = async () => {
     const orig = { ...selectedUser };
 
     const emailFinale = email || adminEmail || null;
+    const normalized = username.trim().toLowerCase();
 
+    if (!normalized) {
+      return setMessage("Username non valido");
+    }
+
+    const historyRef = collection(db, "username_history");
+
+    // =============================
+    // 🔴 1. CONTROLLO STORICO GLOBALE
+    // =============================
+    const q = query(
+      historyRef,
+      where("username_lower", "==", normalized),
+      limit(1)
+    );
+
+    const snapCheck = await getDocs(q);
+
+    if (!snapCheck.empty) {
+      const found = snapCheck.docs[0].data();
+
+      if (found.userId !== selectedUser.id) {
+        return setMessage("Username già usato da un altro utente (anche in passato)");
+      }
+    }
+
+    const now = new Date();
+
+    // =============================
+    // 🔍 2. CONTROLLO SE HA STORICO
+    // =============================
+    const qHistory = query(
+      historyRef,
+      where("userId", "==", selectedUser.id),
+      limit(1)
+    );
+
+    const snapHistory = await getDocs(qHistory);
+    const hasHistory = !snapHistory.empty;
+
+    // =============================
+    // 🧠 3. BOOTSTRAP
+    // =============================
+    if (!hasHistory) {
+      const configRef = doc(db, "configurazioni", "datiAzienda");
+      const configSnap = await getDoc(configRef);
+
+      let startDate = new Date();
+
+      if (configSnap.exists()) {
+        const data = configSnap.data();
+        if (data?.giornoAvviamento) {
+          startDate = new Date(data.giornoAvviamento);
+        }
+      }
+
+      await addDoc(historyRef, {
+        userId: selectedUser.id,
+        username: orig.username,
+        username_lower: (orig.username || "").toLowerCase(),
+        startAt: Timestamp.fromDate(startDate),
+        endAt: Timestamp.fromDate(now),
+        source: "Avviamento"
+      });
+    }
+
+    // =============================
+    // 🔁 4. CHIUDI USERNAME ATTIVO
+    // =============================
+    const snapActive = await getDocs(historyRef);
+
+    const active = snapActive.docs.find(d => {
+      const x = d.data();
+      return x.userId === selectedUser.id && x.endAt === null;
+    });
+
+    if (active) {
+      await updateDoc(doc(db, "username_history", active.id), {
+        endAt: Timestamp.fromDate(now)
+      });
+    }
+
+    // =============================
+    // 🆕 5. CREA NUOVO STORICO
+    // =============================
+    await addDoc(historyRef, {
+      userId: selectedUser.id,
+      username,
+      username_lower: normalized,
+      startAt: Timestamp.fromDate(now),
+      endAt: null,
+      source: "CambioNomeUtente"
+    });
+
+    // =============================
+    // 💾 6. UPDATE UTENTE
+    // =============================
     const updated = {
       ...selectedUser,
       username,
+      username_lower: normalized,
       email: emailFinale,
       ruolo: role
     };
@@ -222,46 +343,38 @@ const handleUpdateUser = async () => {
 
     await setDoc(doc(db, "utenti", selectedUser.id), updated);
 
+    // =============================
+    // 🧾 LOG
+    // =============================
     const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
 
     await scriviLog({
       pagina: "gestione-utenti",
       evento: "MODIFICA_UTENTE",
-
       riferimento: {
         collezione: "utenti",
         documentoId: selectedUser.id
       },
-
       utente: buildLogUser(currentUser, "ADMIN"),
-
       before: {
         username: orig.username || "-",
         email: orig.email || "-",
         ruolo: orig.ruolo || "OPERATORE"
       },
-
       after: {
         username: updated.username || "-",
         email: updated.email || "-",
-        ruolo: updated.ruolo || "OPERATORE"
+        ruolo: updated.ruolo || "OPERATORE",
+        storico: "username_history_aggiornato"
       },
-
       meta: {
         tipo: "UTENTE",
         ip: clientIP
       },
-
       ripristinabile: true
     });
 
     setMessage(`Utente ${username} modificato!`);
-
-    setSelectedUser(null);
-    setUsername("");
-    setPassword("");
-    setEmail("");
-    setConfirmPassword("");
 
     fetchUsers();
     resetForm();
@@ -347,6 +460,34 @@ useEffect(() => {
 
   fetchAdminEmail();
 }, []);
+
+const loadUsernameHistory = async (userId) => {
+  try {
+    const historyRef = collection(db, "username_history");
+
+    const q = query(
+      historyRef,
+      where("userId", "==", userId)
+    );
+
+    const snap = await getDocs(q);
+
+    const data = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+
+    data.sort((a, b) =>
+      (b.startAt?.toMillis?.() || 0) - (a.startAt?.toMillis?.() || 0)
+    );
+
+    setUsernameHistory(data);
+    setShowHistoryModal(true);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   // -------- AGGIUNGI UTENTE --------
 const handleAddUser = async () => {
@@ -504,7 +645,21 @@ const handleDeleteUser = async (utente) => {
       setMessage("Errore ripristino utente");
     }
   };
-let usersOrdinati = [...users];
+let usersFiltrati = users.filter(u => {
+  const term = searchTerm.toLowerCase().trim();
+  if (!term) return true;
+
+  const current = (u.username || u.email || "").toLowerCase();
+
+  const history = (historyIndex[u.id] || []).join(" ");
+
+  return (
+    current.includes(term) ||
+    history.includes(term)
+  );
+});
+
+let usersOrdinati = [...usersFiltrati];
 
 if (sortConfig.key) {
   usersOrdinati.sort((a, b) => {
@@ -536,6 +691,9 @@ if (sortConfig.key) {
     return sortConfig.direction === "asc" ? comparison : -comparison;
   });
 }
+
+
+
   return (
     <div className="gestione-utenti-container" style={{ padding: "20px" }}>
       {/* NAV */}
@@ -633,6 +791,19 @@ if (sortConfig.key) {
   </div>
 </div>
 )}
+<div style={{ marginBottom: 15 }}>
+  <input
+    type="text"
+    placeholder="🔎 Cerca username (anche storico)..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    style={{
+      padding: "8px",
+      width: "100%",
+      maxWidth: "400px"
+    }}
+  />
+</div>
       {/* TABELLA UTENTI */}
 {/* TABELLA UTENTI */}
 {/* TABELLA UTENTI */}
@@ -708,7 +879,17 @@ if (sortConfig.key) {
   >
     Reset Password
   </button>
-
+{(u.hasHistory || selectedUser?.id === u.id) && (
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      loadUsernameHistory(u.id);
+    }}
+    style={{ backgroundColor: "#6c757d", color: "white" }}
+  >
+    📜 Storico Nome Utente
+  </button>
+)}
   {/* 🔥 NUOVO: SBLOCCA SOLO SE BLOCCATO */}
   {u.stato === "BLOCCATO" && (
     <button
@@ -723,6 +904,100 @@ if (sortConfig.key) {
   ))}
 </tbody>
 </table>
+{showHistoryModal && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      backgroundColor: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 9999
+    }}
+    onClick={() => setShowHistoryModal(false)}
+  >
+    <div
+      style={{
+        width: "90%",
+        maxWidth: "900px",
+        background: "white",
+        borderRadius: "10px",
+        padding: "20px",
+        maxHeight: "80vh",
+        overflowY: "auto"
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <h3>📜 Storico Username</h3>
+
+        <button
+          onClick={() => setShowHistoryModal(false)}
+          style={{
+            background: "transparent",
+            border: "none",
+            fontSize: "20px",
+            cursor: "pointer"
+          }}
+        >
+          ✖
+        </button>
+      </div>
+
+      {/* BODY */}
+      {usernameHistory.length === 0 ? (
+        <div>Nessuno storico disponibile</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Dal</th>
+              <th>Al</th>
+              <th>Origine</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {usernameHistory.map(item => (
+              <tr key={item.id}>
+                <td>{item.username}</td>
+                <td>{item.startAt?.toDate?.().toLocaleString()}</td>
+                <td>
+                  {item.endAt
+                    ? item.endAt.toDate().toLocaleString()
+                    : "ATTUALE"}
+                </td>
+                <td>{item.source}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {/* FOOTER BUTTON CHIUDI */}
+<div style={{ marginTop: 15, display: "flex", justifyContent: "flex-end" }}>
+  <button
+    onClick={() => setShowHistoryModal(false)}
+    style={{
+      background: "#6c757d",
+      color: "white",
+      border: "none",
+      padding: "8px 14px",
+      borderRadius: "6px",
+      cursor: "pointer"
+    }}
+  >
+    Chiudi
+  </button>
+</div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

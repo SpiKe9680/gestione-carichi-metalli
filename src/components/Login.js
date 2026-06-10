@@ -1,11 +1,10 @@
 // src/components/Login.js
 import React, { useState } from "react";
 import { db, auth, loginAdminFirebase } from "../firebase";
-import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import {  collection,  query,  where,  getDocs,  addDoc,  updateDoc,  doc,  limit,  getDoc,  Timestamp} from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { useEffect } from "react";
-import { getDoc } from "firebase/firestore";
 import bcrypt from "bcryptjs";
 const Login = () => {
   const navigate = useNavigate();
@@ -13,7 +12,8 @@ const [logoBase64, setLogoBase64] = useState(null);
   const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [message, setMessage] = useState("");
-
+const [showUsernameWarning, setShowUsernameWarning] = useState(false);
+const [pendingUsernameChange, setPendingUsernameChange] = useState(null);
   // modal state
   const [mode, setMode] = useState(null); // "username" | "password" | null
   const [oldUser, setOldUser] = useState("");
@@ -370,9 +370,6 @@ useEffect(() => {
 
   loadLogo();
 }, []);
-// =============================
-// CAMBIO USERNAME (FIXED)
-// =============================
 const handleChangeUsername = async () => {
   setMessage("");
 
@@ -386,52 +383,181 @@ const handleChangeUsername = async () => {
       return setMessage("Username non valido");
     }
 
+    // controllo esistenza username
     const snap = await getDocs(collection(db, "utenti"));
 
-    const exists = snap.docs.some((d) => {
-      const data = d.data();
+   const exists = snap.docs.some((d) => {
+  const data = d.data();
 
-      const sameUser = d.id === user.id;
-      const username = (data.username || "").trim().toLowerCase();
-
-      return !sameUser && username === normalized;
-    });
+  return (
+    data.username_lower === normalized &&
+    data.userId !== user.id
+  );
+});
 
     if (exists) {
       return setMessage("Username già esistente");
     }
 
-    await updateDoc(doc(db, "utenti", user.id), {
-      username: newUsername.trim(),
-      username_lower: normalized
+    // 🧠 NON aggiornare subito → apri conferma
+    setPendingUsernameChange({
+      userId: user.id,
+      oldUsername: user.username,
+      newUsername: newUsername.trim(),
+      normalized
     });
 
-    await scriviLog({
-      pagina: "login",
-      azione: "MODIFICA_USERNAME",
-      collezioneRef: "utenti",
-      documentoId: user.id,
-
-      dati_originali: {
-        username: user.username
-      },
-      dati_modificati: {
-        username: newUsername.trim()
-      },
-
-      meta: {
-        tipo: "AUTH"
-      },
-
-      ripristinabile: true
-    });
-
-    setMessage("Username aggiornato");
-    setMode(null);
+    setShowUsernameWarning(true);
 
   } catch (e) {
     console.error(e);
     setMessage("Errore cambio username");
+  }
+};
+
+const confirmUsernameChange = async () => {
+  if (!pendingUsernameChange) return;
+
+  const { userId, oldUsername, newUsername, normalized } = pendingUsernameChange;
+
+  const now = new Date();
+
+  try {
+    await loginAdminFirebase();
+
+    // =============================
+    // 🔎 1. CERCO STORICO UTENTE (OTTIMIZZATO)
+    // =============================
+    const historyRef = collection(db, "username_history");
+
+    const qUserHistory = query(
+      historyRef,
+      where("userId", "==", userId),
+      limit(1)
+    );
+
+    const historySnap = await getDocs(qUserHistory);
+
+    const hasHistory = !historySnap.empty;
+
+    // =============================
+    // 📅 2. CARICO DATA AVVIAMENTO (solo se serve)
+    // =============================
+    let giornoAvviamento = null;
+
+    if (!hasHistory) {
+      const configRef = doc(db, "configurazioni", "datiAzienda");
+      const configSnap = await getDoc(configRef);
+
+      giornoAvviamento = configSnap.data()?.giornoAvviamento;
+    }
+
+    // =============================
+    // 🔒 3. CHIUDO EVENTUALE RECORD ATTIVO
+    // =============================
+    const qActive = query(
+      historyRef,
+      where("userId", "==", userId),
+      where("endAt", "==", null),
+      limit(1)
+    );
+
+    const activeSnap = await getDocs(qActive);
+
+    if (!activeSnap.empty) {
+      const activeDoc = activeSnap.docs[0];
+
+      await updateDoc(doc(db, "username_history", activeDoc.id), {
+        endAt: Timestamp.fromDate(now)
+      });
+    }
+
+    // =============================
+    // 🧠 4. BOOTSTRAP (SE NON ESISTE STORICO)
+    // =============================
+    if (!hasHistory) {
+      await addDoc(historyRef, {
+        userId,
+        username: oldUsername,
+        username_lower: (oldUsername || "").toLowerCase(),
+        startAt: Timestamp.fromDate(new Date(giornoAvviamento)),
+        endAt: Timestamp.fromDate(now),
+        source: "Avviamento"
+      });
+    }
+
+    // =============================
+// 🚫 CONTROLLO USERNAME GIÀ USATO DA ALTRI (STORICO)
+// =============================
+const qUsernameUsed = query(
+  historyRef,
+  where("username_lower", "==", normalized)
+);
+
+const usernameSnap = await getDocs(qUsernameUsed);
+
+const usedByAnother = usernameSnap.docs.some(d => {
+  const data = d.data();
+  return data.userId !== userId;
+});
+
+if (usedByAnother) {
+  setMessage("Username già utilizzato in passato da un altro utente");
+  return;
+}
+
+    // =============================
+    // 🔄 5. UPDATE UTENTE
+    // =============================
+    await updateDoc(doc(db, "utenti", userId), {
+      username: newUsername,
+      username_lower: normalized
+    });
+
+    // =============================
+    // ➕ 6. NUOVO RECORD STORICO
+    // =============================
+    await addDoc(historyRef, {
+      userId,
+      username: newUsername,
+      username_lower: normalized,
+      startAt: Timestamp.fromDate(now),
+      endAt: null,
+      source: "CambioNomeUtente"
+    });
+
+    // =============================
+    // 🧾 7. LOG
+    // =============================
+    await scriviLog({
+      pagina: "login",
+      evento: "MODIFICA_USERNAME",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: userId
+      },
+      before: {
+        username: oldUsername
+      },
+      after: {
+        username: newUsername,
+        bootstrap: !hasHistory
+      },
+      utente: `${oldUsername} → ${newUsername}`,
+      ripristinabile: true
+    });
+
+    // =============================
+    // ✅ UI
+    // =============================
+    setMessage("Username aggiornato");
+    setMode(null);
+    setShowUsernameWarning(false);
+    setPendingUsernameChange(null);
+
+  } catch (e) {
+    console.error(e);
+    setMessage("Errore aggiornamento username");
   }
 };
 
@@ -684,7 +810,36 @@ const handleChangePassword = async () => {
         <button onClick={() => setMode("password")} style={{ width: "100%", padding: 10 }}> 
           Cambia Password
         </button>
-    
+    {showUsernameWarning && (
+  <div style={{
+    marginTop: 15,
+    padding: 10,
+    background: "#ffdddd",
+    border: "1px solid red",
+    color: "#b30000"
+  }}>
+    <b>ATTENZIONE</b>
+    <p>
+      Cambiando username, tutto ciò che è stato fatto con il vecchio username resterà invariato.
+      Da questo momento verrà usato il nuovo username.
+    </p>
+
+    <p>
+      <b>{pendingUsernameChange?.oldUsername}</b> → <b>{pendingUsernameChange?.newUsername}</b>
+    </p>
+
+    <button onClick={confirmUsernameChange}>
+      Conferma cambio
+    </button>
+
+    <button onClick={() => {
+      setShowUsernameWarning(false);
+      setPendingUsernameChange(null);
+    }}>
+      Annulla
+    </button>
+  </div>
+)}
       {/* MODIFICA USERNAME */}
       {mode === "username" && (
         <div style={{ marginTop: 20 }}>

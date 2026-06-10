@@ -8,6 +8,8 @@ import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+import {  FaSignOutAlt} from "react-icons/fa";
+import { signOut } from "firebase/auth";
 const GestioneLog = () => {
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
@@ -27,8 +29,11 @@ const [currentPage, setCurrentPage] = useState(1);
 const pageSize = 50;
   const navigate = useNavigate();
 
-  // NAV
-  const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
+ const handleLogout = async () => {
+  await signOut(auth);
+  sessionStorage.clear();
+  navigate("/login", { replace: true });
+};
   
   const goHome = () => navigate("/admin");
 const logRipristinabile = (log) => {
@@ -271,9 +276,10 @@ const paginatedLogs = filteredLogs.slice(
     <div className="gestione-log-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goHome}>🏠 Dashboard</button>
-       <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>  
+         <button onClick={handleLogout}>
+                 <FaSignOutAlt style={{ marginRight: "8px" }} />
+                 Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+               </button>
 <button onClick={handlePrintLogs}>
   🖨️ Stampa
 </button>
