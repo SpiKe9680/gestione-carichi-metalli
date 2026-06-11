@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { ripristinaUtente } from "../utils/utenti";
 import bcrypt from "bcryptjs";
-
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const GestioneUtenti = () => {
   const [users, setUsers] = useState([]);
   const [email, setEmail] = useState("");
@@ -27,14 +27,13 @@ const [isDirty, setIsDirty] = useState(false);
 const [confirmPassword, setConfirmPassword] = useState("");
   // -------- FETCH UTENTI --------
   useEffect(() => { fetchUsers(); }, []);
-
+const [initialUsername, setInitialUsername] = useState("");
 const fetchUsers = async () => {
   const [usersSnap, historySnap] = await Promise.all([
     getDocs(collection(db, "utenti")),
     getDocs(collection(db, "username_history"))
   ]);
 
-  // 🔥 INDEX: userId -> lista username storici
   const index = {};
 
   historySnap.docs.forEach(d => {
@@ -50,23 +49,90 @@ const fetchUsers = async () => {
 
   setHistoryIndex(index);
 
-  // 🔥 set utenti
   const data = usersSnap.docs.map(d => {
     const u = { id: d.id, ...d.data() };
 
     const isBlocked =
       u.lock_until && u.lock_until > Date.now();
 
+    const isDisabled = u.attivo === false;
+
     return {
       ...u,
       hasHistory: !!index[u.id]?.length,
-      stato: isBlocked ? "BLOCCATO" : "ABILITATO"
+      stato: isDisabled
+        ? "DISABILITATO"
+        : (isBlocked ? "BLOCCATO" : "ABILITATO")
     };
   });
 
   setUsers(data);
 };
+const handleStampaUtenti = async () => {
+  if (!usersOrdinati || usersOrdinati.length === 0) {
+    alert("Nessun utente da stampare");
+    return;
+  }
 
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  const { pdf, startY } = await PdfHeader();
+
+  let y = startY + 10;
+
+  pdf.setFontSize(16);
+  pdf.text("Gestione Utenti", 14, y);
+  y += 10;
+
+  const formatHistory = (userId, currentUsername) => {
+    const history = historyIndex[userId] || [];
+
+    const filtered = history.filter(
+      u => u && u.toLowerCase() !== (currentUsername || "").toLowerCase()
+    );
+
+    return filtered.length ? filtered.join(", ") : "-";
+  };
+
+  const getChangeCount = (userId, currentUsername) => {
+    const history = historyIndex[userId] || [];
+
+    const filtered = history.filter(
+      u => u && u.toLowerCase() !== (currentUsername || "").toLowerCase()
+    );
+
+    return filtered.length; // 🔥 MIGLIORIA 4
+  };
+
+  const body = usersOrdinati.map(u => [
+    u.username || (u.email ? u.email.split("@")[0] : "-"),
+    u.email || "-",
+    u.ruolo || "OPERATORE",
+    u.stato || "-",
+    formatHistory(u.id, u.username),
+    getChangeCount(u.id, u.username) // 🔥 CAMBI USERNAME
+  ]);
+
+  autoTable(pdf, {
+    startY: y,
+    head: [[
+      "Username",
+      "Email",
+      "Ruolo",
+      "Stato",
+      "Storico Username",
+      "Cambi"
+    ]],
+    body,
+    theme: "grid",
+    styles: { fontSize: 8 },
+    margin: { left: 14, right: 14 }
+  });
+
+  await salvaESharePdfCapacitor(pdf, "gestione_utenti.pdf");
+};
 const getClientIP = async () => {
   try {
     const res = await fetch("https://api.ipify.org?format=json");
@@ -172,6 +238,7 @@ const handleSelectUser = (u) => {
     : (u.email ? u.email.split("@")[0] : "");
 
   setUsername(usernameFinale);
+setInitialUsername(usernameFinale);
   setPassword("");
   setConfirmPassword("");
 
@@ -182,26 +249,21 @@ const handleSelectUser = (u) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-
 useEffect(() => {
   if (!selectedUser) return;
 
-  const origUsername = selectedUser.username
-    ? selectedUser.username
-    : (selectedUser.email ? selectedUser.email.split("@")[0] : "");
-
-  const origEmail = selectedUser.email || "";
+  const origEmail = (selectedUser.email || "").trim().toLowerCase();
   const origRole = selectedUser.ruolo || "OPERATORE";
 
   const dirty =
-    username !== origUsername ||
-    email !== origEmail ||
+    username !== initialUsername ||   // 🔥 QUI FIX
+    email.trim().toLowerCase() !== origEmail ||
     role !== origRole ||
     password.length > 0;
 
   setIsDirty(dirty);
 
-}, [username, password, email, role, selectedUser]);
+}, [username, password, email, role, selectedUser, initialUsername]);
 // -------- ANNULLA --------
 const handleAnnulla = () => {
   resetForm();
@@ -217,6 +279,28 @@ const resetForm = () => {
   setIsDirty(false);
   setMode(null);
 };
+const buildUsernameTooltip = (userId, currentUsername) => {
+  const history = historyIndex[userId] || [];
+
+  if (!history.length) return "";
+
+  const currentLower = (currentUsername || "").toLowerCase();
+
+  const filtered = history.filter(
+    u => u && u.toLowerCase() !== currentLower
+  );
+
+  if (!filtered.length) return "";
+
+  if (filtered.length === 1) {
+    return `Username usati: ${filtered[0]}`;
+  }
+
+  const last = filtered[filtered.length - 1];
+  const others = filtered.slice(0, -1);
+
+  return `Username usati: ${others.join(", ")} e ${last}`;
+};
 
 const handleUpdateUser = async () => {
   if (!selectedUser) return;
@@ -227,13 +311,27 @@ const handleUpdateUser = async () => {
   }
 
   try {
-    const orig = { ...selectedUser };
+    const orig = selectedUser;
 
     const emailFinale = email || adminEmail || null;
-    const normalized = username.trim().toLowerCase();
+    const normalized = (username || "").trim().toLowerCase();
+    const origNormalized = (orig.username || "").trim().toLowerCase();
 
     if (!normalized) {
-      return setMessage("Username non valido");
+      setMessage("Username non valido");
+      return;
+    }
+
+    // 🔥 0. SE NON CAMBIA NULLA -> ESCI SUBITO
+    const nothingChanged =
+      normalized === origNormalized &&
+      emailFinale === (orig.email || null) &&
+      role === (orig.ruolo || "OPERATORE") &&
+      !password;
+
+    if (nothingChanged) {
+      setMessage("Nessuna modifica rilevata");
+      return;
     }
 
     const historyRef = collection(db, "username_history");
@@ -253,88 +351,57 @@ const handleUpdateUser = async () => {
       const found = snapCheck.docs[0].data();
 
       if (found.userId !== selectedUser.id) {
-        return setMessage("Username già usato da un altro utente (anche in passato)");
+        setMessage("Username già usato da un altro utente");
+        return;
       }
     }
 
     const now = new Date();
 
     // =============================
-    // 🔍 2. CONTROLLO SE HA STORICO
+    // 🔁 2. CHIUDI USERNAME ATTUALE (SOLO SE CAMBIA)
     // =============================
-    const qHistory = query(
-      historyRef,
-      where("userId", "==", selectedUser.id),
-      limit(1)
-    );
+    if (normalized !== origNormalized) {
+      const snapActive = await getDocs(historyRef);
 
-    const snapHistory = await getDocs(qHistory);
-    const hasHistory = !snapHistory.empty;
+      const active = snapActive.docs.find(d => {
+        const x = d.data();
+        return x.userId === selectedUser.id && x.endAt === null;
+      });
 
-    // =============================
-    // 🧠 3. BOOTSTRAP
-    // =============================
-    if (!hasHistory) {
-      const configRef = doc(db, "configurazioni", "datiAzienda");
-      const configSnap = await getDoc(configRef);
-
-      let startDate = new Date();
-
-      if (configSnap.exists()) {
-        const data = configSnap.data();
-        if (data?.giornoAvviamento) {
-          startDate = new Date(data.giornoAvviamento);
-        }
+      if (active) {
+        await updateDoc(doc(db, "username_history", active.id), {
+          endAt: Timestamp.fromDate(now)
+        });
       }
 
+      // 🆕 NUOVO STORICO SOLO SE CAMBIA USERNAME
       await addDoc(historyRef, {
         userId: selectedUser.id,
-        username: orig.username,
-        username_lower: (orig.username || "").toLowerCase(),
-        startAt: Timestamp.fromDate(startDate),
-        endAt: Timestamp.fromDate(now),
-        source: "Avviamento"
+        username,
+        username_lower: normalized,
+        startAt: Timestamp.fromDate(now),
+        endAt: null,
+        source: "CambioNomeUtente"
       });
     }
 
     // =============================
-    // 🔁 4. CHIUDI USERNAME ATTIVO
-    // =============================
-    const snapActive = await getDocs(historyRef);
-
-    const active = snapActive.docs.find(d => {
-      const x = d.data();
-      return x.userId === selectedUser.id && x.endAt === null;
-    });
-
-    if (active) {
-      await updateDoc(doc(db, "username_history", active.id), {
-        endAt: Timestamp.fromDate(now)
-      });
-    }
-
-    // =============================
-    // 🆕 5. CREA NUOVO STORICO
-    // =============================
-    await addDoc(historyRef, {
-      userId: selectedUser.id,
-      username,
-      username_lower: normalized,
-      startAt: Timestamp.fromDate(now),
-      endAt: null,
-      source: "CambioNomeUtente"
-    });
-
-    // =============================
-    // 💾 6. UPDATE UTENTE
+    // 💾 3. UPDATE UTENTE (SOLO CAMPI REALMENTE CAMBIATI)
     // =============================
     const updated = {
-      ...selectedUser,
-      username,
-      username_lower: normalized,
-      email: emailFinale,
+      ...orig,
       ruolo: role
     };
+
+    if (normalized !== origNormalized) {
+      updated.username = username;
+      updated.username_lower = normalized;
+    }
+
+    if (emailFinale !== orig.email) {
+      updated.email = emailFinale;
+    }
 
     if (password && password.trim() !== "") {
       updated.password_hash = await bcrypt.hash(password, 10);
@@ -365,7 +432,7 @@ const handleUpdateUser = async () => {
         username: updated.username || "-",
         email: updated.email || "-",
         ruolo: updated.ruolo || "OPERATORE",
-        storico: "username_history_aggiornato"
+        storico: normalized !== origNormalized ? "username_history_aggiornato" : "invariato"
       },
       meta: {
         tipo: "UTENTE",
@@ -374,7 +441,11 @@ const handleUpdateUser = async () => {
       ripristinabile: true
     });
 
-    setMessage(`Utente ${username} modificato!`);
+    setMessage(
+      normalized !== origNormalized
+        ? `Username aggiornato: ${username}`
+        : `Utente aggiornato senza cambio username`
+    );
 
     fetchUsers();
     resetForm();
@@ -580,59 +651,93 @@ resetForm();
     setMessage("Errore nella creazione utente");
   }
 };
-  // -------- ELIMINA UTENTE --------
-const handleDeleteUser = async (utente) => {
-  if (utente.uid === auth.currentUser?.uid) {
-    alert("Non puoi eliminare l'utente loggato!");
-    return;
-  }
-
-  if (!window.confirm("Sei sicuro di eliminare questo utente?")) return;
+const handleEnableUser = async (utente) => {
+  if (!window.confirm("Riabilitare questo utente?")) return;
 
   try {
     const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
 
+    await updateDoc(doc(db, "utenti", utente.id), {
+      attivo: true,
+      disabilitatoAt: null
+    });
+
     await scriviLog({
       pagina: "gestione-utenti",
-      evento: "ELIMINAZIONE_UTENTE",
-
+      evento: "ABILITAZIONE_UTENTE",
       riferimento: {
         collezione: "utenti",
         documentoId: utente.id
       },
-
       utente: buildLogUser(currentUser, "ADMIN"),
+      before: {
+        stato: "DISABILITATO"
+      },
+      after: {
+        stato: "ABILITATO",
+        attivo: true
+      },
+      meta: {
+        tipo: "UTENTE",
+        ip: clientIP
+      },
+      ripristinabile: true
+    });
 
+    setMessage(`Utente ${utente.username || utente.email} riabilitato`);
+    fetchUsers();
+
+  } catch (err) {
+    console.error(err);
+    setMessage("Errore riabilitazione utente");
+  }
+};
+const handleDisableUser = async (utente) => {
+ if (utente.id === currentUser.uid) {
+    alert("Non puoi modificare il tuo utente!");
+    return;
+  }
+
+  if (!window.confirm("Disabilitare questo utente?")) return;
+
+  try {
+    const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
+
+    await updateDoc(doc(db, "utenti", utente.id), {
+      attivo: false,
+      disabilitatoAt: Timestamp.now()
+    });
+
+    await scriviLog({
+      pagina: "gestione-utenti",
+      evento: "DISABILITAZIONE_UTENTE",
+      riferimento: {
+        collezione: "utenti",
+        documentoId: utente.id
+      },
+      utente: buildLogUser(currentUser, "ADMIN"),
       before: {
         username: utente.username || "-",
         email: utente.email || "-",
         ruolo: utente.ruolo || "OPERATORE"
       },
-
       after: {
-        stato: "ELIMINATO"
+        stato: "DISABILITATO",
+        attivo: false
       },
-
       meta: {
         tipo: "UTENTE",
         ip: clientIP
       },
-
-      ripristinabile: false
+      ripristinabile: true
     });
 
-    await deleteDoc(doc(db, "utenti", utente.id));
-
-    const usernameFinale = utente.username
-      ? utente.username
-      : (utente.email ? utente.email.split("@")[0] : "UTENTE");
-
-    setMessage(`Utente ${usernameFinale} eliminato!`);
+    setMessage(`Utente ${utente.username || utente.email} disabilitato`);
     fetchUsers();
 
   } catch (err) {
     console.error(err);
-    setMessage("Errore eliminazione utente");
+    setMessage("Errore disabilitazione utente");
   }
 };
   // -------- RIPRISTINA UTENTE --------
@@ -692,7 +797,20 @@ if (sortConfig.key) {
   });
 }
 
+const formatDateIT = (ts) => {
+  if (!ts) return "-";
 
+  const date = ts?.toDate ? ts.toDate() : new Date(ts);
+
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+};
 
   return (
     <div className="gestione-utenti-container" style={{ padding: "20px" }}>
@@ -707,25 +825,27 @@ if (sortConfig.key) {
       <h2>Gestione Utenti</h2>
       {message && <p style={{ color: "green" }}>{message}</p>}
 <div style={{ marginBottom: 15 }}>
-  <button
-    onClick={() => {
-      setMode("add");
-      setSelectedUser(null);
-      setUsername("");
-      setPassword("");
-      setEmail("");
-      setRole("OPERATORE");
-      setConfirmPassword("");
-      setIsDirty(false);
-    }}
-    style={{ background: "#4caf50", color: "white" }}
-  >
-    ➕ Nuovo Utente
-  </button>
+  {mode === null && (
+    <button
+      onClick={() => {
+        setMode("add");
+        setSelectedUser(null);
+        setUsername("");
+        setPassword("");
+        setEmail("");
+        setRole("OPERATORE");
+        setConfirmPassword("");
+        setIsDirty(false);
+      }}
+      style={{ background: "#4caf50", color: "white" }}
+    >
+      ➕ Nuovo Utente
+    </button>
+  )}
 </div>
 {/* FORM COMPATTO UTENTI (MOBILE FRIENDLY) */}
 
-{(mode === "add" || mode === "edit") && (
+{mode !== null && (
 <div style={{ marginBottom: 20, padding: 10, border: "1px solid #ddd" }}>
 
   <div className="filter-item">
@@ -766,23 +886,30 @@ if (sortConfig.key) {
   </div>
 
   <div style={{ marginTop: 10, display: "flex", gap: "10px" }}>
+{mode === "add" && (
+  <button
+    onClick={handleAddUser}
+    disabled={
+      !username ||
+      !password ||
+      password !== confirmPassword
+    }
+  >
+    ➕ Aggiungi Utente
+  </button>
+)}
 
-    <button
-      onClick={async () => {
-        if (mode === "edit") {
-          await handleUpdateUser();
-        } else {
-          await handleAddUser();
-        }
-      }}
-      disabled={
-  !username ||
-  password !== confirmPassword ||
-  (mode === "add" && !password)
-}
-    >
-      {mode === "edit" ? "💾 Modifica Utente" : "➕ Aggiungi Utente"}
-    </button>
+{mode === "edit" && (
+  <button
+    onClick={handleUpdateUser}
+    disabled={
+      !username ||
+      password !== confirmPassword
+    }
+  >
+    💾 Modifica Utente
+  </button>
+)}
 
     <button onClick={handleAnnulla} style={{ background: "#ccc" }}>
       Annulla
@@ -804,9 +931,9 @@ if (sortConfig.key) {
     }}
   />
 </div>
-      {/* TABELLA UTENTI */}
-{/* TABELLA UTENTI */}
-{/* TABELLA UTENTI */}
+<button onClick={handleStampaUtenti} style={{ marginBottom: 10 }}>
+  🖨️ Stampa Utenti
+</button>
 <table style={{ width: "100%", borderCollapse: "collapse" }}>
 <thead>
   <tr style={{ borderBottom: "2px solid #ccc" }}>
@@ -842,10 +969,15 @@ if (sortConfig.key) {
 </thead>
 <tbody>
   {usersOrdinati.map(u => (
-    <tr
-      key={u.id}
-      style={{ borderBottom: "1px solid #eee", cursor: "pointer" }}
-      onClick={() => handleSelectUser(u)}
+   <tr
+  key={u.id}
+  onClick={() => handleSelectUser(u)}
+  style={{
+    borderBottom: "1px solid #eee",
+    cursor: "pointer",
+    backgroundColor:
+      selectedUser?.id === u.id ? "#e3f2fd" : "transparent"
+  }}
     >
       {/* NOME UTENTE */}
       <td>{u.username ? u.username : (u.email ? u.email.split("@")[0] : "-")}</td>
@@ -865,13 +997,22 @@ if (sortConfig.key) {
 </td>
       {/* AZIONI */}
 <td style={{ display: "flex", gap: "10px" }}>
+{u.attivo !== false ? (
   <button
-    onClick={e => { e.stopPropagation(); handleDeleteUser(u); }}
-    disabled={u.id === auth.currentUser?.uid}
+    onClick={e => { e.stopPropagation(); handleDisableUser(u); }}
+   disabled={u.id === currentUser.uid}
     style={{ backgroundColor: "#f44336", color: "white" }}
   >
-    Elimina
+    Disabilita
   </button>
+) : (
+  <button
+    onClick={e => { e.stopPropagation(); handleEnableUser(u); }}
+    style={{ backgroundColor: "#4caf50", color: "white" }}
+  >
+    Abilita
+  </button>
+)}
 
   <button
     onClick={e => { e.stopPropagation(); handleResetPassword(u); }}
@@ -879,13 +1020,14 @@ if (sortConfig.key) {
   >
     Reset Password
   </button>
-{(u.hasHistory || selectedUser?.id === u.id) && (
+{(u.hasHistory) && (
   <button
     onClick={(e) => {
       e.stopPropagation();
       loadUsernameHistory(u.id);
     }}
     style={{ backgroundColor: "#6c757d", color: "white" }}
+    title={buildUsernameTooltip(u.id, u.username)}
   >
     📜 Storico Nome Utente
   </button>
@@ -967,12 +1109,10 @@ if (sortConfig.key) {
             {usernameHistory.map(item => (
               <tr key={item.id}>
                 <td>{item.username}</td>
-                <td>{item.startAt?.toDate?.().toLocaleString()}</td>
-                <td>
-                  {item.endAt
-                    ? item.endAt.toDate().toLocaleString()
-                    : "ATTUALE"}
-                </td>
+                <td>{formatDateIT(item.startAt)}</td>
+<td>
+  {item.endAt ? formatDateIT(item.endAt) : "ATTUALE"}
+</td>
                 <td>{item.source}</td>
               </tr>
             ))}

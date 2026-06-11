@@ -199,6 +199,33 @@ const validaEPreparaProspetto = async (movimentiIds) => {
   for (const d of daEliminare) {    await deleteDoc(doc(db, d.collection, d.id));  }
   return true;
 };
+const cleanupDuplicatiMovimenti = async (movimentiIds) => {
+  const collections = ["prospettiFattura", "fattureCarichi"];
+
+  for (const col of collections) {
+    const snap = await getDocs(collection(db, col));
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const ids = data.movimentiIds || [];
+
+      if (!Array.isArray(ids)) continue;
+
+      const overlap = ids.some(id => movimentiIds.includes(id));
+      if (!overlap) continue;
+
+      // 🔥 SE È GIÀ PAGATO NON TOCCARE
+      if (data.movimentoFinanziarioId) {
+        console.warn("⚠️ SKIP PAGATO:", d.id);
+        continue;
+      }
+
+      // 🔥 CASO LIMITE: DELETE TOTALE
+      await deleteDoc(doc(db, col, d.id));
+      console.log("🗑️ ELIMINATO DUPLICATO:", col, d.id);
+    }
+  }
+};
 const handleSalvaDocumento = async () => {
   try {
     if (!modalData) {
@@ -211,7 +238,7 @@ const handleSalvaDocumento = async () => {
       tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
 
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
-
+await cleanupDuplicatiMovimenti(movimentiIds);
     // 🔥 USA STATO UI, NON FIRESTORE RAW
     const movs = filteredScarichi
       .filter(m => movimentiIds.includes(m.id));
@@ -437,21 +464,20 @@ useEffect(() => {
   );
 
   const dates = movs
-    .map(m => m.data)
-    .filter(Boolean)
-    .map(d => normalizeDate(d))
+    .map(m => normalizeDate(m.data))
     .filter(Boolean);
 
   if (!dates.length) return;
 
-  const min = new Date(Math.min(...dates.map(d => d.getTime())));
+  const max = new Date(Math.max(...dates.map(d => d.getTime())));
 
-  setMinDataSalvataggio(min);
+  setMinDataSalvataggio(max);
 
-  // 🔥 se la data attuale è "troppo piccola", la correggiamo automaticamente
-  setDataSalvataggio(prev =>
-    prev && prev >= min ? prev : min
-  );
+  setDataSalvataggio(prev => {
+    if (!prev) return max;
+    if (prev < max) return max;
+    return prev;
+  });
 }, [modalData, filteredScarichi]);
 useEffect(() => {
   fetchMovimenti();
@@ -1086,7 +1112,7 @@ const toOptions = (arr) =>
   </div>
    <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
     <div style={{width:"15px",height:"15px",background:"#40ef46",border:"1px solid #ccc"}}></div>
-    <span>Già Fatturati</span>
+    <span>Pagato/Incassato</span>
   </div>
 </div>
 <div className="filtri">

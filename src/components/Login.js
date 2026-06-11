@@ -120,6 +120,33 @@ const handleLogin = async () => {
     }
 
     // =============================
+    // 🔴 UTENTE DISABILITATO
+    // =============================
+    if (userFound.attivo === false || userFound.stato === "DISABILITATO") {
+      await scriviLog({
+        pagina: "login",
+        evento: "LOGIN_DISABILITATO",
+        riferimento: { collezione: "utenti", documentoId: userFound.id },
+        utente: utenteLog,
+        before: {
+          ip: clientIP,
+          stato: userFound.stato,
+          attivo: userFound.attivo
+        },
+        after: {
+          risultato: "ACCESSO_NEGATO",
+          motivo: "UTENTE_DISABILITATO",
+          ip: clientIP
+        },
+        ripristinabile: false
+      });
+
+      auth.signOut();
+      setMessage("Utente disabilitato. Accesso negato.");
+      return;
+    }
+
+    // =============================
     // 🔒 BLOCCO
     // =============================
     if (userFound.lock_until) {
@@ -383,23 +410,64 @@ const handleChangeUsername = async () => {
       return setMessage("Username non valido");
     }
 
-    // controllo esistenza username
+    await loginAdminFirebase();
+
+    // 🔥 1. BLOCCO 1 MESE
+    const lastChangeRaw = user.dataUltimoCambioUsername;
+    const lastChange = lastChangeRaw?.toDate
+      ? lastChangeRaw.toDate()
+      : lastChangeRaw ? new Date(lastChangeRaw) : null;
+
+    const now = new Date();
+
+    if (lastChange) {
+      const diffMs = now - lastChange;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+      if (diffDays < 30) {
+        const remaining = Math.ceil(30 - diffDays);
+
+        await scriviLog({
+          pagina: "login",
+          evento: "MODIFICA_USERNAME_BLOCCATA",
+          utente: `${user.ruolo || "OPERATORE"} - ${user.username}`,
+          riferimento: {
+            collezione: "utenti",
+            documentoId: user.id
+          },
+          before: {
+            username: user.username,
+            tentativo: normalized,
+            motivo: "Username già modificato negli ultimi 30 giorni"
+          },
+          after: {
+            risultato: "BLOCCATO",
+            giorni_rimanenti: remaining
+          },
+          ripristinabile: false
+        });
+
+        return setMessage(`Puoi cambiare username solo 1 volta al mese. Riprova tra ${remaining} giorni.`);
+      }
+    }
+
+    // 🔥 2. CHECK DUPLICATI (UTENTI ATTIVI + STORICO)
     const snap = await getDocs(collection(db, "utenti"));
 
-   const exists = snap.docs.some((d) => {
-  const data = d.data();
+    const exists = snap.docs.some((d) => {
+      const data = d.data();
 
-  return (
-    data.username_lower === normalized &&
-    data.userId !== user.id
-  );
-});
+      return (
+        data.username_lower === normalized &&
+        d.id !== user.id
+      );
+    });
 
     if (exists) {
       return setMessage("Username già esistente");
     }
 
-    // 🧠 NON aggiornare subito → apri conferma
+    // 🧠 PREPARA CONFERMA
     setPendingUsernameChange({
       userId: user.id,
       oldUsername: user.username,
@@ -502,17 +570,15 @@ const usedByAnother = usernameSnap.docs.some(d => {
 });
 
 if (usedByAnother) {
-  setMessage("Username già utilizzato in passato da un altro utente");
+  setMessage("IMPOSSIBILE CONTINUARE: Username già utilizzato in passato da un altro utente");
   return;
 }
 
-    // =============================
-    // 🔄 5. UPDATE UTENTE
-    // =============================
-    await updateDoc(doc(db, "utenti", userId), {
-      username: newUsername,
-      username_lower: normalized
-    });
+ await updateDoc(doc(db, "utenti", userId), {
+  username: newUsername,
+  username_lower: normalized,
+  dataUltimoCambioUsername: Timestamp.fromDate(now)
+});
 
     // =============================
     // ➕ 6. NUOVO RECORD STORICO

@@ -1146,7 +1146,7 @@ const selectStyle = {
     />
     Disabilita filtro date
   </label>
-
+<div>
   {!tutti && (
     <>
       <label className="filter-item">
@@ -1176,6 +1176,7 @@ const selectStyle = {
      
     </>
   )}
+  </div>
 </div>
 </div>
 
