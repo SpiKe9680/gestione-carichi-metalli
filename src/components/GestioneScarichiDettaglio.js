@@ -13,6 +13,7 @@ import {  PdfHeader } from "../utils/dateUtils";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+
 const formattaDataItaliana = (date) => {
   if (!date) return "";
   const gg = String(date.getDate()).padStart(2, "0");
@@ -20,7 +21,6 @@ const formattaDataItaliana = (date) => {
   const yyyy = date.getFullYear();
   return `${gg} ${mese} ${yyyy}`;
 };
-
 const formattaOra24 = (date) =>
   `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
 const getUtenteReact = () => {
@@ -35,6 +35,7 @@ const getUtenteReact = () => {
   );
 };
 
+
 const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "tutti", filtroListinoProp = "tutti", tipoMovimentoProp = "scarico" }) => {
   console.log("📌 Props ricevute nel dettaglio:", { 
     giornoSelezionato, 
@@ -42,6 +43,8 @@ const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreP
     filtroListinoProp, 
     tipoMovimentoProp 
 });
+
+const vaiScarichi= ()=>navigate("/scarichi", { state: { refresh: true } });
   const [tipoMovimento] = useState(tipoMovimentoProp); // default scarico
   const [righe, setRighe] = useState([]);
   console.log("📌 Stato iniziale righe:", righe);
@@ -1265,6 +1268,7 @@ const trovaRigaIndex = (riga) =>
     ← Torna ai Carichi / Scarichi
   </button>
   <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
+  <button onClick={vaiScarichi} style={{marginLeft:10}}>⚙ Nuovo Carico/Scarico</button>
 </div>
 
      {/* ===== FILTRI HEADER ===== */}
