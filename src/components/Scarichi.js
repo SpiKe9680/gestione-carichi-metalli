@@ -76,6 +76,38 @@ const [docIdOriginale, setDocIdOriginale] = useState(null);
   const [usaOra, setUsaOra] = useState(true);
   const [dataScaricoStr, setDataScaricoStr] = useState("");
   const [oraStr, setOraStr] = useState("");
+  // 🔥 CHECK CONNESSIONE — BLOCCA TUTTO SE OFFLINE
+const checkConnection = (navigate, activeUserRole) => {
+  if (navigator.onLine) return true;
+
+  // Overlay o alert
+  alert("Connessione assente. Impossibile continuare.");
+
+  const ruolo = (activeUserRole || "").toLowerCase().trim();
+
+  if (ruolo === "operatore") {
+    navigate("/login");
+  } else {
+    navigate("/admin");
+  }
+
+  return false;
+};
+useEffect(() => {
+  if (!checkConnection(navigate, activeUserRole)) return;
+
+  const handleOffline = () => checkConnection(navigate, activeUserRole);
+  const handleOnline = () => console.log("🔵 Connessione ripristinata");
+
+  window.addEventListener("offline", handleOffline);
+  window.addEventListener("online", handleOnline);
+
+  return () => {
+    window.removeEventListener("offline", handleOffline);
+    window.removeEventListener("online", handleOnline);
+  };
+}, [activeUserRole]);
+
 const headerBtnStyle = {
   height: "38px",
   padding: "0 12px",
@@ -359,10 +391,11 @@ const parseDataOra = (dataStr, oraStr) => {
 const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
 // --- AUTOSAVE BOZZA SCARICO ---
 const triggerAutosave = () => {
+
   if (!initialized) return;
   if (uploadingImages) return;
   if (lockDraftSync) return;
-
+if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
   // snapshot reale (NON dirty fragile)
   const snapshot = JSON.stringify({
     scarico,
@@ -436,9 +469,10 @@ const salvaPdfSuDisco = async (pdf, filename) => {
 };
 const salvaBozza = async () => {
   try {
+ 
     const utenteId = getLogUser();
     if (!utenteId) return;
-
+if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
     const draftRef = doc(db, "scarichi_draft", utenteId);
 
     const payload = {
@@ -483,6 +517,7 @@ useEffect(() => {
 
   const init = async () => {
     try {
+      checkConnection();
       const user = await new Promise((resolve) => {
         const unsub = auth.onAuthStateChanged((u) => {
           unsub();
@@ -687,7 +722,7 @@ const isFornitorePrivato =
   (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 const handleAdd = () => {
   if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
-
+if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
   const cer = selectedCer || "SENZA_CER";
   const fir = firCer || "";
 
@@ -1073,7 +1108,7 @@ const handleSave = async () => {
 
   if (salvataggioInCorso) return;
   setSalvataggioInCorso(true);
-
+if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
   try {
     const utenteNome = getLogUser();
     if (!utenteNome) {

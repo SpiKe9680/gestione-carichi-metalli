@@ -1011,6 +1011,55 @@ await scriviLog({
         CONSUNTIVA TUTTO
       </button>
 
+      <button
+  style={{
+    marginLeft: 10,
+    background: "#2980b9",
+    color: "white"
+  }}
+  disabled={loadingBulk}
+  onClick={async () => {
+    const ok = window.confirm("Confermi consuntivazione giornaliera?");
+    if (!ok) return;
+
+    await runSafe(async () => {
+      for (const o of occList) {
+        await addDoc(collection(db, "MovimentoFinanziario"), {
+          anagraficaId: contItem.id,
+          data: o.data,              // 🔥 DATA REALE DEL MOVIMENTO
+          dataDocumento: o.data,     // 🔥 COERENTE
+          importo: contItem.importo,
+          tipo: contItem.tipo
+        });
+      }
+    });
+
+    await scriviLog({
+      pagina: "movimenti-giorno",
+      evento: "CONTABILIZZAZIONE_GIORNALIERA",
+      riferimento: { anagraficaId: contItem.id },
+      before: null,
+      after: {
+        dataInizio: formatDate(occList[0]?.data),
+        dataFine: formatDate(occList[occList.length - 1]?.data),
+        importoSingolo: contItem.importo,
+        numeroOperazioni: occList.length,
+        importoTotale: contItem.importo * occList.length,
+        descrizione: contItem.nomeBreve
+      },
+      utente: currentUser.username || currentUser.email,
+      ripristinabile: false
+    });
+
+    setShowModal(false);
+    setContItem(null);
+    setOccList([]);
+  }}
+>
+  CONSUNTIVA GIORNALMENTE
+</button>
+
+
       {/* LISTA */}
       {occList.map((o, i) => (
         <div key={i} style={{

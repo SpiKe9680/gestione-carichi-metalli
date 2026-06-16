@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { FiUpload, FiDownload } from 'react-icons/fi';
 import autoTable from "jspdf-autotable";
-// --- Blocchetto Data/Ora per editor ---
+import Select from "react-select";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import {  PdfHeader } from "../utils/dateUtils";
@@ -1260,6 +1260,14 @@ const handleStampa = async () => {
   await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
 };
 
+const optUtente = valoriUtente.map(v => ({ value: v, label: v }));
+const optOra = valoriOra.map(v => ({ value: v, label: v }));
+const optFornitore = valoriFornitore.map(v => ({ value: v, label: v }));
+const optCER = valoriCER.map(v => ({ value: v, label: v }));
+const optListino = valoriListino.map(v => ({ value: v, label: v }));
+const optFIR = valoriFIR.map(v => ({ value: v, label: v || "(vuoto)" }));
+const optMateriale = valoriMateriale.map(v => ({ value: v, label: v }));
+const optTipo = valoriTipo.map(v => ({ value: v, label: v }));
 
 const nessunMovimento =
   righeCarichiAll.length === 0 && righeScarichiAll.length === 0;
@@ -1310,157 +1318,141 @@ const trovaRigaIndex = (riga) =>
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <tbody>
 
+        {/* UTENTE */}
         <tr>
           <td style={{ padding: "6px 4px", width: "30%", textAlign: "left" }}>
             Utente:
           </td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroUtente}
-              onChange={e => {
-                setFiltroUtente(e.target.value);
+            <Select
+              value={{ value: filtroUtente, label: filtroUtente }}
+              onChange={(opt) => {
+                setFiltroUtente(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriUtente.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optUtente}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* ORA */}
         <tr>
           <td style={{ padding: "6px 4px" }}>Ora:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroOra}
-              onChange={e => {
-                setFiltroOra(e.target.value);
+            <Select
+              value={{ value: filtroOra, label: filtroOra }}
+              onChange={(opt) => {
+                setFiltroOra(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriOra.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optOra}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* FORNITORE / DESTINATARIO */}
         <tr>
           <td style={{ padding: "6px 4px" }}>{getLabelFornDest()}:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroFornitore}
-              onChange={e => {
-                setFiltroFornitore(e.target.value);
+            <Select
+              value={{ value: filtroFornitore, label: filtroFornitore }}
+              onChange={(opt) => {
+                setFiltroFornitore(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriFornitore.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optFornitore}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* CER */}
         <tr>
           <td style={{ padding: "6px 4px" }}>CER:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroCER}
-              onChange={e => {
-                setFiltroCER(e.target.value);
+            <Select
+              value={{ value: filtroCER, label: filtroCER }}
+              onChange={(opt) => {
+                setFiltroCER(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriCER.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optCER}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* LISTINO */}
         <tr>
           <td style={{ padding: "6px 4px" }}>Listino:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroListino}
-              onChange={e => {
-                setFiltroListino(e.target.value);
+            <Select
+              value={{ value: filtroListino, label: filtroListino }}
+              onChange={(opt) => {
+                setFiltroListino(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriListino.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optListino}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* FIR */}
         <tr>
           <td style={{ padding: "6px 4px" }}>FIR:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroFIR}
-              onChange={e => {
-                setFiltroFIR(e.target.value);
+            <Select
+              value={{ value: filtroFIR, label: filtroFIR || "(vuoto)" }}
+              onChange={(opt) => {
+                setFiltroFIR(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriFIR.map(v => (
-                <option key={v} value={v}>{v || "(vuoto)"}</option>
-              ))}
-            </select>
+              options={optFIR}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* MATERIALE */}
         <tr>
           <td style={{ padding: "6px 4px" }}>Materiale:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroMateriale}
-              onChange={e => {
-                setFiltroMateriale(e.target.value);
+            <Select
+              value={{ value: filtroMateriale, label: filtroMateriale }}
+              onChange={(opt) => {
+                setFiltroMateriale(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriMateriale.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optMateriale}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
+        {/* TIPO */}
         <tr>
           <td style={{ padding: "6px 4px" }}>Tipo:</td>
           <td style={{ padding: "6px 4px" }}>
-            <select
-              value={filtroTipo}
-              onChange={e => {
-                setFiltroTipo(e.target.value);
+            <Select
+              value={{ value: filtroTipo, label: filtroTipo }}
+              onChange={(opt) => {
+                setFiltroTipo(opt.value);
                 setCurrentPageCarichi(1);
                 setCurrentPageScarichi(1);
               }}
-              style={{ width: "100%" }}
-            >
-              {valoriTipo.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              options={optTipo}
+              styles={{ container: base => ({ ...base, width: "100%" }) }}
+            />
           </td>
         </tr>
 
@@ -1485,6 +1477,7 @@ const trovaRigaIndex = (riga) =>
     </button>
   </div>
 )}
+
 
 
  <label>Mostra:
