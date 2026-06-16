@@ -286,16 +286,27 @@ const generaPDFListinoConHeader = async (listino) => {
   pdf.text(`Listino: ${listino.nome} - Stampato il ${data} alle ${ora}`, 14, 65);
 
   pdf.setFontSize(12);
-pdf.text(`Tipo Listino: ${listino.tipoListino || "SCARICO"}`, 14, 75);  // <--- nuova riga
+  pdf.text(`Tipo Listino: ${listino.tipoListino || "SCARICO"}`, 14, 75);
 
-  // Tabella prezzi
-  const materiali = Object.keys(listino.prezzi || {}).sort();
-const rows = materiali.map(c => [
-  c,
-  listino.tipoListino === "CARICO"
-    ? listino.prezzi?.[c]?.vendita ?? 0
-    : listino.prezzi?.[c]?.acquisto ?? 0
-]);
+  // 🔥 FILTRO: escludi materiali con prezzo = 0
+  const materiali = Object.keys(listino.prezzi || {})
+    .filter(codice => {
+      const prezzo = listino.tipoListino === "CARICO"
+        ? listino.prezzi?.[codice]?.vendita ?? 0
+        : listino.prezzi?.[codice]?.acquisto ?? 0;
+
+      return Number(prezzo) !== 0; // <-- SE È ZERO, NON STAMPARE
+    })
+    .sort();
+
+  // Tabella prezzi filtrata
+  const rows = materiali.map(c => [
+    c,
+    listino.tipoListino === "CARICO"
+      ? listino.prezzi?.[c]?.vendita ?? 0
+      : listino.prezzi?.[c]?.acquisto ?? 0
+  ]);
+
   autoTable(pdf, {
     startY: startY,
     head: [["Materiale", "Prezzo"]],
@@ -304,9 +315,9 @@ const rows = materiali.map(c => [
     theme: "grid"
   });
 
-
   await salvaESharePdfCapacitor(pdf, `listino_${listino.nome}.pdf`);
 };
+
 const salvaListino = async () => {
   if (!editor) return;
 
