@@ -724,6 +724,21 @@ async function salvaModifiche({ docRef, editor }) {
   }
 }
 
+const resetFiltri = () => {
+  setFiltroUtente("tutti");
+  setFiltroOra("tutti");
+  setFiltroFornitore("tutti");
+  setFiltroCER("tutti");
+  setFiltroListino("tutti");
+  setFiltroFIR("tutti");
+  setFiltroMateriale("tutti");
+  setFiltroTipo("tutti");
+
+setCurrentPageCarichi(1);
+        setCurrentPageScarichi(1);
+};
+
+
 const eliminaRiga = async (riga) => {
   try {
     const collezione = riga.sourceCollection || "scarichi";
@@ -1286,100 +1301,191 @@ const trovaRigaIndex = (riga) =>
 {showFiltri && (
   <div
     style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "10px",
       padding: "10px",
       border: "1px solid #ccc",
       borderRadius: 8,
       background: "#f9f9f9"
     }}
   >
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <tbody>
 
-    <label>Utente:
-      <select value={filtroUtente} onChange={e=>{
-        setFiltroUtente(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriUtente.map(v=><option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px", width: "30%", textAlign: "left" }}>
+            Utente:
+          </td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroUtente}
+              onChange={e => {
+                setFiltroUtente(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriUtente.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>Ora:
-      <select value={filtroOra} onChange={e=>{
-        setFiltroOra(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriOra.map(v=><option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>Ora:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroOra}
+              onChange={e => {
+                setFiltroOra(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriOra.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>{getLabelFornDest()}:
-      <select value={filtroFornitore} onChange={e=>{
-        setFiltroFornitore(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriFornitore.map(v=><option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>{getLabelFornDest()}:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroFornitore}
+              onChange={e => {
+                setFiltroFornitore(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriFornitore.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>CER:
-      <select value={filtroCER} onChange={e=>{
-        setFiltroCER(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriCER.map(v=><option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>CER:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroCER}
+              onChange={e => {
+                setFiltroCER(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriCER.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>Listino:
-      <select value={filtroListino} onChange={e=>{
-        setFiltroListino(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriListino.map(v=><option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>Listino:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroListino}
+              onChange={e => {
+                setFiltroListino(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriListino.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>FIR:
-      <select value={filtroFIR} onChange={e=>{
-        setFiltroFIR(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriFIR.map(v => <option key={v} value={v}>{v || "(vuoto)"}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>FIR:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroFIR}
+              onChange={e => {
+                setFiltroFIR(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriFIR.map(v => (
+                <option key={v} value={v}>{v || "(vuoto)"}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>Materiale:
-      <select value={filtroMateriale} onChange={e=>{
-        setFiltroMateriale(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriMateriale.map(v => <option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>Materiale:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroMateriale}
+              onChange={e => {
+                setFiltroMateriale(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriMateriale.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-    <label>Tipo:
-      <select value={filtroTipo} onChange={e=>{
-        setFiltroTipo(e.target.value);
-        setCurrentPageCarichi(1);
-        setCurrentPageScarichi(1);
-      }}>
-        {valoriTipo.map(v => <option key={v} value={v}>{v}</option>)}
-      </select>
-    </label>
+        <tr>
+          <td style={{ padding: "6px 4px" }}>Tipo:</td>
+          <td style={{ padding: "6px 4px" }}>
+            <select
+              value={filtroTipo}
+              onChange={e => {
+                setFiltroTipo(e.target.value);
+                setCurrentPageCarichi(1);
+                setCurrentPageScarichi(1);
+              }}
+              style={{ width: "100%" }}
+            >
+              {valoriTipo.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </td>
+        </tr>
 
-   
+      </tbody>
+    </table>
 
+    <button
+      onClick={resetFiltri}
+      style={{
+        padding: "8px 12px",
+        background: "#d9534f",
+        color: "white",
+        border: "none",
+        borderRadius: 6,
+        cursor: "pointer",
+        marginTop: "10px",
+        fontWeight: "bold",
+        width: "100%"
+      }}
+    >
+      Reset filtri
+    </button>
   </div>
 )}
+
 
  <label>Mostra:
       <select
