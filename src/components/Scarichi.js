@@ -1492,7 +1492,7 @@ setTimeout(() => {
       setSelectedListino(primoCompatibile.nome);
     }
   }}
-  placeholder="Cerca fornitore..."
+  placeholder={tipoMovimento === "carico" ? "Cerca cliente..." : "Cerca fornitore..."}
   isSearchable
   isClearable
 />
