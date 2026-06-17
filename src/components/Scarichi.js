@@ -77,22 +77,38 @@ const [docIdOriginale, setDocIdOriginale] = useState(null);
   const [dataScaricoStr, setDataScaricoStr] = useState("");
   const [oraStr, setOraStr] = useState("");
   // 🔥 CHECK CONNESSIONE — BLOCCA TUTTO SE OFFLINE
-const checkConnection = (navigate, activeUserRole) => {
-  if (navigator.onLine) return true;
+  const realNetworkCheck = async () => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
 
-  // Overlay o alert
+    await fetch("https://www.google.com/generate_204", {
+      method: "GET",
+      mode: "no-cors",
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+const checkConnection = async (navigate, activeUserRole) => {
+  const online = await realNetworkCheck();
+  if (online) return true;
+
   alert("Connessione assente. Impossibile continuare.");
 
   const ruolo = (activeUserRole || "").toLowerCase().trim();
 
-  if (ruolo === "operatore") {
-    navigate("/login");
-  } else {
-    navigate("/admin");
-  }
+  if (ruolo === "operatore") navigate("/login");
+  else navigate("/admin");
 
   return false;
 };
+
 useEffect(() => {
   if (!checkConnection(navigate, activeUserRole)) return;
 
@@ -395,7 +411,7 @@ const triggerAutosave = () => {
   if (!initialized) return;
   if (uploadingImages) return;
   if (lockDraftSync) return;
-if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
+if (!checkConnection(navigate, activeUserRole)) return;
   // snapshot reale (NON dirty fragile)
   const snapshot = JSON.stringify({
     scarico,
@@ -472,7 +488,7 @@ const salvaBozza = async () => {
  
     const utenteId = getLogUser();
     if (!utenteId) return;
-if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
+if (!checkConnection(navigate, activeUserRole)) return;
     const draftRef = doc(db, "scarichi_draft", utenteId);
 
     const payload = {
@@ -722,7 +738,7 @@ const isFornitorePrivato =
   (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 const handleAdd = () => {
   if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
-if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
+if (!checkConnection(navigate, activeUserRole)) return;
   const cer = selectedCer || "SENZA_CER";
   const fir = firCer || "";
 
@@ -1105,10 +1121,14 @@ const uploadFotoFiles = async (files) => {
 
 const handleSave = async () => {
   console.log("🔥 HANDLE SAVE PARTITO");
-
+ const ok = await checkConnection(navigate, activeUserRole);
+  if (!ok) {
+    setSalvataggioInCorso(false);
+    return;
+  }
   if (salvataggioInCorso) return;
   setSalvataggioInCorso(true);
-if (!navigator.onLine) return; // 🔥 BLOCCO SE OFFLINE
+
   try {
     const utenteNome = getLogUser();
     if (!utenteNome) {
