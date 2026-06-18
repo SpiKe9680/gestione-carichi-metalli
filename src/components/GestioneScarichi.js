@@ -705,11 +705,16 @@ const estimateResults = () => {
   return dati.length;
 };
 const isDocumentoDisabled = () => {
+  const label = getDocumentoLabel();
+
   return (
     filtroFornitore === "tutti" ||
-    tipoMovimento === "tutti"
+    tipoMovimento === "tutti" ||
+    label === "📄 Documento" ||
+    label === "⚠️ Separa Carichi/Scarichi"
   );
 };
+
 const getDocumentoLabel = () => {
   if (filtroFornitore === "tutti") {
     return "⚠️ Seleziona controparte";
@@ -742,40 +747,7 @@ const getConfigAzienda = async () => {
   if (!snap.exists()) return null;
   return snap.data();
 };
-const stampaProspettoFatturaScarichi = async (righe, fornitore = "") => {
-  const config = await getConfigAzienda();
-  const pdf = new jsPDF();
-  let y = 10;
-  if (config?.logoBase64) {
-    pdf.addImage(      `data:image/png;base64,${config.logoBase64}`,      "PNG",      10,      5,      40,      20    );
-  }
-  pdf.setFontSize(11);
-  pdf.text(config?.ragioneSociale || "", 60, 10);
-  pdf.text(config?.indirizzo || "", 60, 16);
-  pdf.text(config?.capCitta || "", 60, 22);
-  pdf.text(`P.IVA: ${config?.piva || "-"}`, 60, 28);
-  y = 42;
-  pdf.setFontSize(14);
-  pdf.text("PROSPETTO FATTURA SCARICHI", 10, y);
-  y += 8;
-  pdf.setFontSize(11);
-  pdf.text(`Cliente: ${fornitore || "-"}`, 10, y);
-  y += 10;
-  const head = [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]];
-  let totale = 0;
-  const body = righe.map(r => {
-   const tot = money(r.netto * r.prezzoKg);
-totale += round2(tot);
-    return [      r.fir || "-",      r.cer || "-",      r.materiale || "-",      Number(r.netto || 0).toFixed(2),      Number(r.prezzoKg || 0).toFixed(2),      tot.toFixed(2),];
-  });
-  autoTable(pdf, {    startY: y,    head,    body,    theme: "grid",    styles: { fontSize: 9 }  });
-  const finalY = pdf.lastAutoTable.finalY || y;
-  pdf.setFontSize(12);
-  totale = round2(totale);
-  pdf.text(`TOTALE: € ${totale.toFixed(2)}`, 10, finalY + 10);
 
-  await salvaESharePdfCapacitor(pdf, `prospetto_${(fornitore || "cliente").replace(/[^a-z0-9]/gi, "_")}.pdf`);
-};
 const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
   const safe = (v) => Number(v) || 0;
@@ -1115,6 +1087,152 @@ const getMovimentiValidi = () => {
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
 
+const handleStampaContabilePagamento = async () => {
+  try {
+    const config = await getConfigAzienda();
+    const { PdfHeader } = await import("../utils/dateUtils");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    // 🔥 Prendi SOLO i movimenti contabilizzati
+    const contabilizzati = filteredScarichi.filter(
+      m => m.movimentoFinanziarioId
+    );
+
+    if (!contabilizzati.length) {
+      alert("Nessun movimento contabilizzato da stampare.");
+      return;
+    }
+
+    // 🔥 Tutti i movimenti contabilizzati hanno la stessa controparte
+    const controparte = contabilizzati[0].fornitore || "Sconosciuto";
+
+    // 🔥 Recupera i dati della controparte da Firestore
+    let datiControparte = {};
+    try {
+      const snap = await getDocs(collection(db, "controparti"));
+      snap.docs.forEach(d => {
+        const c = d.data();
+        if ((c.nome || "").trim() === controparte.trim()) {
+          datiControparte = c;
+        }
+      });
+    } catch (e) {
+      console.warn("⚠️ Impossibile leggere dati controparte:", e);
+    }
+
+    const indirizzo = datiControparte.indirizzo || "-";
+    const piva = datiControparte.piva || "-";
+
+    // 🔥 Raggruppa per FIR + DATA FIR
+    const gruppi = {};
+
+    contabilizzati.forEach(m => {
+      const dataFIR =
+        m.dataDocumento ||
+        m.dataScarico ||
+        m.dataCreazione ||
+        m.data ||
+        null;
+
+      (m.cer || []).forEach(c => {
+        const fir = c.fir || "SENZA FIR";
+
+        if (!gruppi[fir]) {
+          gruppi[fir] = {
+            dataFIR: dataFIR ? new Date(dataFIR) : null,
+            righe: []
+          };
+        }
+
+        (c.righe || []).forEach(r => {
+          const prezzo = Number(
+            r.prezzo ??
+            r.prezzoAcquisto ??
+            r.prezzoVendita ??
+            0
+          );
+
+          const tot = Number(r.netto || 0) * prezzo;
+
+          gruppi[fir].righe.push({
+            cer: c.cer || c.codiceCER || "-",
+            materiale: r.materiale || "-",
+            netto: Number(r.netto || 0),
+            prezzo,
+            totale: tot,
+            note: c.note || "-"
+          });
+        });
+      });
+    });
+
+    // 🔥 Crea PDF
+    const { pdf, startY } = await PdfHeader();
+
+    pdf.setFontSize(16);
+    pdf.text("CONTABILE DI PAGAMENTO", 14, startY - 12);
+
+    pdf.setFontSize(12);
+    pdf.text(`Controparte: ${controparte}`, 14, startY + 2);
+    pdf.text(`Indirizzo: ${indirizzo}`, 14, startY + 8);
+    pdf.text(`P.IVA: ${piva}`, 14, startY + 14);
+
+    let y = startY + 26;
+    let totaleGenerale = 0;
+
+    // 🔥 Stampa FIR + DATA FIR + tabella
+    for (const fir of Object.keys(gruppi)) {
+      const gruppo = gruppi[fir];
+
+      const dataFIRtxt = gruppo.dataFIR
+        ? gruppo.dataFIR.toLocaleDateString("it-IT")
+        : "-";
+
+      pdf.setFontSize(13);
+      pdf.text(`FIR: ${fir}   –   Data: ${dataFIRtxt}`, 14, y);
+      y += 4;
+
+      const body = gruppo.righe.map(r => {
+        totaleGenerale += r.totale;
+        return [
+          r.cer,
+          r.materiale,
+          r.netto.toFixed(2),
+          r.prezzo.toFixed(2),
+          r.totale.toFixed(2),
+          r.note
+        ];
+      });
+
+      autoTable(pdf, {
+        startY: y,
+        head: [["CER", "Materiale", "Kg", "Prezzo", "Totale", "Note"]],
+        body,
+        styles: { fontSize: 9 },
+        theme: "grid"
+      });
+
+      y = pdf.lastAutoTable.finalY + 10;
+    }
+
+    // 🔥 Totale finale
+    pdf.setFontSize(14);
+    pdf.text(`Totale Pagato: € ${totaleGenerale.toFixed(2)}`, 14, y + 4);
+
+    const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
+
+    await salvaESharePdfCapacitor(
+      pdf,
+      `contabile_pagamento_${controparte.replace(/[^a-zA-Z0-9]/g, "_")}_${today}.pdf`
+    );
+
+  } catch (err) {
+    console.error(err);
+    alert("Errore durante la stampa della contabile.");
+  }
+};
+
+
 
 
   return (
@@ -1141,6 +1259,16 @@ const toOptions = (arr) =>
 >
   {getDocumentoLabel()}
 </button>
+{filteredScarichi.some(m => m.movimentoFinanziarioId) && (
+  <button
+    onClick={handleStampaContabilePagamento}
+    className="btn btn-success"
+    style={{ marginLeft: "10px" }}
+  >
+    📄 Stampa Contabile Pagamento
+  </button>
+)}
+
       </div>
       <h2>Gestione Carichi / Scarichi</h2>
 <div style={{
