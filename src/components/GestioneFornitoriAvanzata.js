@@ -32,20 +32,38 @@ const requestSort = (key) => {
     return { key, direction: "asc" };
   });
 };
-const isSingolo = (m) => m?.tipoMovimento === "SINGOLO";
+const [escludiPrivato, setEscludiPrivato] = useState(false);
 const [showMergeUI, setShowMergeUI] = useState(false);
 const [merge1, setMerge1] = useState("");
 const [merge2, setMerge2] = useState("");
-
+const [fattureCarichi, setFattureCarichi] = useState([]);
+const [prospettiFattura, setProspettiFattura] = useState([]);
+const [filtroFornitori, setFiltroFornitori] = useState("TUTTI");
 const mergeInvalid = !merge1 || !merge2 || merge1 === merge2;
 const safeDate = (d) => {
   if (!d) return null;
 
-  if (typeof d.toDate === "function") return d.toDate(); // Firestore Timestamp
-  if (d instanceof Date) return d; // già JS Date
+  // Firestore Timestamp
+  if (typeof d.toDate === "function") return d.toDate();
+
+  // Oggetto Firestore con seconds
+  if (typeof d === "object" && d.seconds) {
+    return new Date(d.seconds * 1000);
+  }
+
+  // Stringa ISO
+  if (typeof d === "string") {
+    const parsed = new Date(d);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  // JS Date
+  if (d instanceof Date) return d;
 
   return null;
 };
+const [filtroStato, setFiltroStato] = useState("TUTTI");
+
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [fornitori, setFornitori] = useState([]);
   const [scarichi, setScarichi] = useState([]);
@@ -56,6 +74,7 @@ const getUtenteReact = () => {
     currentUser.username || currentUser.email 
   );
 };
+
 
 const safeRenameControparte = async (fornitore) => {
   try {
@@ -307,6 +326,7 @@ const eseguiFusioneControparti = async (tipo) => {
   const [dal, setDal] = useState(null);
   const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
+const [movimenti, setMovimenti] = useState([]);
 
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
@@ -320,6 +340,13 @@ const eseguiFusioneControparti = async (tipo) => {
     try {
       const fornSnap = await getDocs(collection(db, "fornitori"));
       setFornitori(fornSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+const movSnap = await getDocs(collection(db, "MovimentoFinanziario"));
+setMovimenti(movSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+const snapFatt = await getDocs(collection(db, "fattureCarichi"));
+setFattureCarichi(snapFatt.docs.map(d => ({ id: d.id, ...d.data() })));
+
+const snapProsp = await getDocs(collection(db, "prospettiFattura"));
+setProspettiFattura(snapProsp.docs.map(d => ({ id: d.id, ...d.data() })));
 
       const scarSnap = await getDocs(collection(db, "scarichi"));
       const carSnap = await getDocs(collection(db, "carichi"));
@@ -403,6 +430,43 @@ const countCarichi = (fornitore) => {
 
   return lista.length;
 };
+const passaFiltroFornitoriBase = (f) => {
+  const scarTot = countScarichiTot(f);
+  const carTot = countCarichiTot(f);
+
+  switch (filtroFornitori) {
+    case "CON_MOV": return scarTot > 0 || carTot > 0;
+    case "SENZA_MOV": return scarTot === 0 && carTot === 0;
+    case "CON_CARICHI": return carTot > 0;
+    case "SENZA_CARICHI": return carTot === 0;
+    case "CON_SCARICHI": return scarTot > 0;
+    case "SENZA_SCARICHI": return scarTot === 0;
+    default: return true;
+  }
+};
+const passaFiltroFornitori = (f) => {
+  if (escludiPrivato && f.nome === "FORNITORE PRIVATO") return false;
+
+  // 🔥 Filtro Stato
+  const scarTot = countScarichiTot(f);
+  const scarCont = countScarichiCont(f);
+  const carTot = countCarichiTot(f);
+  const carCont = countCarichiCont(f);
+
+  if (filtroStato === "DA_CONT") {
+    if (!(scarTot > scarCont || carTot > carCont)) return false;
+  }
+
+  if (filtroStato === "CONT") {
+    if (!(scarTot === scarCont && carTot === carCont)) return false;
+  }
+
+  // 🔥 Filtro movimenti
+  return passaFiltroFornitoriBase(f);
+};
+
+
+
 
 // ---------------- COUNT CARICHI TOTALI ----------------
 const countCarichiTotali = (fornitore) => {
@@ -411,6 +475,114 @@ const countCarichiTotali = (fornitore) => {
   const countScarichiTotali = (fornitore) => {
     return scarichi.filter(s => s.fornitore === fornitore.nome).length;
   };
+const filtraPerData = (data) => {
+  if (tutti) return true;
+
+  // Se dal o al non sono ancora pronti → NON filtrare
+  if (!dal || !al) return true;
+
+  const d = safeDate(data);
+  if (!d) return false;
+
+  const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dalNorm = new Date(dal.getFullYear(), dal.getMonth(), dal.getDate());
+  const alNorm = new Date(al.getFullYear(), al.getMonth(), al.getDate(), 23, 59, 59, 999);
+
+  return dd >= dalNorm && dd <= alNorm;
+};
+
+
+const countScarichiTot = (f) =>
+  scarichi.filter(s =>
+    s.fornitore === f.nome &&
+    filtraPerData(s.data)
+  ).length;
+const countScarichiCont = (f) =>
+  scarichi.filter(s =>
+    s.fornitore === f.nome &&
+    filtraPerData(s.data) &&
+    s.movimentoFinanziarioId &&
+    String(s.movimentoFinanziarioId).trim() !== ""
+  ).length;
+const countCarichiTot = (f) =>
+  carichi.filter(c =>
+    c.fornitore === f.nome &&
+    filtraPerData(c.data)
+  ).length;
+const countCarichiCont = (f) =>
+  carichi.filter(c =>
+    c.fornitore === f.nome &&
+    filtraPerData(c.data) &&
+    c.movimentoFinanziarioId &&
+    String(c.movimentoFinanziarioId).trim() !== ""
+  ).length;
+
+
+
+const calcolaUtileContabilizzato = (f) => {
+  // ENTRATE: fatture carichi
+  const entrate = fattureCarichi
+    .filter(fc => fc.cliente === f.nome)
+    .filter(fc => filtraPerData(fc.dataCreazione))
+    .reduce((tot, fc) => tot + Number(fc.totale || 0), 0);
+
+  // USCITE: prospetti fattura
+  const uscite = prospettiFattura
+    .filter(pf => pf.cliente === f.nome)
+    .filter(pf => filtraPerData(pf.dataCreazione))
+    .reduce((tot, pf) => tot + Number(pf.totale || 0), 0);
+
+  return entrate - uscite;
+};
+
+
+
+const calcolaUtilePotenziale = (f) => {
+  // 🔵 RICAVI POTENZIALI (CARICHI)
+  const ricavi = carichi
+    .filter(c => c.fornitore === f.nome)
+    .filter(c => filtraPerData(c.data))
+    .reduce((tot, c) => {
+      if (!Array.isArray(c.carico)) return tot;
+
+      return tot + c.carico.reduce((sumVoce, voce) => {
+        if (!Array.isArray(voce.righe)) return sumVoce;
+
+        return sumVoce + voce.righe.reduce((sumRiga, r) => {
+          const prezzoVendita = Number(r.prezzoVendita || r.prezzo || 0);
+          const netto = Number(r.netto || 0);
+          return sumRiga + prezzoVendita * netto;
+        }, 0);
+      }, 0);
+    }, 0);
+
+  // 🔴 COSTI POTENZIALI (SCARICHI)
+  const costi = scarichi
+    .filter(s => s.fornitore === f.nome)
+    .filter(s => filtraPerData(s.data))
+    .reduce((tot, s) => {
+      if (!Array.isArray(s.scarico)) return tot;
+
+      return tot + s.scarico.reduce((sumVoce, voce) => {
+        if (!Array.isArray(voce.righe)) return sumVoce;
+
+        return sumVoce + voce.righe.reduce((sumRiga, r) => {
+          const prezzoAcq = Number(r.prezzoAcquisto || 0);
+          const netto = Number(r.netto || 0);
+          return sumRiga + prezzoAcq * netto;
+        }, 0);
+      }, 0);
+    }, 0);
+
+  // 🎯 UTILE POTENZIALE = RICAVI - COSTI
+  return ricavi - costi;
+};
+
+
+
+
+
+
   useEffect(() => {
     if (minDataDB && maxDataDB) {
       setDal(minDataDB);
@@ -587,70 +759,40 @@ await scriviLog({
     }
   };
 
-  // ---------------- STAMPA ----------------
-const handleStampa = async () => {
-  if (!fornitori || fornitori.length === 0)
-    return alert("Nessuna controparte da stampare");
 
-  const { jsPDF } = await import("jspdf");
-  const autoTable = (await import("jspdf-autotable")).default;
-  const { PdfHeader } = await import("../utils/dateUtils");
-
-  const { pdf, startY } = await PdfHeader();
-
-  let y = startY + 10;
-
-  pdf.setFontSize(16);
-  pdf.text("Movimenti Controparti (Scarichi/Carichi)", 14, y);
-  y += 10;
-
-  // 🔥 FIX: stampa SEMPRE se filtro NON disabilitato
-  if (!tutti) {
-    const formatData = (d) => {
-      if (!d) return "";
-      return `${String(d.getDate()).padStart(2, "0")}/${String(
-        d.getMonth() + 1
-      ).padStart(2, "0")}/${d.getFullYear()}`;
-    };
-
-    const dalTxt = formatData(dal);
-    const alTxt = formatData(al);
-
-    if (dalTxt || alTxt) {
-      const label = `Dal ${dalTxt || "..."} Al ${alTxt || "..."}`;
-      pdf.setFontSize(11);
-      pdf.text(label, 14, y);
-      y += 8;
-    }
+const renderContabilizzazione = (tot, cont) => {
+  // Caso 1: 0 / 0 → nero
+  if (tot === 0 && cont === 0) {
+    return (
+      <span style={{ color: "black" }}>
+        {tot} / {cont}
+      </span>
+    );
   }
 
-  const righe = fornitori.map((f) => {
-    const scarichi = countScarichi(f);
-    const carichi = countCarichi(f);
+  // Caso 2: tutto contabilizzato → verde
+  if (tot === cont) {
+    return (
+      <span style={{ color: "green", fontWeight: "bold" }}>
+        {tot} / {cont}
+      </span>
+    );
+  }
 
-
-
-    return [
-      f.nome || "",
-      f.indirizzo || "-",
-      f.piva_cf || "-",
-      scarichi,
-      carichi,
-    ];
-  });
-
-  autoTable(pdf, {
-    startY: y,
-    head: [["Nome", "Indirizzo", "P.IVA / CF", "Scarichi", "Carichi"]],
-    body: righe,
-    theme: "grid",
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [230, 230, 230] },
-  });
-
-  
-   await salvaESharePdfCapacitor(pdf, "controparti.pdf");
+  // Caso 3: differenza → rosso
+  return (
+    <span style={{ color: "red", fontWeight: "bold" }}>
+      {tot} / {cont}
+    </span>
+  );
 };
+
+
+
+
+
+
+
 let fornitoriOrdinati = [...fornitori];
 
 if (sortConfig.key) {
@@ -683,6 +825,17 @@ if (sortConfig.key) {
         aVal = countCarichiTotali(a);
         bVal = countCarichiTotali(b);
         break;
+      
+      case "utilePot":
+  aVal = calcolaUtilePotenziale(a);
+  bVal = calcolaUtilePotenziale(b);
+  break;
+
+case "utileCont":
+  aVal = calcolaUtileContabilizzato(a);
+  bVal = calcolaUtileContabilizzato(b);
+  break;
+
 
       default:
         return 0;
@@ -699,6 +852,197 @@ if (sortConfig.key) {
       : String(bVal).localeCompare(String(aVal), "it", { numeric: true });
   });
 }
+
+const fornitoriFiltrati = fornitoriOrdinati.filter(f => {
+  const scarTot = countScarichiTot(f);
+  const carTot = countCarichiTot(f);
+
+  if (escludiPrivato && f.nome === "FORNITORE PRIVATO") return false;
+
+  // Usa SOLO il filtro fornitori (CON_MOV, SENZA_MOV, ecc.)
+  if (!passaFiltroFornitori(f)) return false;
+
+  return true;
+});
+
+
+const totalePot = fornitoriFiltrati.reduce(
+  (s, f) => s + calcolaUtilePotenziale(f),
+  0
+);
+
+const totaleCont = fornitoriFiltrati.reduce(
+  (s, f) => s + calcolaUtileContabilizzato(f),
+  0
+);
+const handleStampa = async () => {
+  if (!fornitoriOrdinati || fornitoriOrdinati.length === 0) {
+    alert("Nessuna controparte da stampare");
+    return;
+  }
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const { PdfHeader } = await import("../utils/dateUtils");
+
+  const { pdf, startY } = await PdfHeader();
+  let y = startY + 10;
+
+  pdf.setFontSize(16);
+  pdf.text("Movimenti Controparti (Utile Potenziale / Contabilizzato)", 14, y);
+  y += 10;
+
+  // 🔵 LEGENDA
+  pdf.setFontSize(11);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text("Legenda:", 14, y);
+  y += 6;
+
+  pdf.setTextColor(0, 128, 0);
+  pdf.text("[VERDE]  Contabilizzati (tot = cont)", 14, y);
+  y += 6;
+
+  pdf.setTextColor(200, 0, 0);
+  pdf.text("[ROSSO]  Da contabilizzare (tot > cont)", 14, y);
+  y += 6;
+
+  pdf.setTextColor(0, 0, 0);
+  pdf.text("[NERO]   Nessun movimento (0 / 0)", 14, y);
+  y += 10;
+
+  // 🔥 FILTRI ATTIVI
+  pdf.setFontSize(11);
+  pdf.setTextColor(0, 0, 0);
+
+  if (!tutti && dal && al) {
+    const formatData = d =>
+      `${String(d.getDate()).padStart(2, "0")}/${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}/${d.getFullYear()}`;
+
+    pdf.text(
+      `Periodo: Dal ${formatData(dal)} Al ${formatData(al)}`,
+      14,
+      y
+    );
+    y += 8;
+  }
+
+  if (escludiPrivato) {
+    pdf.setTextColor(150, 0, 0);
+    pdf.text("Filtro attivo: Escludi fornitori privati", 14, y);
+    y += 8;
+  }
+
+  if (filtroStato === "DA_CONT") {
+    pdf.setTextColor(150, 0, 0);
+    pdf.text("Filtro attivo: Solo da contabilizzare", 14, y);
+    y += 8;
+  }
+
+  if (filtroStato === "CONT") {
+    pdf.setTextColor(0, 120, 0);
+    pdf.text("Filtro attivo: Solo contabilizzati", 14, y);
+    y += 8;
+  }
+
+  pdf.setTextColor(0, 0, 0);
+
+ // 🔥 Filtro movimenti leggibile
+const descrMov = {
+  "TUTTI": null,
+  "CON_MOV": "Solo controparti con movimenti",
+  "SENZA_MOV": "Solo controparti senza movimenti",
+  "CON_CARICHI": "Solo controparti con carichi",
+  "SENZA_CARICHI": "Solo controparti senza carichi",
+  "CON_SCARICHI": "Solo controparti con scarichi",
+  "SENZA_SCARICHI": "Solo controparti senza scarichi"
+};
+
+if (descrMov[filtroFornitori]) {
+  pdf.setTextColor(0, 0, 0);
+  pdf.text(`Filtro movimenti: ${descrMov[filtroFornitori]}`, 14, y);
+  y += 8;
+}
+
+
+  y += 5;
+
+  // 🔥 RIGHE DELLA TABELLA (STESSI FILTRI DELLA UI)
+const righe = fornitoriOrdinati
+  .filter(f => passaFiltroFornitori(f))   // 🔥 gli stessi della UI
+  .map(f => {
+    const scarTot = countScarichiTot(f);
+    const scarCont = countScarichiCont(f);
+    const carTot = countCarichiTot(f);
+    const carCont = countCarichiCont(f);
+    const utilePot = calcolaUtilePotenziale(f);
+    const utileCont = calcolaUtileContabilizzato(f);
+
+    return [
+      f.nome,
+      f.indirizzo || "-",
+      f.piva_cf || "-",
+      `${scarTot} / ${scarCont}`,
+      `${carTot} / ${carCont}`,
+      utilePot.toLocaleString("it-IT", { minimumFractionDigits: 2 }),
+      utileCont.toLocaleString("it-IT", { minimumFractionDigits: 2 })
+    ];
+  })
+
+  // 🔥 TABELLA PDF
+  autoTable(pdf, {
+    startY: y,
+    head: [[
+      "Nome",
+      "Indirizzo",
+      "P.IVA / CF",
+      "Scarichi (cont.)",
+      "Carichi (cont.)",
+      "Utile Potenziale",
+      "Utile Contabilizzato"
+    ]],
+    body: righe,
+    theme: "grid",
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [230, 230, 230] }
+  });
+
+  let yFinal = pdf.lastAutoTable.finalY + 10;
+
+  // 🔥 TOTALI FINALI
+  const totalePot = fornitoriOrdinati
+    .filter(f => passaFiltroFornitori(f))
+    .reduce((s, f) => s + calcolaUtilePotenziale(f), 0);
+
+  const totaleCont = fornitoriOrdinati
+    .filter(f => passaFiltroFornitori(f))
+    .reduce((s, f) => s + calcolaUtileContabilizzato(f), 0);
+
+  pdf.setFontSize(12);
+  pdf.setTextColor(totalePot >= 0 ? 0 : 200, totalePot >= 0 ? 128 : 0, 0);
+  pdf.text(
+    `Totale Utile Potenziale: ${totalePot.toLocaleString("it-IT", {
+      minimumFractionDigits: 2
+    })} €`,
+    14,
+    yFinal
+  );
+
+  yFinal += 8;
+
+  pdf.setTextColor(totaleCont >= 0 ? 0 : 200, totaleCont >= 0 ? 128 : 0, 0);
+  pdf.text(
+    `Totale Utile Contabilizzato: ${totaleCont.toLocaleString("it-IT", {
+      minimumFractionDigits: 2
+    })} €`,
+    14,
+    yFinal
+  );
+
+  await salvaESharePdfCapacitor(pdf, "controparti.pdf");
+};
+
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -710,11 +1054,26 @@ if (sortConfig.key) {
       </div>
 
      <h2>Gestione Controparti</h2>
-     <button onClick={aggiungiFornitore} style={{marginBottom:15}}>➕ Aggiungi Controparte</button>
-      
-      <button onClick={() => setShowMergeUI(!showMergeUI)} style={{marginLeft:10}}>
-  🔀 Fusione Societaria
-</button>
+     <div style={{
+  display: "flex",
+  alignItems: "center",
+  gap: "20px",
+  marginBottom: 15
+}}>
+  
+  <button onClick={aggiungiFornitore}>➕ Aggiungi Controparte</button>
+
+  <button onClick={() => setShowMergeUI(!showMergeUI)}>
+    🔀 Fusione Societaria
+  </button>
+
+  <div style={{ display: "flex", flexDirection: "column", marginLeft: "20px" }}>
+    <span style={{ color: "red", fontWeight: "bold" }}>🔴 Da Contabilizzare</span>
+    <span style={{ color: "green", fontWeight: "bold" }}>🟢 Contabilizzati</span>
+  </div>
+
+</div>
+
 
 {showMergeUI && (
   <div style={{border:"1px solid #ccc", padding:15, marginTop:15}}>
@@ -774,6 +1133,44 @@ if (sortConfig.key) {
         <label style={{display:"flex",alignItems:"center"}}>
           <input type="checkbox" checked={tutti} onChange={e=>setTutti(e.target.checked)}/> Disabilita filtro date
         </label>
+{/* 🔥 NUOVO FILTRO FORNITORI */}
+  <label>
+    Filtro Fornitori:
+    <select
+      value={filtroFornitori}
+      onChange={(e) => setFiltroFornitori(e.target.value)}
+      style={{ marginLeft: 8 }}
+    >
+      <option value="TUTTI">TUTTI</option>
+      <option value="CON_MOV">CON MOVIMENTI</option>
+      <option value="SENZA_MOV">SENZA MOVIMENTI</option>
+      <option value="CON_CARICHI">CON CARICHI</option>
+      <option value="SENZA_CARICHI">SENZA CARICHI</option>
+      <option value="CON_SCARICHI">CON SCARICHI</option>
+      <option value="SENZA_SCARICHI">SENZA SCARICHI</option>
+    </select>
+    <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+  <input
+    type="checkbox"
+    checked={escludiPrivato}
+    onChange={(e) => setEscludiPrivato(e.target.checked)}
+  />
+  Escludi FORNITORE PRIVATO
+</label>
+
+  </label>
+  <label style={{ marginLeft: 20 }}>
+  Stato:
+  <select
+    value={filtroStato}
+    onChange={(e) => setFiltroStato(e.target.value)}
+    style={{ marginLeft: 8 }}
+  >
+    <option value="TUTTI">Tutti</option>
+    <option value="DA_CONT">Da contabilizzare</option>
+    <option value="CONT">Contabilizzati</option>
+  </select>
+</label>
 
         {!tutti && (
           <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
@@ -802,6 +1199,8 @@ if (sortConfig.key) {
             </label>
           </div>
         )}
+
+
       </div>
 
       <table className="tabella-scarichi">
@@ -826,15 +1225,30 @@ if (sortConfig.key) {
     <th onClick={() => requestSort("carichi")} style={{cursor:"pointer"}}>
       Carichi {sortConfig.key==="carichi" ? (sortConfig.direction==="asc"?"⬆️":"⬇️") : ""}
     </th>
+<th onClick={() => requestSort("utilePot")} style={{cursor:"pointer"}}>
+  Utile Potenziale
+</th>
+
+<th onClick={() => requestSort("utileCont")} style={{cursor:"pointer"}}>
+  Utile Contabilizzato
+</th>
 
     <th>Azioni</th>
   </tr>
 </thead>
 <tbody>
-  {fornitoriOrdinati.map(f => {
-    const n = countScarichi(f);
-    const nc = countCarichi(f);
+ {fornitoriOrdinati
+  .filter(f => passaFiltroFornitori(f))
+  .map(f => {
+const scarTot = countScarichiTot(f);
+const scarCont = countScarichiCont(f);
+
+const carTot = countCarichiTot(f);
+const carCont = countCarichiCont(f);
+
     const tot = countScarichiTotali(f) + countCarichiTotali(f);
+const utilePot = calcolaUtilePotenziale(f);
+const utileCont = calcolaUtileContabilizzato(f);
 
     return (
       <tr key={f.id}>
@@ -842,13 +1256,17 @@ if (sortConfig.key) {
         <td>{f.indirizzo || "-"}</td>
         <td>{f.piva_cf || "-"}</td>
 
-        <td style={{ color: n > 0 ? "red" : "inherit" }}>
-          {n}
-        </td>
+      <td>{renderContabilizzazione(scarTot, scarCont)}</td>
+<td>{renderContabilizzazione(carTot, carCont)}</td>
 
-        <td style={{ color: nc > 0 ? "green" : "inherit" }}>
-          {nc}
-        </td>
+
+<td style={{ color: utilePot >= 0 ? "green" : "red" }}>
+  {utilePot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+</td>
+
+<td style={{ color: utileCont >= 0 ? "green" : "red" }}>
+  {utileCont.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+</td>
 
         <td>
         <button onClick={() => safeRenameControparte(f)}>
@@ -870,12 +1288,31 @@ if (sortConfig.key) {
               Non eliminabile
             </button>
           )}
+
+          {/* <button onClick={() => debugControparte(f)}>DEBUG</button>
+<button onClick={() => debugCarichiCompleti(f)}>DEBUG CARICHI</button>
+<button onClick={debugMovimenti}>DEBUG MOVIMENTI</button> */}
+
         </td>
       </tr>
     );
   })}
 </tbody>
       </table>
+<div style={{ marginTop: 20, fontSize: "1.2rem" }}>
+  <b>Totale utile potenziale:</b>{" "}
+  <span style={{ color: totalePot >= 0 ? "green" : "red" }}>
+    {totalePot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+  </span>
+</div>
+
+<div style={{ marginTop: 10, fontSize: "1.2rem" }}>
+  <b>Totale utile contabilizzato:</b>{" "}
+  <span style={{ color: totaleCont >= 0 ? "green" : "red" }}>
+    {totaleCont.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+  </span>
+</div>
+
 
       {errori.length>0 && <div style={{color:"red",marginTop:20}}>{errori.join("\n")}</div>}
     </div>

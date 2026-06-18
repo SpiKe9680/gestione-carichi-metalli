@@ -17,6 +17,8 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+import {  saveOfflinePhotos,  loadOfflinePhotos,  clearOfflinePhotos} from "../utils/offlinePhotos";
+
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -37,14 +39,19 @@ const [snapshotIniziale, setSnapshotIniziale] = useState(null);
 const [firCheckLoading, setFirCheckLoading] = useState(false);
  const [tipoMovimento, setTipoMovimento] = useState("scarico");
   const navigate = useNavigate();
-  const getLogUser = () => {
-  const u =
-    activeUser?.username ||
-    authUser?.username ||
-    JSON.parse(sessionStorage.getItem("utenteLoggato"))?.username;
+const getLogUser = () => {
+  if (activeUser?.username) return activeUser.username;
+  if (activeUser?.email) return activeUser.email;
 
-  return u || authUser?.email || "Sconosciuto";
+  const stored = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+  if (stored?.username) return stored.username;
+  if (stored?.email) return stored.email;
+
+  return null; // se null → NON salvare bozza
 };
+
+
+
 
   const [fornitori, setFornitori] = useState([]);
   const [listini, setListini] = useState([]);
@@ -123,6 +130,28 @@ useEffect(() => {
     window.removeEventListener("online", handleOnline);
   };
 }, [activeUserRole]);
+
+useEffect(() => {
+  const stored = sessionStorage.getItem("utenteLoggato");
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    if (parsed && parsed.username && !activeUser?.username) {
+      setactiveUser(parsed);
+    }
+  }
+}, []);
+useEffect(() => {
+  if (!activeUser?.username) {
+    const stored = sessionStorage.getItem("utenteLoggato");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.username) {
+        setactiveUser(parsed);
+      }
+    }
+  }
+}, [activeUser]);
+
 
 const headerBtnStyle = {
   height: "38px",
@@ -244,7 +273,7 @@ useEffect(() => {
   inizializzatoRef.current = true;
 }, [usaOra, dataScaricoStr, oraStr, isEditing, docIdOriginale]);
 useEffect(() => {
-  console.log("Ruolo utente corrente: ", activeUserRole);
+  //console.log("Ruolo E NOME utente corrente: ", activeUserRole,activeUser);
 }, [activeUserRole]);
 
 useEffect(() => {
@@ -252,13 +281,12 @@ useEffect(() => {
     try {
       const snap = await getDocs(collection(db, "scarichi_images_queue"));
 
+      // 🔵 PROCESSA LA QUEUE FIRESTORE
       for (const docSnap of snap.docs) {
         const data = docSnap.data();
-
         if (data.uploaded) continue;
 
         try {
-          // riconversione base64 → file
           const res = await fetch(data.fileData);
           const blob = await res.blob();
 
@@ -269,38 +297,64 @@ useEffect(() => {
           const url = await uploadSistema3Parti(file);
 
           await setDoc(
-  doc(db, "scarichi", data.docTempId),
-  {
-    fotoURL: arrayUnion(url),
-  },
-  { merge: true }
-);
-await setDoc(
-  doc(db, "scarichi_draft", data.utenteId),
-  {
-    fotoURL: arrayUnion(url),
-  },
-  { merge: true }
-);
-          await setDoc(doc(db, "scarichi_images_queue", docSnap.id), {
-            uploaded: true,
-            url
-          }, { merge: true });
+            doc(db, "scarichi", data.docTempId),
+            { fotoURL: arrayUnion(url) },
+            { merge: true }
+          );
 
+          await setDoc(
+            doc(db, "scarichi_draft", data.utenteId),
+            { fotoURL: arrayUnion(url) },
+            { merge: true }
+          );
+
+          await setDoc(
+            doc(db, "scarichi_images_queue", docSnap.id),
+            { uploaded: true, url },
+            { merge: true }
+          );
         } catch (err) {
           console.warn("Retry upload fallito", err);
         }
       }
+
+      // 🔵 SYNC FOTO OFFLINE (IndexedDB) — FUORI DAL FOR
+      const utenteId = getLogUser();
+      if (utenteId) {
+        const offline = await loadOfflinePhotos(utenteId);
+        if (offline.length > 0) {
+          const files = offline.map(f => {
+            const blob = new Blob([f.data], { type: f.type });
+            return new File([blob], f.name, { type: f.type });
+          });
+
+          try {
+            const uploadedUrls = await uploadFotoFiles(files);
+
+            await setDoc(
+              doc(db, "scarichi_draft", utenteId),
+              { fotoURL: arrayUnion(...uploadedUrls) },
+              { merge: true }
+            );
+
+            await clearOfflinePhotos(utenteId);
+          } catch (e) {
+            console.warn("Upload offline fallito, restano in coda", e);
+          }
+        }
+      }
+
     } catch (e) {
       console.error("Queue sync error", e);
     }
   };
 
-  const interval = setInterval(syncQueue, 30000); // ogni 30 sec
+  const interval = setInterval(syncQueue, 30000);
   syncQueue();
 
   return () => clearInterval(interval);
 }, []);
+
 useEffect(() => {
   if (isEditing) {
     setFirExists(false);
@@ -407,12 +461,12 @@ const parseDataOra = (dataStr, oraStr) => {
 const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
 // --- AUTOSAVE BOZZA SCARICO ---
 const triggerAutosave = () => {
-
   if (!initialized) return;
   if (uploadingImages) return;
   if (lockDraftSync) return;
-if (!checkConnection(navigate, activeUserRole)) return;
-  // snapshot reale (NON dirty fragile)
+
+  // ❌ NON controllare la connessione qui
+
   const snapshot = JSON.stringify({
     scarico,
     selectedFornitore,
@@ -421,14 +475,13 @@ if (!checkConnection(navigate, activeUserRole)) return;
     tipoMovimento,
     dataScaricoStr,
     oraStr,
-  foto: previewFoto
-  .map(p => (typeof p === "string" ? p : p?.url))
-  .filter(p => p && !p.startsWith("blob:"))
-  .sort()
-  .join("|")
+    foto: previewFoto
+      .map(p => (typeof p === "string" ? p : p?.url))
+      .filter(p => p && !p.startsWith("blob:"))
+      .sort()
+      .join("|")
   });
 
-  // evita salvataggi inutili
   if (snapshot === lastSnapshotRef.current) return;
 
   lastSnapshotRef.current = snapshot;
@@ -438,11 +491,12 @@ if (!checkConnection(navigate, activeUserRole)) return;
   }
 
   autosaveTimerRef.current = setTimeout(() => {
-  requestAnimationFrame(() => {
-    salvaBozza();
-  });
-}, 1000);
+    requestAnimationFrame(() => {
+      salvaBozza();
+    });
+  }, 1000);
 };
+
 useEffect(() => {
   triggerAutosave();
 }, [
@@ -485,37 +539,32 @@ const salvaPdfSuDisco = async (pdf, filename) => {
 };
 const salvaBozza = async () => {
   try {
- 
     const utenteId = getLogUser();
     if (!utenteId) return;
-if (!checkConnection(navigate, activeUserRole)) return;
+
+    // ❌ NON controllare la connessione qui
+
     const draftRef = doc(db, "scarichi_draft", utenteId);
 
     const payload = {
       tipoMovimento,
       fornitore: selectedFornitore || "",
       listino: selectedListino || "",
-
       scarico: tipoMovimento === "scarico" ? scarico : [],
       carico: tipoMovimento === "carico" ? scarico : [],
-
       firCer: firCer || "",
       selectedCer: selectedCer || "",
-
       utente: utenteLoggato,
-
       dataScaricoStr,
       oraStr,
-
       data:
         dataScaricoStr && oraStr
           ? parseDataOra(dataScaricoStr, oraStr)
           : null,
-
       fotoURL: (previewFoto || []).filter(
         p => typeof p === "string" && !p.startsWith("blob:")
       ),
-note: note || "",
+      note: note || "",
       inModifica: true,
       updatedAt: serverTimestamp()
     };
@@ -525,6 +574,7 @@ note: note || "",
     console.error("Errore salvaBozza:", e);
   }
 };
+
 const [uploadingImages, setUploadingImages] = useState(false);
 const [initialized, setInitialized] = useState(false);
 
@@ -533,7 +583,7 @@ useEffect(() => {
 
   const init = async () => {
     try {
-      checkConnection();
+      
       const user = await new Promise((resolve) => {
         const unsub = auth.onAuthStateChanged((u) => {
           unsub();
@@ -606,6 +656,23 @@ useEffect(() => {
           setPreviewFoto(foto);
 setNote(d.note || "");
           setDocIdOriginale(d.docIdOriginale || null);
+
+// 🔥 FOTO OFFLINE DA INDEXEDDB
+const offline = await loadOfflinePhotos(utenteId);
+if (offline.length > 0) {
+  const files = offline.map(f => {
+    const blob = new Blob([f.data], { type: f.type });
+    return new File([blob], f.name, { type: f.type });
+  });
+
+  setFotoFile(prev => [...prev, ...files]);
+
+  const previewsOffline = files.map(file =>
+    URL.createObjectURL(file)
+  );
+  setPreviewFoto(prev => [...prev, ...previewsOffline]);
+}
+
 
           // 🔥 FIX DATA/ORA BOZZA
           if (d.data) {
@@ -738,7 +805,8 @@ const isFornitorePrivato =
   (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 const handleAdd = () => {
   if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
-if (!checkConnection(navigate, activeUserRole)) return;
+  if (!checkConnection(navigate, activeUserRole)) return;
+
   const cer = selectedCer || "SENZA_CER";
   const fir = firCer || "";
 
@@ -770,7 +838,6 @@ if (!checkConnection(navigate, activeUserRole)) return;
   setScarico(prev => {
     const updated = [...prev];
 
-    // 🔥 FIX: IDENTITÀ SOLO CER (NON FIR)
     const cerIdx = updated.findIndex(c => c.cer === cer);
 
     if (cerIdx === -1) {
@@ -785,7 +852,6 @@ if (!checkConnection(navigate, activeUserRole)) return;
     }
 
     const existing = updated[cerIdx];
-
     const righe = [...(existing.righe || [])];
 
     const rigaIdx = righe.findIndex(
@@ -800,7 +866,7 @@ if (!checkConnection(navigate, activeUserRole)) return;
 
     updated[cerIdx] = {
       ...existing,
-      fir, // FIR aggiornabile senza duplicare blocchi
+      fir,
       righe,
       totaleCer: righe.reduce((s, r) => s + r.netto, 0)
     };
@@ -813,6 +879,7 @@ if (!checkConnection(navigate, activeUserRole)) return;
   setCalo("");
   setDirty(true);
 };
+
 const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
 };
@@ -916,12 +983,13 @@ const handlePrint = async (movimentoId = null, tipo) => {
 
       docData = snap.data();
     } else {
-     const utente = getLogUser();
+      const utente = getLogUser();
 
       if (!utente) {
         alert("Utente non loggato");
         return;
       }
+
       const snap = await getDocs(collection(db, collezione));
       const userDocs = snap.docs
         .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
@@ -938,9 +1006,12 @@ const handlePrint = async (movimentoId = null, tipo) => {
 
       docData = userDocs[0].data();
     }
+
+    // ---------------- HEADER PDF ----------------
     const { pdf, startY } = await PdfHeader();
     pdf.setFontSize(16);
     let y = startY + 26;
+
     const dataObj = docData.data?.toDate
       ? docData.data.toDate()
       : new Date();
@@ -966,116 +1037,181 @@ const handlePrint = async (movimentoId = null, tipo) => {
     );
 
     pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
-if (docData.note && docData.note.trim() !== "") {
-  const noteLines = pdf.splitTextToSize(docData.note, 180);
 
-  const noteBlockHeight = noteLines.length * 5 + 10;
+    // ---------------- NOTE ----------------
+    if (docData.note && docData.note.trim() !== "") {
+      const noteLines = pdf.splitTextToSize(docData.note, 180);
+      const noteBlockHeight = noteLines.length * 5 + 10;
 
-  // se non c'è spazio sufficiente → nuova pagina
-  if (y + noteBlockHeight > 280) {
-    pdf.addPage();
-    y = 20;
-  }
-
-  pdf.setFontSize(12);
-  pdf.text("Note:", 10, y);
-  y += 6;
-
-  pdf.setFontSize(10);
-  pdf.text(noteLines, 10, y);
-
-  y += noteLines.length * 5 + 10;
-}
-
-
-    // ---------------- TABELLE CER ----------------
-    const righe = docData.carico || docData.scarico || [];
-    for (const c of righe) {
-      pdf.setFontSize(13);
-      pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
-      y += 6;
-
-      autoTable(pdf, {
-        startY: y,
-        head: [["Materiale", "Peso", "Calo", "Netto"]],
-        body: (c.righe || []).map(r => [
-          r.materiale,
-          Number(r.peso || 0).toFixed(2),
-          Number(r.calo || 0).toFixed(2),
-          Number(r.netto || 0).toFixed(2),
-        ]),
-        theme: "grid",
-        styles: { fontSize: 10 },
-        margin: { left: 10 },
-      });
-
-      y = pdf.lastAutoTable.finalY + 6;
-
-      pdf.text(
-        `Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`,
-        10,
-        y
-      );
-
-      y += 10;
-    }
-    const fotos = Array.isArray(docData.fotoURL)
-      ? docData.fotoURL
-      : docData.fotoURL
-      ? [docData.fotoURL]
-      : [];
-
-    if (fotos.length > 0) {
-      if (y > 200) {
+      if (y + noteBlockHeight > 280) {
         pdf.addPage();
         y = 20;
       }
 
       pdf.setFontSize(12);
-      pdf.text("Foto movimento:", 10, y);
-      y += 10;
+      pdf.text("Note:", 10, y);
+      y += 6;
 
-      let x = 10;
-      let imgY = y;
+      pdf.setFontSize(10);
+      pdf.text(noteLines, 10, y);
 
-      for (let i = 0; i < fotos.length; i++) {
-        try {
-          const response = await fetch(fotos[i]);
-          const blob = await response.blob();
+      y += noteLines.length * 5 + 10;
+    }
 
-          const base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
+    // ---------------- TABELLE CER ----------------
+    const righe = docData.carico || docData.scarico || [];
 
-          pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
+    const isPrivatoScarico =
+      tipo === "scarico" &&
+      (
+        (docData.fornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO" ||
+        (docData.listino || "").trim().toUpperCase() === "LISTINOPRIVATI"
+      );
 
-          x += 65;
+    let totaleScaricoEuro = 0;
 
-          if (x > 160) {
-            x = 10;
-            imgY += 65;
-          }
-        } catch (err) {
-          console.error("Errore immagine PDF:", err);
-        }
+    for (const c of righe) {
+      pdf.setFontSize(13);
+      pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
+      y += 6;
+
+      if (isPrivatoScarico) {
+        // 🔥 STAMPA PRIVATI (€/kg + totale €)
+        autoTable(pdf, {
+          startY: y,
+          head: [["Materiale", "Netto kg", "€/kg", "Totale €"]],
+          body: (c.righe || []).map(r => {
+            const netto = Number(r.netto || 0);
+            const prezzo = Number(r.prezzoAcquisto || 0);
+            const totale = netto * prezzo;
+            totaleScaricoEuro += totale;
+
+            return [
+              r.materiale,
+              netto.toFixed(2),
+              prezzo.toFixed(2),
+              totale.toFixed(2),
+            ];
+          }),
+          theme: "grid",
+          styles: { fontSize: 10 },
+          margin: { left: 10 },
+        });
+
+        y = pdf.lastAutoTable.finalY + 6;
+
+        pdf.text(`Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`, 10, y);
+        y += 10;
+
+      } else {
+        // 🔵 STAMPA NORMALE
+        autoTable(pdf, {
+          startY: y,
+          head: [["Materiale", "Peso", "Calo", "Netto"]],
+          body: (c.righe || []).map(r => [
+            r.materiale,
+            Number(r.peso || 0).toFixed(2),
+            Number(r.calo || 0).toFixed(2),
+            Number(r.netto || 0).toFixed(2),
+          ]),
+          theme: "grid",
+          styles: { fontSize: 10 },
+          margin: { left: 10 },
+        });
+
+        y = pdf.lastAutoTable.finalY + 6;
+
+        pdf.text(`Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`, 10, y);
+        y += 10;
       }
     }
+
+    // ---------------- TOTALE FINALE PRIVATI ----------------
+    if (isPrivatoScarico) {
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.setFontSize(14);
+      pdf.text(
+        `Totale scarico da pagare al fornitore: ${totaleScaricoEuro.toFixed(2)} €`,
+        10,
+        y
+      );
+
+      y += 14;
+    }
+
+// ---------------- FOTO ----------------
+const fotos = Array.isArray(docData.fotoURL)
+  ? docData.fotoURL
+  : docData.fotoURL
+  ? [docData.fotoURL]
+  : [];
+
+if (fotos.length > 0) {
+  // Se siamo troppo in basso → nuova pagina
+  if (y > 200) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setFontSize(12);
+  pdf.text("Foto movimento:", 10, y);
+  y += 10;
+
+  let x = 10;
+  let imgY = y;
+
+  for (let i = 0; i < fotos.length; i++) {
+    try {
+      const response = await fetch(fotos[i]);
+      const blob = await response.blob();
+
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      // 🔥 Se la foto non ci sta → nuova pagina
+      if (imgY + 60 > 280) {
+        pdf.addPage();
+        x = 10;
+        imgY = 20;
+      }
+
+      pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
+
+      x += 65;
+
+      // 🔥 Se finisce la riga → vai a capo
+      if (x > 160) {
+        x = 10;
+        imgY += 65;
+      }
+
+    } catch (err) {
+      console.error("Errore immagine PDF:", err);
+    }
+  }
+}
+
 
     // ---------------- SAVE ----------------
     const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
 
-
- await salvaESharePdfCapacitor(pdf, filename);
-return;
+    await salvaESharePdfCapacitor(pdf, filename);
+    return;
 
   } catch (err) {
     console.error("Errore PDF:", err);
     alert("Errore generazione PDF");
   }
 };
+
 const uploadSistema3Parti = async (file) => {
   const toBase64 = (file) =>
     new Promise((resolve, reject) => {
@@ -1121,11 +1257,13 @@ const uploadFotoFiles = async (files) => {
 
 const handleSave = async () => {
   console.log("🔥 HANDLE SAVE PARTITO");
- const ok = await checkConnection(navigate, activeUserRole);
+
+  const ok = await checkConnection(navigate, activeUserRole);
   if (!ok) {
     setSalvataggioInCorso(false);
     return;
   }
+
   if (salvataggioInCorso) return;
   setSalvataggioInCorso(true);
 
@@ -1136,7 +1274,7 @@ const handleSave = async () => {
       return;
     }
 
-    if (!selectedFornitore ||  !scarico || scarico.length === 0) {
+    if (!selectedFornitore || !scarico || scarico.length === 0) {
       alert("Completa fornitore e scarico");
       return;
     }
@@ -1144,10 +1282,8 @@ const handleSave = async () => {
     const isFornitorePrivato =
       (selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
 
-    // 🔥 FIX: RIMOSSO BLOCCO FIR MANCANTE
-    // (prima impediva il salvataggio)
-
-    // 🔥 FIX: GENERA FIR AUTOMATICO SE MANCANTE (solo se NON privato)
+    // 🔥 FIR NON OBBLIGATORIO PER PRIVATI
+    // Per gli altri → FIR auto-generato se mancante
     let scaricoFix = [...scarico];
 
     if (!isFornitorePrivato) {
@@ -1174,6 +1310,7 @@ const handleSave = async () => {
       });
     }
 
+    // 🔥 FOTO OBBLIGATORIE SOLO PER NON PRIVATI
     const hasImages =
       (fotoFile && fotoFile.length > 0) ||
       (previewFoto && previewFoto.some((p) => typeof p === "string" && !p.startsWith("blob:")));
@@ -1183,6 +1320,7 @@ const handleSave = async () => {
       return;
     }
 
+    // ---------------- DRAFT / MODIFICA ----------------
     const draftRef = doc(db, "scarichi_draft", utenteNome);
     const draftSnap = await getDoc(draftRef);
 
@@ -1204,6 +1342,7 @@ const handleSave = async () => {
       before = snap.exists() ? snap.data() : null;
     }
 
+    // ---------------- UPLOAD FOTO ONLINE ----------------
     let uploadedUrls = [];
 
     if (fotoFile && fotoFile.length > 0) {
@@ -1222,18 +1361,42 @@ const handleSave = async () => {
       }
     }
 
+    // ---------------- FOTO GIÀ ESISTENTI ----------------
     const existingUrls = (previewFoto || []).filter(
       (u) => typeof u === "string" && !u.startsWith("blob:")
     );
 
-    const fotoURLs = Array.from(new Set([...existingUrls, ...uploadedUrls]));
+    // ---------------- FOTO OFFLINE (IndexedDB) ----------------
+    const utenteId = getLogUser();
+    let offlineUrls = [];
 
+    const offline = await loadOfflinePhotos(utenteId);
+    if (offline.length > 0) {
+      const files = offline.map(f => {
+        const blob = new Blob([f.data], { type: f.type });
+        return new File([blob], f.name, { type: f.type });
+      });
+
+      try {
+        const uploaded = await uploadFotoFiles(files);
+        offlineUrls = uploaded;
+        await clearOfflinePhotos(utenteId);
+      } catch (e) {
+        console.warn("Upload offline fallito, restano in coda", e);
+      }
+    }
+
+    // ---------------- MERGE FOTO ----------------
+    const fotoURLs = Array.from(
+      new Set([...existingUrls, ...uploadedUrls, ...offlineUrls])
+    );
+
+    // ---------------- PAYLOAD ----------------
     const payload = {
       fornitore: selectedFornitore || "",
       listino: selectedListino || "",
       tipo: tipoMovimento || "scarico",
 
-      // 🔥 FIX: usa scaricoFix con FIR auto-generati
       [tipoMovimento === "carico" ? "carico" : "scarico"]: scaricoFix,
 
       utente: utenteLoggato,
@@ -1254,6 +1417,7 @@ const handleSave = async () => {
 
     let isUpdate = false;
 
+    // ---------------- SALVATAGGIO ----------------
     if (inModifica && docIdOriginaleState) {
       await setDoc(doc(db, targetCollection, docIdOriginaleState), payload, { merge: true });
       isUpdate = true;
@@ -1263,6 +1427,7 @@ const handleSave = async () => {
       isUpdate = false;
     }
 
+    // ---------------- LOG ----------------
     const refDocFinale = doc(db, targetCollection, docIdOriginaleState);
     const snapFinale = await getDoc(refDocFinale);
     const after = snapFinale.exists() ? snapFinale.data() : payload;
@@ -1298,8 +1463,10 @@ const handleSave = async () => {
       ripristinabile: !!before
     });
 
+    // ---------------- RESET DRAFT ----------------
     await deleteDoc(doc(db, "scarichi_draft", utenteNome));
 
+    // ---------------- RESET UI ----------------
     setScarico([]);
     setFotoFile([]);
     setPreviewFoto([]);
@@ -1319,6 +1486,7 @@ const handleSave = async () => {
     if (vuoleStampare) {
       await handlePrint(docIdOriginaleState, tipoMovimento);
     }
+
   } catch (err) {
     console.error("❌ ERRORE SAVE:", err);
     alert("Errore salvataggio");
@@ -1326,6 +1494,7 @@ const handleSave = async () => {
     setSalvataggioInCorso(false);
   }
 };
+
 
 
 
@@ -1372,6 +1541,24 @@ const materialiOptions = materialiFiltrati.map(m => ({
   value: m.nome,
   label: m.nome
 }));
+
+// 🔥 Calcoli per fornitore privato
+let totaleScaricoEuro = 0;
+
+const scaricoConTotali = scarico.map(c => {
+  let totaleCerEuro = 0;
+
+  const righe = c.righe.map(r => {
+    const totale = Number(r.netto || 0) * Number(r.prezzoAcquisto || 0);
+    totaleCerEuro += totale;
+    return { ...r, totaleEuro: totale };
+  });
+
+  totaleScaricoEuro += totaleCerEuro;
+
+  return { ...c, righe, totaleCerEuro };
+});
+
 
   return (
     <div className="scarichi-container">
@@ -1523,25 +1710,34 @@ setTimeout(() => {
 <Select
   options={fornitoriOptions}
   value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
-  onChange={(selected) => {
-    const nome = selected?.value || "";
-    setSelectedFornitore(nome);
+onChange={(selected) => {
+  const nome = selected?.value || "";
+  setSelectedFornitore(nome);
 
-    const forn = fornitori.find(f => f.nome === nome);
-    if (!forn) return;
+  // 🔥 LOGICA FORNITORE PRIVATO (solo SCARICO)
+  if (nome.trim().toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico") {
+    setSelectedListino("LISTINOPRIVATI");
+    return;
+  }
 
-      const primoCompatibile = listini.find(
-      l => (l.tipoListino || "").trim() === tipoMovimento
-    );
+  // 🔵 Logica normale
+  const forn = fornitori.find(f => f.nome === nome);
+  if (!forn) return;
 
-    if (primoCompatibile) {
-      setSelectedListino(primoCompatibile.nome);
-    }
-  }}
+  const primoCompatibile = listini.find(
+    l => (l.tipoListino || "").trim() === tipoMovimento
+  );
+
+  if (primoCompatibile) {
+    setSelectedListino(primoCompatibile.nome);
+  }
+}}
+
   placeholder={tipoMovimento === "carico" ? "Cerca cliente..." : "Cerca fornitore..."}
   isSearchable
   isClearable
 />
+
   {/* PULSANTE NUOVO FORNITORE / DESTINATARIO */}
   <button     type="button"    onClick={() => { // 🔥 SALVA STATO CORRENTE PRIMA DI USCIRE
     localStorage.setItem("scaricoReturnPage", "/scarichi");
@@ -1558,16 +1754,22 @@ localStorage.setItem("fornitore_prefill_nome", "");
   options={listiniOptions}
   value={listiniOptions.find(o => o.value === selectedListino) || null}
   onChange={(selected) => {
+    // 🔥 BLOCCO LISTINO PER FORNITORE PRIVATO (solo SCARICO)
+    if ((selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico") {
+      return;
+    }
     setSelectedListino(selected?.value || "");
   }}
   placeholder="Cerca listino..."
   isSearchable
   isClearable
+  isDisabled={(selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico"}
   menuPortalTarget={document.body}
   styles={{
     menuPortal: base => ({ ...base, zIndex: 9999 })
   }}
 />
+
         
  
         {listinoBloccato && (
@@ -1582,20 +1784,46 @@ onChange={async (e) => {
   const files = Array.from(e.target.files);
   if (!files.length) return;
 
+  const utenteId = getLogUser();
   setUploadingImages(true);
 
-  // mantieni file per upload vero
-  setFotoFile(prev => [...prev, ...files]);
+  const online = await realNetworkCheck();
 
-  // 🔥 SOLO PREVIEW LEGGERO (NO BASE64)
-  const previews = files.map(file => URL.createObjectURL(file));
-  setPreviewFoto(prev => [...prev, ...previews]);
+  if (online) {
+    // 🔵 ONLINE → CARICO SUBITO LE FOTO E SALVO GLI URL
+    try {
+      const uploadedUrls = await uploadFotoFiles(files);
 
-  setTimeout(() => {
-    setUploadingImages(false);
-    setDirty(true);
-  }, 300);
+      // aggiungo gli URL alle preview
+      setPreviewFoto(prev => [...prev, ...uploadedUrls]);
+
+      // aggiungo gli URL anche a fotoFile (per coerenza)
+      setFotoFile(prev => [...prev, ...files]);
+
+      // 🔥 SALVO SUBITO LA BOZZA CON GLI URL
+      await salvaBozza();
+    } catch (err) {
+      console.error("Errore upload immediato:", err);
+    }
+  } else {
+    // 🔴 OFFLINE → SALVO IN INDEXEDDB
+    if (utenteId) {
+      await saveOfflinePhotos(utenteId, files);
+    }
+
+    // preview locali (blob)
+    const previews = files.map(file => URL.createObjectURL(file));
+    setPreviewFoto(prev => [...prev, ...previews]);
+
+    // salvo i file per upload futuro
+    setFotoFile(prev => [...prev, ...files]);
+  }
+
+  setUploadingImages(false);
+  setDirty(true);
 }}
+
+
 />
 {previewFoto.length > 0 && (
   <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
@@ -1690,34 +1918,30 @@ onChange={async (e) => {
           <label>F.I.R (CER)/DDT:</label>
           
 <input
-id="fir-input"
-className={firError ? "input-error" : ""}
+  id="fir-input"
   type="text"
   value={firCer}
   disabled={isFornitorePrivato}
   onChange={(e) => {
-  setFirCer(e.target.value.toUpperCase());
-  setFirError(false);
-  setDirty(true);
-}}
+    setFirCer(e.target.value.toUpperCase());
+    setFirError(false);
+    setDirty(true);
+  }}
   onBlur={() => {
-  if (!isFornitorePrivato) {
-    setFirError(!firCer);
-    checkFirExists(firCer);
-  }
+    if (!isFornitorePrivato) {
+      setFirError(!firCer);
+      checkFirExists(firCer);
+    }
   }}
   placeholder={
-  isFornitorePrivato
-    ? "FIR non richiesto per fornitore privato"
-    : firError
-      ? "FIR obbligatorio"
-      : "Numero formulario (FIR)"
-}
-  style={{
-    textTransform: "uppercase",
-    backgroundColor: isFornitorePrivato ? "#eee" : "white"
-  }}
+    isFornitorePrivato
+      ? "FIR non richiesto per fornitore privato"
+      : firError
+        ? "FIR obbligatorio"
+        : "Numero formulario (FIR)"
+  }
 />
+
         {firExists && (
   <p style={{ color: "red", fontWeight: "bold" }}>
     il FIR immesso {firCer} è già presente a sistema, impossibile continuare
@@ -1844,39 +2068,71 @@ onBlur={(e) => {
         </>
       )}
       <hr />
-{scarico.map((c) => (
+{scaricoConTotali.map((c) => (
   <div key={c.cer + c.fir} style={{ marginBottom: "20px" }}>
     <h4>CER {c.cer} {c.fir && `- FIR: ${c.fir}`}</h4>
+
     <table>
       <thead>
-        <tr>          
-          <th>Materiale</th>          
-          <th>Peso</th>          
-          <th>Calo</th>          
-          <th>Netto</th>          
-          <th>Azioni</th>        
-       </tr>
+        <tr>
+          <th>Materiale</th>
+          <th>Peso</th>
+          <th>Calo</th>
+          <th>Netto</th>
+
+          {/* 🔥 SOLO PER FORNITORE PRIVATO */}
+          {isFornitorePrivato && (
+            <>
+              <th>€/kg</th>
+              <th>Totale €</th>
+            </>
+          )}
+
+          <th>Azioni</th>
+        </tr>
       </thead>
+
       <tbody>
-  {c.righe.map((r) => (
-    <tr key={r.materiale}>
-      <td>{r.materiale}</td>
-      <td>{r.peso}</td>
-      <td>{r.calo}</td>
-      <td>{r.netto}</td>
-      <td>
-        <button onClick={() => handleEdit(c.cer, c.fir, r.materiale)}>✏️</button>
-        <button onClick={() => handleDelete(c.cer, c.fir, r.materiale)}>🗑️</button>
-      </td>
-    </tr>
-  ))}
-</tbody>
+        {c.righe.map((r) => (
+          <tr key={r.materiale}>
+            <td>{r.materiale}</td>
+            <td>{r.peso}</td>
+            <td>{r.calo}</td>
+            <td>{r.netto}</td>
+
+            {/* 🔥 SOLO PER FORNITORE PRIVATO */}
+            {isFornitorePrivato && (
+              <>
+                <td>{Number(r.prezzoAcquisto).toFixed(2)}</td>
+                <td>{Number(r.totaleEuro).toFixed(2)}</td>
+              </>
+            )}
+
+            <td>
+              <button onClick={() => handleEdit(c.cer, c.fir, r.materiale)}>✏️</button>
+              <button onClick={() => handleDelete(c.cer, c.fir, r.materiale)}>🗑️</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
     </table>
+
+    {/* 🔥 Totale CER */}
     <p style={{ fontWeight: "bold", marginTop: "6px" }}>
       Totale CER: {c.totaleCer} kg
+
+      {isFornitorePrivato && (
+        <> — <span style={{ color: "green" }}>{c.totaleCerEuro.toFixed(2)} €</span></>
+      )}
     </p>
   </div>
 ))}
+{isFornitorePrivato && (
+  <h3 style={{ marginTop: "20px", color: "green" }}>
+    Totale scarico da pagare: {totaleScaricoEuro.toFixed(2)} €
+  </h3>
+)}
+
     </div>
   );
 };

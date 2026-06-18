@@ -197,7 +197,7 @@ const ConfigurazioniGenerali = ({ logout }) => {
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <label>Guadagno minimo €/kg:</label>
+        <label>Utile minimo €/kg:</label>
         <br />
         <input
           type="number"

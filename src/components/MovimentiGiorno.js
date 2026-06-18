@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
-import { collection, getDocs, updateDoc, doc, getDoc, deleteDoc, addDoc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, getDoc, deleteDoc, addDoc, onSnapshot } from "firebase/firestore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { scriviLog } from "../utils/log"; 
@@ -56,87 +56,54 @@ const formatDate = (d) => {
     };
     fetchConfig();
   }, []);
-  
-useEffect(() => {
-  const fetchAll = async () => {
-    try {
-      const [
-        finSnap,
-        fattureSnap,
-        prospettiSnap,
-        scarichiSnap
-      ] = await Promise.all([
-        getDocs(collection(db, "MovimentoFinanziario")),
-        getDocs(collection(db, "fattureCarichi")),
-        getDocs(collection(db, "prospettiFattura")),
-        getDocs(collection(db, "scarichi"))
-      ]);
-const anagraficaSnap = await getDocs(collection(db, "AnagraficaMovimentoFinanziario"));
-const anagrafica = anagraficaSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-setAnagraficaMov(anagrafica);      
-const fin = finSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const fattureMap = {};
-      fattureSnap.docs.forEach(d => {
-        fattureMap[d.id] = { id: d.id, ...d.data() };
-      });
-      const prospettiMap = {};
-      prospettiSnap.docs.forEach(d => {
-        prospettiMap[d.id] = { id: d.id, ...d.data() };
-      });
-      const scarichiMap = {};
-      scarichiSnap.docs.forEach(d => {
-        scarichiMap[d.id] = { id: d.id, ...d.data() };
-      });
-      setMovFin(fin);
-      setMapFatture(fattureMap);
-      setMapProspetti(prospettiMap);
-      setMapScarichi(scarichiMap);
-    } catch (err) {
-      console.error(err);
-    }
+  useEffect(() => {
+  const unsubFin = onSnapshot(collection(db, "MovimentoFinanziario"), (snap) => {
+    setMovFin(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  });
+
+  const unsubFatture = onSnapshot(collection(db, "fattureCarichi"), (snap) => {
+    const map = {};
+    snap.docs.forEach(d => map[d.id] = { id: d.id, ...d.data() });
+    setMapFatture(map);
+  });
+
+  const unsubProspetti = onSnapshot(collection(db, "prospettiFattura"), (snap) => {
+    const map = {};
+    snap.docs.forEach(d => map[d.id] = { id: d.id, ...d.data() });
+    setMapProspetti(map);
+  });
+
+  const unsubScarichi = onSnapshot(collection(db, "scarichi"), (snap) => {
+    const map = {};
+    snap.docs.forEach(d => map[d.id] = { id: d.id, ...d.data() });
+    setMapScarichi(map);
+  });
+
+  const unsubAnagrafica = onSnapshot(collection(db, "AnagraficaMovimentoFinanziario"), (snap) => {
+    setAnagraficaMov(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  });
+
+  return () => {
+    unsubFin();
+    unsubFatture();
+    unsubProspetti();
+    unsubScarichi();
+    unsubAnagrafica();
   };
-  fetchAll();
 }, []);
+
+
 const runSafe = async (fn) => {
-  if (globalLoading) return; // 🔥 blocca doppio click
+  if (globalLoading) return;
   setGlobalLoading(true);
   try {
     await fn();
-    await refreshAll();
   } finally {
     setGlobalLoading(false);
   }
 };
-const refreshAll = async () => {
-  const [
-    finSnap,
-    fattureSnap,
-    prospettiSnap,
-    scarichiSnap
-  ] = await Promise.all([
-    getDocs(collection(db, "MovimentoFinanziario")),
-    getDocs(collection(db, "fattureCarichi")),
-    getDocs(collection(db, "prospettiFattura")),
-    getDocs(collection(db, "scarichi"))
-  ]);
-  const fin = finSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const fattureMap = {};
-  fattureSnap.docs.forEach(d => {
-    fattureMap[d.id] = { id: d.id, ...d.data() };
-  });
-  const prospettiMap = {};
-  prospettiSnap.docs.forEach(d => {
-    prospettiMap[d.id] = { id: d.id, ...d.data() };
-  });
-  const scarichiMap = {};
-  scarichiSnap.docs.forEach(d => {
-    scarichiMap[d.id] = { id: d.id, ...d.data() };
-  });
-  setMovFin(fin);
-  setMapFatture(fattureMap);
-  setMapProspetti(prospettiMap);
-  setMapScarichi(scarichiMap);
-};
+
+
    const isSameDay = (a, b) => {
   const da = toDate(a);
   const db = toDate(b);
@@ -154,6 +121,12 @@ const refreshAll = async () => {
 const [selectedDate, setSelectedDate] = useState(
   routerLocation.state?.date ? new Date(routerLocation.state.date) : new Date()
 );
+
+useEffect(() => {
+  // forza un re-render quando cambia la data
+  setCarichiScarichi([...carichiScarichi]);
+}, [selectedDate, movFin, mapFatture, mapProspetti, mapScarichi]);
+
 const endOfDay = new Date(selectedDate);
 endOfDay.setHours(23, 59, 59, 999);
 const ALLOWED_TYPES = new Set([
@@ -281,52 +254,136 @@ scarichiPrivati.forEach(s => {
 });
 daConsuntivare.sort((a, b) => a.dataMov - b.dataMov);
   const goDashboard = () => navigate("/admin");
-const handlePrintPDF = async () => {
+
+  const handlePrintPDF = async () => {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
+
   const { pdf, startY } = await PdfHeader();
   let y = startY;
+
   pdf.setFontSize(14);
-  pdf.text("Movimento Giorno", 14, y);
+  pdf.text("Movimenti del giorno", 14, y);
   y += 6;
   pdf.setFontSize(10);
-  pdf.text(
-    `Giorno: ${new Date(selectedDate).toLocaleDateString("it-IT")}`,
-    14,
-    y
-  );
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const totalPages = pdf.getNumberOfPages();
+  pdf.setPage(totalPages);
+  const x = pageWidth - 70;
+  const yy = pageHeight - 20;
+
+  pdf.text(` ${new Date(selectedDate).toLocaleDateString("it-IT")}`, 14, y);
   y += 8;
+  pdf.text(` Carichi / Scarichi`, x, y);
+  y += 8;
+
+  // ---------------------------------------------------------
+  // COLORAZIONE IMPORTI BASATA SU TIPO
+  // ---------------------------------------------------------
+  const colorizeImportByTipo = (data) => {
+    const raw = String(data.cell.raw || "");
+    const [valStr, tipo] = raw.split("|");
+    const val = Number(valStr || 0);
+    const entrata = isEntrata(tipo);
+
+    if (entrata) {
+      data.cell.styles.textColor = [0, 128, 0];
+      data.cell.text = [`+${val.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`];
+    } else {
+      data.cell.styles.textColor = [200, 0, 0];
+      data.cell.text = [`-${val.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`];
+    }
+  };
+
+  // ---------------------------------------------------------
+  // CARICHI / SCARICHI CONSUNTIVATI
+  // ---------------------------------------------------------
   autoTable(pdf, {
     startY: y,
     head: [["CONTROPARTE", "DATA MOVIMENTO", "IMPORTO"]],
-    body: rows.map(r => [
+    body: rows.map((r) => [
       r.controparte,
       toDate(r.dataMov)?.toLocaleDateString("it-IT") || "",
-      `${Number(r.importo).toLocaleString("it-IT", {
-        minimumFractionDigits: 2
-      })} €`
+      `${Number(r.importo || 0).toFixed(2)}|${r.tipo || ""}`,
     ]),
     theme: "grid",
     styles: { fontSize: 8 },
     headStyles: { fillColor: [39, 174, 96] },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 2) colorizeImportByTipo(data);
+    },
   });
+
   y = pdf.lastAutoTable.finalY + 6;
+
+  // ---------------------------------------------------------
+  // CARICHI / SCARICHI DA CONSUNTIVARE
+  // ---------------------------------------------------------
   autoTable(pdf, {
     startY: y,
     head: [["CONTROPARTE", "DATA", "IMPORTO"]],
-    body: daConsuntivare.map(r => [
+    body: daConsuntivare.map((r) => [
       r.controparte,
       new Date(r.dataMov).toLocaleDateString("it-IT"),
-      `${Number(r.importo).toLocaleString("it-IT", {
-        minimumFractionDigits: 2
-      })} €`
+      `${Number(r.importo || 0).toFixed(2)}|${r.tipo || ""}`,
     ]),
     theme: "grid",
     styles: { fontSize: 8 },
     headStyles: { fillColor: [231, 76, 60] },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 2) colorizeImportByTipo(data);
+    },
   });
+
   y = pdf.lastAutoTable.finalY + 10;
+
+  // Introiti (sempre positivi → verde)
+pdf.setTextColor(0, 128, 0);
+pdf.text(
+  `Introiti: +${introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+  14,
+  y
+);
+y += 5;
+
+// Spese (sempre positive ma da mostrare in rosso e con -)
+pdf.setTextColor(200, 0, 0);
+pdf.text(
+  `Spese: -${speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+  14,
+  y
+);
+y += 5;
+
+// Utile (può essere positivo o negativo)
+if (guadagno >= 0) {
+  pdf.setTextColor(0, 128, 0);
+  pdf.text(
+    `Utile: +${guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+} else {
+  pdf.setTextColor(200, 0, 0);
+  pdf.text(
+    `Utile: ${guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+}
+
+y += 8;
+pdf.setTextColor(0, 0, 0); // reset colore
+
+  pdf.text(` Altri Movimenti`, x, y);
+  y += 8;
+
+  // ---------------------------------------------------------
+  // ALTRI CONSUNTIVATI (movFin + anagraficaMov)
+  // ---------------------------------------------------------
   const consuntivatiAltri = anagraficaMov
     .map(item => {
       const movs = movFin.filter(m =>
@@ -334,15 +391,19 @@ const handlePrintPDF = async () => {
         isSameDay(m.data, selectedDate)
       );
       if (movs.length === 0) return null;
-      const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
+
+      const totale = movs.reduce((s, m) => s + Number(m.importo || 0), 0);
+      const tipo = movs[0]?.tipo || item.tipo || "";
+
       return [
         item.nomeBreve,
         item.periodicita,
-        `${totale.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+        `${totale.toFixed(2)}|${tipo}`,
         movs.length
       ];
     })
     .filter(Boolean);
+
   autoTable(pdf, {
     startY: y,
     head: [["MOVIMENTO", "FREQUENZA", "€", "CONT."]],
@@ -350,20 +411,33 @@ const handlePrintPDF = async () => {
     theme: "grid",
     styles: { fontSize: 8 },
     headStyles: { fillColor: [39, 174, 96] },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 2) colorizeImportByTipo(data);
+    },
   });
+
   y = pdf.lastAutoTable.finalY + 10;
+
+  // ---------------------------------------------------------
+  // ALTRI DA CONSUNTIVARE (anagraficaMov + getOccorrenze)
+  // ---------------------------------------------------------
   const daConsAltri = anagraficaMov
     .map(item => {
       const occ = getOccorrenze(item);
       if (!occ.length) return null;
+
+      const tipo = item.tipo || "";
+      const importo = Number(item.importo || 0);
+
       return [
         item.nomeBreve,
         item.periodicita,
-        `${item.importo.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+        `${importo.toFixed(2)}|${tipo}`,
         occ.length
       ];
     })
     .filter(Boolean);
+
   autoTable(pdf, {
     startY: y,
     head: [["MOVIMENTO", "FREQUENZA", "€", "CONT."]],
@@ -371,61 +445,73 @@ const handlePrintPDF = async () => {
     theme: "grid",
     styles: { fontSize: 8 },
     headStyles: { fillColor: [231, 76, 60] },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 2) colorizeImportByTipo(data);
+    },
   });
+
   y = pdf.lastAutoTable.finalY + 10;
-  pdf.setFontSize(10);
-  pdf.text(
-    `Introiti: ${introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-  y += 5;
-  pdf.text(
-    `Spese: ${speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-  y += 5;
-  pdf.text(
-    `Guadagno: ${guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-  y += 8;
-  pdf.text(
-    `Introiti (Attività): ${introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-  y += 5;
-  pdf.text(
-    `Spese (Attività): ${speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-  y += 5;
-  pdf.text(
-    `Guadagno (Attività): ${guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
-    14,
-    y
-  );
-const pageWidth = pdf.internal.pageSize.getWidth();
-const pageHeight = pdf.internal.pageSize.getHeight();
-const totalPages = pdf.getNumberOfPages();
-pdf.setPage(totalPages);
-pdf.setFontSize(10);
-const x = pageWidth - 70;
- y = pageHeight - 20;
+
+  // ---------------------------------------------------------
+  // TOTALI ATTIVITÀ
+  // ---------------------------------------------------------
+ pdf.setFontSize(10);
+
+// Introiti Attività (sempre positivi → verde)
 pdf.setTextColor(0, 128, 0);
-pdf.text("Consuntivati", x, y);
+pdf.text(
+  `Introiti (Attività): +${introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+  14,
+  y
+);
+y += 5;
+
+// Spese Attività (positive ma da mostrare in rosso e con -)
 pdf.setTextColor(200, 0, 0);
-pdf.text("Da Consuntivare", x, y + 6);
-pdf.setTextColor(0, 0, 0);
-    const dataSafe = new Date()
-    .toLocaleDateString("it-IT")
-    .replace(/\//g, "-");
+pdf.text(
+  `Spese (Attività): -${speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+  14,
+  y
+);
+y += 5;
+
+// Utile Attività (può essere positivo o negativo)
+if (guadagnoAttDaCons >= 0) {
+  pdf.setTextColor(0, 128, 0);
+  pdf.text(
+    `Utile (Attività): +${guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+} else {
+  pdf.setTextColor(200, 0, 0);
+  pdf.text(
+    `Utile (Attività): ${guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €`,
+    14,
+    y
+  );
+}
+
+y += 8;
+pdf.setTextColor(0, 0, 0); // reset colore
+
+
+  // ---------------------------------------------------------
+  // FOOTER
+  // ---------------------------------------------------------
+  pdf.setTextColor(0, 128, 0);
+  pdf.text("Consuntivati", x, yy);
+  pdf.setTextColor(200, 0, 0);
+  pdf.text("Da Consuntivare", x, yy + 6);
+  pdf.setTextColor(0, 0, 0);
+
+  const dataSafe = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
   await salvaESharePdfCapacitor(pdf, `Movimenti_${dataSafe}.pdf`);
 };
+
+
+
+
 const handleConsuntiva = async (row) => {
   const ok = window.confirm(`Confermare consuntivazione per ${row.controparte}?`);
   if (!ok) return;
@@ -628,7 +714,7 @@ const unlinkMovimentiDaFinanziario = async (tipo, anagraficaId) => {
 const linkMovimentiAFinanziario = async (tipo, anagraficaId, movimentoFinanziarioId) => {
   try {
     let refDoc = null;
-
+console.log("linkMovimentiAFinanziario tipo, anagraficaId, movimentoFinanziarioId",tipo, anagraficaId, movimentoFinanziarioId);
     if (tipo === "prospettiFattura") {
       refDoc = doc(db, "prospettiFattura", anagraficaId);
     } else if (tipo === "fattureCarichi") {
@@ -642,7 +728,7 @@ const linkMovimentiAFinanziario = async (tipo, anagraficaId, movimentoFinanziari
 
     const data = snap.data();
     const movimentiIds = data.movimentiIds || [];
-
+console.log("linkMovimentiAFinanziario movimentiIds",movimentiIds);
     for (const id of movimentiIds) {
       // 🔥 prova prima scarichi
       const scaricoRef = doc(db, "scarichi", id);
@@ -908,18 +994,52 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
    
 
       {/* FOOTER */}
-      <div style={{ marginTop: 40 }}>
-        <h4>📊 Riepilogo Giorno</h4>
-      <p>Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Guadagno: {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+<div style={{ marginTop: 40 }}>
+  <h4>📊 Riepilogo Giorno</h4>
 
-<h4>📌 Da Consuntivare (Attività)</h4>
-<p>Introiti: {introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Spese: {speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Guadagno: {guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: "20px",
+      marginTop: "20px",
+      alignItems: "flex-start"
+    }}
+  >
+    {/* 🔵 COLONNA SINISTRA — CONSUNTIVATI */}
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: "8px",
+        padding: "15px",
+        background: "#f8f8f8"
+      }}
+    >
+      <h4>📌 Consuntivati</h4>
 
-      </div>
+      <p>🟢 Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+      <p>🔴 Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+      <p><b>Utile:</b> {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+    </div>
+
+    {/* 🔴 COLONNA DESTRA — DA CONSUNTIVARE */}
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: "8px",
+        padding: "15px",
+        background: "#f8f8f8"
+      }}
+    >
+      <h4>📌 Da Consuntivare</h4>
+
+      <p>🟢 Introiti: {introitiAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+      <p>🔴 Spese: {speseAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+      <p><b>Utile:</b> {guadagnoAttDaCons.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+    </div>
+  </div>
+</div>
+
 
 
       
@@ -1114,8 +1234,7 @@ await scriviLog({
   utente: currentUser.username || currentUser.email,
   ripristinabile: false
 });
-//console.log("🔥 contItem SELECTED:", contItem);
-              await refreshAll();
+
             }}
           >
             Consuntiva
@@ -1255,8 +1374,7 @@ await scriviLog({
   utente: currentUser.username || currentUser.email,
   ripristinabile: false
 });
-console.log('log: ',o);
-              await refreshAll();
+
             }}
           >
             STORNA

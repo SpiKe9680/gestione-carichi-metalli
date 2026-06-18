@@ -1,7 +1,7 @@
 // src/components/GestioneScarichi.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, updateDoc, doc, getDoc, addDoc, setDoc,deleteDoc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, getDoc, addDoc, setDoc,deleteDoc,onSnapshot  } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 import DatePicker, { registerLocale } from "react-datepicker";
@@ -139,41 +139,90 @@ const pulitiIds = React.useMemo(() => {
     id.replace(/^scarico_/, "").replace(/^carico_/, "")
   );
 }, [modalData]);
-const fetchMovimenti = async () => {
-  try {
-    const scarichiSnap = await getDocs(collection(db, "scarichi"));
-    const carichiSnap = await getDocs(collection(db, "carichi"));
+useEffect(() => {
+  const unsub = fetchMovimenti();
+  return () => unsub && unsub();
+}, []);
+
+const fetchMovimenti = () => {
+  const unsubScarichi = onSnapshot(collection(db, "scarichi"), (snap) => {
     const parseData = normalizeDate;
-  const parseDoc = (d, tipo) => {
-  const data = d.data();
-  const movimenti = Array.isArray(data[tipo]) ? data[tipo] : [];
-  return {
-    id: d.id, // 🔥 ID FIRESTORE VERO (OBBLIGATORIO)
-    uiId: `${tipo}_${d.id}`, // solo UI
-    realId: d.id, // safety
-    tipo,    data: parseData(data.data),    fornitore: data.fornitore || "sconosciuto",    listino: data.listino || "sconosciuto",    utente: data.utente || "sconosciuto",    
-    movimentoFinanziarioId:
-  data.movimentoFinanziarioId !== undefined &&
-  data.movimentoFinanziarioId !== null &&
-  String(data.movimentoFinanziarioId).trim() !== ""    ? data.movimentoFinanziarioId    : null,
-    cer: movimenti.map(m => ({
-      fir: m.fir || "-",      cer: m.cer || m.codiceCER || "-",      tipo: m.tipo,      righe: (m.righe || []).map(r => ({        ...r,        netto: r.netto || 0,        prezzoAcquisto: r.prezzoAcquisto || 0,        prezzoVendita: r.prezzoVendita || 0      }))    }))  };};
-    const scarichi = scarichiSnap.docs.map(d => parseDoc(d, "scarico"));
-    const carichi = carichiSnap.docs.map(d => parseDoc(d, "carico"));
-    const tuttiMovimenti = [...scarichi, ...carichi];
-    tuttiMovimenti.sort((a, b) => b.data - a.data);
-    setScarichi(tuttiMovimenti);
-    if (tuttiMovimenti.length) {
-      const ordinati = [...tuttiMovimenti].sort((a, b) => a.data - b.data);
-      const oggi = new Date();
-      oggi.setHours(23, 59, 59, 999);
-      setMinDataDB(ordinati[0]?.data || null);
-      setMaxDataDB(oggi);
-    }
-  } catch (err) {
-    console.error("Errore caricamento movimenti:", err);
-  }
+
+    const scarichi = snap.docs.map(d => {
+      const data = d.data();
+      const movimenti = Array.isArray(data.scarico) ? data.scarico : [];
+      return {
+        id: d.id,
+        uiId: `scarico_${d.id}`,
+        realId: d.id,
+        tipo: "scarico",
+        data: parseData(data.data),
+        fornitore: data.fornitore || "sconosciuto",
+        listino: data.listino || "sconosciuto",
+        utente: data.utente || "sconosciuto",
+        movimentoFinanziarioId: data.movimentoFinanziarioId || null,
+        cer: movimenti.map(m => ({
+          fir: m.fir || "-",
+          cer: m.cer || m.codiceCER || "-",
+          tipo: m.tipo,
+          righe: (m.righe || []).map(r => ({
+            ...r,
+            netto: r.netto || 0,
+            prezzoAcquisto: r.prezzoAcquisto || 0,
+            prezzoVendita: r.prezzoVendita || 0
+          }))
+        }))
+      };
+    });
+
+    setScarichi(prev => {
+      const altri = prev.filter(p => p.tipo !== "scarico");
+      return [...scarichi, ...altri].sort((a, b) => b.data - a.data);
+    });
+  });
+
+  const unsubCarichi = onSnapshot(collection(db, "carichi"), (snap) => {
+    const parseData = normalizeDate;
+
+    const carichi = snap.docs.map(d => {
+      const data = d.data();
+      const movimenti = Array.isArray(data.carico) ? data.carico : [];
+      return {
+        id: d.id,
+        uiId: `carico_${d.id}`,
+        realId: d.id,
+        tipo: "carico",
+        data: parseData(data.data),
+        fornitore: data.fornitore || "sconosciuto",
+        listino: data.listino || "sconosciuto",
+        utente: data.utente || "sconosciuto",
+        movimentoFinanziarioId: data.movimentoFinanziarioId || null,
+        cer: movimenti.map(m => ({
+          fir: m.fir || "-",
+          cer: m.cer || m.codiceCER || "-",
+          tipo: m.tipo,
+          righe: (m.righe || []).map(r => ({
+            ...r,
+            netto: r.netto || 0,
+            prezzoAcquisto: r.prezzoAcquisto || 0,
+            prezzoVendita: r.prezzoVendita || 0
+          }))
+        }))
+      };
+    });
+
+    setScarichi(prev => {
+      const altri = prev.filter(p => p.tipo !== "carico");
+      return [...carichi, ...altri].sort((a, b) => b.data - a.data);
+    });
+  });
+
+  return () => {
+    unsubScarichi();
+    unsubCarichi();
+  };
 };
+
 const validaEPreparaProspetto = async (movimentiIds) => {
   const collections = ["prospettiFattura", "fattureCarichi"];
   const conflittiPagati = [];
@@ -1065,6 +1114,9 @@ const getMovimentiValidi = () => {
 };
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
+
+
+
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
@@ -1112,7 +1164,7 @@ const toOptions = (arr) =>
   </div>
    <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
     <div style={{width:"15px",height:"15px",background:"#40ef46",border:"1px solid #ccc"}}></div>
-    <span>Pagato/Incassato</span>
+    <span>Contabilizzato</span>
   </div>
 </div>
 <div className="filtri">

@@ -269,7 +269,7 @@ const handlePrintPDF = async () => {
         "Introiti #",
         "Tot Spese",
         "Tot Introiti",
-        "Guadagno",
+        "Utile",
       ],
     ],
     body: weekDays.map((d) => {
@@ -352,7 +352,7 @@ const handlePrintPDF = async () => {
   pdf.text(`Incassi settimana: ${formatEuro(totIntroiti)} €`, 10, y);
   y += 6;
 
-  pdf.text(`Guadagno: ${formatEuro(guadagno)} €`, 10, y);
+  pdf.text(`Utile: ${formatEuro(guadagno)} €`, 10, y);
 
   // =========================
   // SAVE
@@ -428,7 +428,7 @@ const handlePrintPDF = async () => {
             <th># Introiti</th>
             <th>Tot Spese</th>
             <th>Tot Introiti</th>
-            <th>Guadagno</th>
+            <th>Utile</th>
           </tr>
         </thead>
 
@@ -488,7 +488,7 @@ const handlePrintPDF = async () => {
       <div style={boxStyle}>
         <div>📉 Spese settimana: {formatEuro(totSpese)}€</div>
         <div>📈 Incassi settimana: {formatEuro(totIntroiti)}€</div>
-        <div>💰 Guadagno: {formatEuro(guadagno)}€</div>
+        <div>💰 Utile: {formatEuro(guadagno)}€</div>
       </div>
     );
   })()}

@@ -1290,7 +1290,7 @@ const TableMovimenti = ({ dati, tipo }) => (
     <thead>
       <tr>
         <th>Data / Ora</th>
-        <th>Fornitore</th>
+        <th>{tipo === "SCARICO" ? "Fornitore" : "Cliente"}</th>
         <th>Listino</th>
         <th>{tipo === "SCARICO" ? "Prezzo/kg" : "Prezzo/kg"}</th>
         <th>Peso Totale</th>
