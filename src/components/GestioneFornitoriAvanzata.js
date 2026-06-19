@@ -892,23 +892,40 @@ const handleStampa = async () => {
   pdf.text("Movimenti Controparti (Utile Potenziale / Contabilizzato)", 14, y);
   y += 10;
 
-  // 🔵 LEGENDA
-  pdf.setFontSize(11);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text("Legenda:", 14, y);
-  y += 6;
+  // 🔵 NUOVA LEGENDA A 4 LIVELLI
+  pdf.setFont(undefined, "bold");
 
-  pdf.setTextColor(0, 128, 0);
-  pdf.text("[VERDE]  Contabilizzati (tot = cont)", 14, y);
-  y += 6;
+pdf.setFontSize(11);
+pdf.setTextColor(0, 0, 0);
+pdf.text("Legenda:", 14, y);
+y += 6;
 
-  pdf.setTextColor(200, 0, 0);
-  pdf.text("[ROSSO]  Da contabilizzare (tot > cont)", 14, y);
-  y += 6;
+// Verde INTENSO
+pdf.setTextColor(0, 150, 0);
+pdf.text("[VERDE INTENSO]  Utile contabilizzato positivo", 14, y);
+y += 6;
 
-  pdf.setTextColor(0, 0, 0);
-  pdf.text("[NERO]   Nessun movimento (0 / 0)", 14, y);
-  y += 10;
+// Verde chiaro
+pdf.setTextColor(120, 200, 120);
+pdf.text("[VERDE CHIARO] Utile potenziale positivo (non contabilizzato)", 14, y);
+y += 6;
+
+// Rosso INTENSO
+pdf.setTextColor(200, 0, 0);
+pdf.text("[ROSSO INTENSO]  Utile contabilizzato negativo", 14, y);
+y += 6;
+
+// Rosso chiaro
+pdf.setTextColor(255, 150, 150);
+pdf.text("[ROSSO CHIARO] Utile potenziale negativo (non contabilizzato)", 14, y);
+y += 6;
+
+// Nero
+pdf.setTextColor(0, 0, 0);
+pdf.text("[NERO]         Nessun movimento (0 / 0)", 14, y);
+y += 10;
+pdf.setFont(undefined, "normal");
+
 
   // 🔥 FILTRI ATTIVI
   pdf.setFontSize(11);
@@ -948,49 +965,84 @@ const handleStampa = async () => {
 
   pdf.setTextColor(0, 0, 0);
 
- // 🔥 Filtro movimenti leggibile
-const descrMov = {
-  "TUTTI": null,
-  "CON_MOV": "Solo controparti con movimenti",
-  "SENZA_MOV": "Solo controparti senza movimenti",
-  "CON_CARICHI": "Solo controparti con carichi",
-  "SENZA_CARICHI": "Solo controparti senza carichi",
-  "CON_SCARICHI": "Solo controparti con scarichi",
-  "SENZA_SCARICHI": "Solo controparti senza scarichi"
-};
+  // 🔥 Filtro movimenti leggibile
+  const descrMov = {
+    "TUTTI": null,
+    "CON_MOV": "Solo controparti con movimenti",
+    "SENZA_MOV": "Solo controparti senza movimenti",
+    "CON_CARICHI": "Solo controparti con carichi",
+    "SENZA_CARICHI": "Solo controparti senza carichi",
+    "CON_SCARICHI": "Solo controparti con scarichi",
+    "SENZA_SCARICHI": "Solo controparti senza scarichi"
+  };
 
-if (descrMov[filtroFornitori]) {
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(`Filtro movimenti: ${descrMov[filtroFornitori]}`, 14, y);
-  y += 8;
-}
-
+  if (descrMov[filtroFornitori]) {
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Filtro movimenti: ${descrMov[filtroFornitori]}`, 14, y);
+    y += 8;
+  }
 
   y += 5;
 
   // 🔥 RIGHE DELLA TABELLA (STESSI FILTRI DELLA UI)
-const righe = fornitoriOrdinati
-  .filter(f => passaFiltroFornitori(f))   // 🔥 gli stessi della UI
-  .map(f => {
-    const scarTot = countScarichiTot(f);
-    const scarCont = countScarichiCont(f);
-    const carTot = countCarichiTot(f);
-    const carCont = countCarichiCont(f);
-    const utilePot = calcolaUtilePotenziale(f);
-    const utileCont = calcolaUtileContabilizzato(f);
+  const righe = fornitoriOrdinati
+    .filter(f => passaFiltroFornitori(f))
+    .map(f => {
+      const scarTot = countScarichiTot(f);
+      const scarCont = countScarichiCont(f);
+      const carTot = countCarichiTot(f);
+      const carCont = countCarichiCont(f);
+      const utilePot = calcolaUtilePotenziale(f);
+      const utileCont = calcolaUtileContabilizzato(f);
 
-    return [
-      f.nome,
-      f.indirizzo || "-",
-      f.piva_cf || "-",
-      `${scarTot} / ${scarCont}`,
-      `${carTot} / ${carCont}`,
-      utilePot.toLocaleString("it-IT", { minimumFractionDigits: 2 }),
-      utileCont.toLocaleString("it-IT", { minimumFractionDigits: 2 })
-    ];
-  })
+      return {
+        nome: f.nome,
+        indirizzo: f.indirizzo || "-",
+        piva: f.piva_cf || "-",
+        scarichi: `${scarTot} / ${scarCont}`,
+        carichi: `${carTot} / ${carCont}`,
+        utilePot: utilePot.toLocaleString("it-IT", { minimumFractionDigits: 2 }),
+        utileCont: utileCont.toLocaleString("it-IT", { minimumFractionDigits: 2 }),
 
-  // 🔥 TABELLA PDF
+        // 🔥 SERVONO PER IL COLORE
+        scarTot,
+        scarCont,
+        carTot,
+        carCont
+      };
+    });
+const getRowColor = (scarTot, scarCont, carTot, carCont, utilePot, utileCont) => {
+  const tot = scarTot + carTot;
+
+  // 1) Nessun movimento → nero
+  if (tot === 0) {
+    return { fill: [0, 0, 0], text: [255, 255, 255] };
+  }
+
+  // 2) Utile potenziale negativo → ROSSO
+  if (utilePot < 0) {
+    if (utileCont < 0) {
+      return { fill: [255, 80, 80], text: [255, 255, 255] }; // rosso forte + testo bianco
+    } else {
+      return { fill: [255, 180, 180], text: [0, 0, 0] }; // rosso chiaro + testo nero
+    }
+  }
+
+  // 3) Utile potenziale positivo → VERDE
+  if (utilePot > 0) {
+    if (utileCont > 0) {
+      return { fill: [64, 239, 70], text: [255, 255, 255] }; // verde forte + testo bianco
+    } else {
+      return { fill: [180, 255, 180], text: [0, 0, 0] }; // verde chiaro + testo nero
+    }
+  }
+
+  // 4) Utile potenziale = 0 → neutro
+  return { fill: [0, 0, 0], text: [255, 255, 255] };
+};
+
+
+  // 🔥 TABELLA PDF CON COLORI
   autoTable(pdf, {
     startY: y,
     head: [[
@@ -1002,10 +1054,41 @@ const righe = fornitoriOrdinati
       "Utile Potenziale",
       "Utile Contabilizzato"
     ]],
-    body: righe,
+    body: righe.map(r => [
+      r.nome,
+      r.indirizzo,
+      r.piva,
+      r.scarichi,
+      r.carichi,
+      r.utilePot,
+      r.utileCont
+    ]),
     theme: "grid",
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [230, 230, 230] }
+    headStyles: { fillColor: [230, 230, 230] },
+
+didParseCell: function (data) {
+  if (data.section === "body") {
+    const row = righe[data.row.index];
+
+    const utilePot = Number(row.utilePot.replace(/\./g,"").replace(",","."));
+    const utileCont = Number(row.utileCont.replace(/\./g,"").replace(",","."));
+
+    const { fill, text } = getRowColor(
+      row.scarTot,
+      row.scarCont,
+      row.carTot,
+      row.carCont,
+      utilePot,
+      utileCont
+    );
+
+    data.cell.styles.fillColor = fill;
+    data.cell.styles.textColor = text;
+  }
+}
+
+
   });
 
   let yFinal = pdf.lastAutoTable.finalY + 10;
@@ -1042,6 +1125,7 @@ const righe = fornitoriOrdinati
 
   await salvaESharePdfCapacitor(pdf, "controparti.pdf");
 };
+
 
   return (
     <div className="gestione-scarichi-container">

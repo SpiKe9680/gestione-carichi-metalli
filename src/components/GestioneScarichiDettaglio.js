@@ -186,6 +186,7 @@ return movimenti.flatMap((cer) => {
 tipo: tipoMov,
             fornitore: scarico.fornitore,
             listino: scarico.listino,
+            movimentoFinanziarioId: scarico.movimentoFinanziarioId || null,
             dataMovimentoObj: dataObj,
             ora: dataObj
               ? dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
@@ -211,6 +212,7 @@ const prezzoAcquisto = Number(cer.prezzoAcquisto ?? 0);
 tipo: tipoMov,
         fornitore: scarico.fornitore,
         listino: scarico.listino,
+        movimentoFinanziarioId: scarico.movimentoFinanziarioId || null,
         dataMovimentoObj: dataObj,
         ora: dataObj
           ? dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
@@ -480,157 +482,585 @@ const campoModificato = campo => {
   const ricalcolaTotaleCer = cerObj => {
     cerObj.totaleCer = cerObj.righe.reduce((tot,r)=>tot+(Number(r.netto)||0),0);
   };
- const handleStampaScaricoRiga = async (riga) => {
-  if (!riga || !riga.docId) return alert("Riga non valida per la stampa");
-  // tipo: carico o scarico (qui ci interessa scarico)
-  const tipo = riga.tipo?.toLowerCase() === "carico" ? "carico" : "scarico";
-  // chiama la funzione esistente passando docId e tipo
-  await handlePrint(riga.docId, tipo);
-};
-const handlePrint = async (movimentoId = null, tipo) => {
-  try {
-    if (!tipo) return alert("Errore: tipo di movimento non specificato (carico/scarico)");
-    const collezione = tipo === "carico" ? "carichi" : "scarichi";
-    let docData;
-    // --- Recupero documento ---
-    if (movimentoId) {
-      // Stampa movimento specifico
-      const movimentoRef = doc(db, collezione, movimentoId);
-      const movimentoSnap = await getDoc(movimentoRef);
-      if (!movimentoSnap.exists()) throw new Error("Movimento non trovato");
-      docData = movimentoSnap.data();
-    } else {
-      // Stampa ultimo movimento dell'utente
-      const utente = getUtenteReact();
-      const movimentoSnap = await getDocs(collection(db, collezione));
-      // Filtra per utente e ordina per data
-      const userDocs = movimentoSnap.docs
-        .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
-        .sort((a, b) => {
-          const aTime = a.data().data?.toDate ? a.data().data.toDate().getTime() : 0;
-          const bTime = b.data().data?.toDate ? b.data().data.toDate().getTime() : 0;
-          return bTime - aTime; // dal più recente al più vecchio
-        });
-      if (!userDocs.length) return alert(`Nessun movimento ${tipo} da stampare`);
-      docData = userDocs[0].data();
-    }
-    const { pdf, startY } = await PdfHeader();
-    const dataObj = docData.data?.toDate ? docData.data.toDate() : new Date();
-    let y = startY + 30;
-    pdf.setFontSize(14);
-    pdf.text(`Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`, 10, startY - 20);
-    const label = tipo === "carico" ? "Controparte:" : "Controparte:";
-    pdf.setFontSize(12);
-    pdf.text(`${label} ${docData.fornitore || "-"}`, 10, startY -12);
-    pdf.text(`Data e Ora: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`, 10, startY -6);
-    pdf.text(`Listino: ${docData.listino || "-"}`, 10, startY );
-if (docData.note && docData.note.trim() !== "") {
-  const noteLines = pdf.splitTextToSize(docData.note, 180);
+const handleStampaScaricoRiga = async (riga) => {
+  if (!riga) return;
 
-  const noteBlockHeight = noteLines.length * 5 + 10;
-
-  // se non c'è spazio sufficiente → nuova pagina
-  if (y + noteBlockHeight > 280) {
-    pdf.addPage();
-    y = 20;
+  // 🔥 SE PAGATO → STAMPA CONTABILE
+  if (riga.movimentoFinanziarioId) {
+    await handleStampaContabileSingola(riga.movimentoFinanziarioId);
+    return;
   }
+
+  // 🔵 NON PAGATO → STAMPA MOVIMENTO
+  await handlePrint(riga.docId, riga.tipo);
+};
+
+
+const stampaContabileMovimento = async (pdf, mf) => {
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  // ---------------------------------------------------------
+  // 1) CARICO TUTTI I DOCUMENTI NECESSARI
+  // ---------------------------------------------------------
+  const scarichiSnap = await getDocs(collection(db, "scarichi"));
+  const carichiSnap = await getDocs(collection(db, "carichi"));
+  const prospettiSnap = await getDocs(collection(db, "prospettiFattura"));
+  const fattureSnap = await getDocs(collection(db, "fattureCarichi"));
+
+  const mapScarichi = {};
+  const mapCarichi = {};
+  const mapProspetti = {};
+  const mapFatture = {};
+
+  scarichiSnap.docs.forEach(d => mapScarichi[d.id] = { id: d.id, ...d.data() });
+  carichiSnap.docs.forEach(d => mapCarichi[d.id] = { id: d.id, ...d.data() });
+  prospettiSnap.docs.forEach(d => mapProspetti[d.id] = { id: d.id, ...d.data() });
+  fattureSnap.docs.forEach(d => mapFatture[d.id] = { id: d.id, ...d.data() });
+
+  // ---------------------------------------------------------
+  // 2) DATI BASE
+  // ---------------------------------------------------------
+  const movimentoId = mf.id;
+  const tipo = mf.tipo; // "PRIVATI" | "prospettiFattura" | "fattureCarichi"
+  const anagraficaId = mf.anagraficaId;
+
+  const { startY } = await PdfHeader(pdf);
+
+  // ---------------------------------------------------------
+  // 3) RECUPERO DATE PAGAMENTO / DOCUMENTO
+  // ---------------------------------------------------------
+  const movimentoRef = doc(db, "MovimentoFinanziario", movimentoId);
+  const movimentoSnap = await getDoc(movimentoRef);
+
+  let dataPagamentoTxt = "-";
+  let dataDocumentoTxt = "-";
+
+  if (movimentoSnap.exists()) {
+    const d = movimentoSnap.data();
+    const dataPagamento = d.data?.toDate ? d.data.toDate() : null;
+    const dataDocumento = d.dataDocumento?.toDate ? d.dataDocumento.toDate() : null;
+
+    if (dataPagamento) dataPagamentoTxt = dataPagamento.toLocaleDateString("it-IT");
+    if (dataDocumento) dataDocumentoTxt = dataDocumento.toLocaleDateString("it-IT");
+  }
+
+  // ---------------------------------------------------------
+  // 4) RECUPERO DOCUMENTO ORIGINE
+  // ---------------------------------------------------------
+  let docOrigine = null;
+  let controparte = "";
+
+  if (tipo === "fattureCarichi") {
+    docOrigine = mapFatture[anagraficaId];
+    controparte = docOrigine?.cliente || "FATTURA";
+  }
+
+  if (tipo === "prospettiFattura") {
+    docOrigine = mapProspetti[anagraficaId];
+    controparte = docOrigine?.cliente || "PROSPETTO";
+  }
+
+  if (tipo === "PRIVATI") {
+    controparte = "FORNITORE PRIVATO";
+  }
+
+  // ---------------------------------------------------------
+  // 5) RECUPERO INDIRIZZO / PIVA
+  // ---------------------------------------------------------
+  let indirizzo = null;
+  let piva = null;
+
+  try {
+    const snap = await getDocs(collection(db, "controparti"));
+    snap.docs.forEach(d => {
+      const c = d.data();
+      if ((c.nome || "").trim() === controparte.trim()) {
+        indirizzo = c.indirizzo || null;
+        piva = c.piva || null;
+      }
+    });
+  } catch (e) {}
+
+  // ---------------------------------------------------------
+  // 6) INTESTAZIONE PDF
+  // ---------------------------------------------------------
+  let titoloContabile = "CONTABILE DI PAGAMENTO EFFETTUATO";
+  if (tipo === "fattureCarichi") titoloContabile = "CONTABILE DI PAGAMENTO RICEVUTO";
+
+  pdf.setFontSize(16);
+  pdf.text(titoloContabile, 14, startY - 12);
 
   pdf.setFontSize(12);
-  pdf.text("Note:", 10, y);
-  y += 6;
+  let y = startY + 2;
 
-  pdf.setFontSize(10);
-  pdf.text(noteLines, 10, y);
+  pdf.text(`Controparte: ${controparte}`, 14, y); y += 6;
+  if (indirizzo) { pdf.text(`Indirizzo: ${indirizzo}`, 14, y); y += 6; }
+  if (piva) { pdf.text(`P.IVA: ${piva}`, 14, y); y += 6; }
 
-  y += noteLines.length * 5 + 10;
-}
-    
-    const righeMovimento = Array.isArray(docData[tipo === "carico" ? "carico" : "scarico"])
-      ? docData[tipo === "carico" ? "carico" : "scarico"]
-      : [];
-    for (const c of righeMovimento) {
-      const innerRighe = Array.isArray(c.righe) ? c.righe : [];
-      if (!innerRighe.length) continue; // salta CER senza righe
-      pdf.setFontSize(14);
-      let titoloCer = `CER ${c.cer}`;
-      if (c.fir) titoloCer += ` - FIR: ${c.fir}`;
-      pdf.text(titoloCer, 10, y);
-      y += 6;
-      const bodyRighe = innerRighe.map(r => [
-        r.materiale || "-",
-        r.peso != null ? Number(r.peso).toFixed(2) : "-",
-        r.calo != null ? Number(r.calo).toFixed(2) : "-",
-        r.netto != null ? Number(r.netto).toFixed(2) : "-"
-      ]);
-      autoTable(pdf, {
-        startY: y,
-        head: [["Materiale", "Peso", "Calo", "Netto"]],
-        body: bodyRighe,
-        theme: "grid",
-        margin: { left: 10 },
-        headStyles: { fillColor: [200, 200, 200] },
-        styles: { fontSize: 12 },
+  y += 4;
+
+  pdf.text(`Movimento Finanziario: ${movimentoId}`, 14, y); y += 6;
+  pdf.text(`Data Pagamento: ${dataPagamentoTxt}`, 14, y); y += 6;
+  pdf.text(`Data Documento: ${dataDocumentoTxt}`, 14, y); y += 10;
+
+  // ---------------------------------------------------------
+  // 7) COSTRUZIONE RIGHE FIR
+  // ---------------------------------------------------------
+  const righeFIR = [];
+
+  const toDate = (d) => d?.toDate ? d.toDate() : new Date(d);
+
+  // PROSPETTI
+  if (tipo === "prospettiFattura" && docOrigine?.blocchi) {
+    const movIds = docOrigine.movimentiIds || [];
+
+    const mapDateFIR = {};
+    movIds.forEach(idMov => {
+      if (mapScarichi[idMov]) mapDateFIR[idMov] = toDate(mapScarichi[idMov].data);
+      else if (mapCarichi[idMov]) mapDateFIR[idMov] = toDate(mapCarichi[idMov].data);
+    });
+
+    docOrigine.blocchi.forEach((b, index) => {
+      const idMov = movIds[index];
+      const dataFIR = mapDateFIR[idMov] || toDate(docOrigine.dataCreazione);
+
+      (b.righe || []).forEach(r => {
+        const prezzo = Number(r.prezzo ?? 0);
+        const netto = Number(r.netto || 0);
+        const tot = netto * prezzo;
+
+        righeFIR.push({
+          fir: b.fir || null,
+          dataFIR,
+          cer: b.cer || "-",
+          materiale: r.materiale || "-",
+          netto,
+          prezzo,
+          totale: tot,
+          note: b.note || "-"
+        });
       });
-      y = pdf.lastAutoTable.finalY + 6;
-      pdf.setFontSize(12);
-      pdf.text(`Totale CER: ${c.totaleCer != null ? Number(c.totaleCer).toFixed(2) : 0} kg`, 10, y);
-      y += 10;
-    }
-// --- FIX POSIZIONE FOTO ---
-// usa SEMPRE la posizione reale dell'ultima tabella
-if (pdf.lastAutoTable) {
-  y = pdf.lastAutoTable.finalY + 10;
-}
-// se sei troppo in basso → nuova pagina
-if (y > 250) {
-  pdf.addPage();
-  y = 20;
-}
-// Aggiungi foto se presente
-// Aggiungi foto scarichi se presenti (ARRAY supportato)
-const fotoArray = docData.fotoURL || [];
-if (Array.isArray(fotoArray) && fotoArray.length > 0) {
-  for (const url of fotoArray) {
-    try {
-      const response = await fetch(url, {
-  method: "GET",
-  mode: "cors",
-  cache: "no-cache",
-  credentials: "omit",
-  headers: {
-    "Accept": "image/*"
+    });
   }
-});
 
-if (!response.ok) {
-  throw new Error(`HTTP ${response.status} su immagine`);
-}
+  // FATTURE CARICHI
+  if (tipo === "fattureCarichi" && docOrigine?.blocchi) {
+    const movIds = docOrigine.movimentiIds || [];
 
-const blob = await response.blob();
+    const mapDateFIR = {};
+    movIds.forEach(idMov => {
+      if (mapScarichi[idMov]) mapDateFIR[idMov] = toDate(mapScarichi[idMov].data);
+      else if (mapCarichi[idMov]) mapDateFIR[idMov] = toDate(mapCarichi[idMov].data);
+    });
 
-const base64data = await new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onloadend = () => resolve(reader.result);
-  reader.onerror = reject;
-  reader.readAsDataURL(blob);
-});
-      // nuova pagina se serve spazio
+    docOrigine.blocchi.forEach((b, index) => {
+      const idMov = movIds[index];
+      const dataFIR = mapDateFIR[idMov] || toDate(docOrigine.dataCreazione);
+
+      (b.righe || []).forEach(r => {
+        const prezzo = Number(r.prezzo ?? 0);
+        const netto = Number(r.netto || 0);
+        const tot = netto * prezzo;
+
+        righeFIR.push({
+          fir: b.fir || null,
+          dataFIR,
+          cer: b.cer || "-",
+          materiale: r.materiale || "-",
+          netto,
+          prezzo,
+          totale: tot,
+          note: b.note || "-"
+        });
+      });
+    });
+  }
+
+  // PRIVATI
+  if (tipo === "PRIVATI") {
+    let scarico = mapScarichi[anagraficaId];
+    if (!scarico) {
+      scarico = Object.values(mapScarichi).find(
+        s => s.movimentoFinanziarioId === movimentoId
+      );
+    }
+
+    if (scarico) {
+      const dataFIR = toDate(scarico.data);
+
+      (scarico.scarico || []).forEach(b => {
+        (b.righe || []).forEach(r => {
+          const prezzo = Number(r.prezzoAcquisto ?? 0);
+          const netto = Number(r.netto || 0);
+          const tot = netto * prezzo;
+
+          righeFIR.push({
+            fir: b.fir || null,
+            dataFIR,
+            cer: b.cer || "-",
+            materiale: r.materiale || "-",
+            netto,
+            prezzo,
+            totale: tot,
+            note: b.note || "-"
+          });
+        });
+      });
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 8) RAGGRUPPO PER FIR
+  // ---------------------------------------------------------
+  const gruppiFIR = {};
+  righeFIR.forEach(r => {
+    const key = r.fir || "NO_FIR";
+    if (!gruppiFIR[key]) {
+      gruppiFIR[key] = { fir: r.fir, dataFIR: r.dataFIR, righe: [] };
+    }
+    gruppiFIR[key].righe.push(r);
+  });
+
+  let totaleGenerale = 0;
+
+  // ---------------------------------------------------------
+  // 9) STAMPA TABELLE
+  // ---------------------------------------------------------
+  for (const key of Object.keys(gruppiFIR)) {
+    const g = gruppiFIR[key];
+
+    const dataFIRtxt = g.dataFIR
+      ? g.dataFIR.toLocaleDateString("it-IT")
+      : "-";
+
+    if (g.fir && g.fir.trim() !== "") {
+      pdf.text(`FIR: ${g.fir} – Data: ${dataFIRtxt}`, 14, y);
+    } else {
+      pdf.text(`Data: ${dataFIRtxt}`, 14, y);
+    }
+    y += 4;
+
+    const totaleFIR = g.righe.reduce((sum, r) => sum + r.totale, 0);
+    totaleGenerale += totaleFIR;
+
+    const body = g.righe.map(r => [
+      r.cer,
+      r.materiale,
+      r.netto.toFixed(2),
+      r.prezzo.toFixed(2),
+      r.totale.toFixed(2),
+      r.note
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      head: [["CER", "Materiale", "Kg", "Prezzo", "Totale", "Note"]],
+      body,
+      styles: { fontSize: 9 },
+      theme: "grid"
+    });
+
+    y = pdf.lastAutoTable.finalY + 10;
+  }
+
+  if (!righeFIR.length) {
+    totaleGenerale = Number(mf.importo || 0);
+  }
+
+  pdf.setFontSize(14);
+  pdf.text(`Totale Pagato: € ${totaleGenerale.toFixed(2)}`, 14, y + 4);
+
+  const pageNumber = pdf.internal.getNumberOfPages();
+  pdf.setFontSize(10);
+  pdf.text(
+    `Pagina ${pageNumber}`,
+    pdf.internal.pageSize.width - 40,
+    pdf.internal.pageSize.height - 10
+  );
+};
+
+
+const handleStampaContabileSingola = async (movimentoId) => {
+  console.log("🟦 handleStampaContabileSingola START — movimentoId:", movimentoId);
+
+  try {
+    // 🔥 Leggo il movimento DIRETTAMENTE da Firestore
+    const movRef = doc(db, "MovimentoFinanziario", movimentoId);
+    const movSnap = await getDoc(movRef);
+
+    if (!movSnap.exists()) {
+      console.error("💥 Movimento non trovato su Firestore:", movimentoId);
+      alert("Movimento non trovato su Firestore. Riprova.");
+      return;
+    }
+
+    const mf = { id: movSnap.id, ...movSnap.data() };
+    console.log("✅ Movimento letto da Firestore:", mf);
+
+    const { PdfHeader } = await import("../utils/dateUtils");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    console.log("➡️ Creo PDF...");
+    const { pdf } = await PdfHeader();
+
+    console.log("➡️ Chiamo stampaContabileMovimento...");
+    await stampaContabileMovimento(pdf, mf);
+
+    const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
+    console.log("➡️ Salvo PDF...");
+    await salvaESharePdfCapacitor(pdf, `contabile_${today}_${movimentoId}.pdf`);
+
+    console.log("🟩 handleStampaContabileSingola COMPLETATA");
+  } catch (err) {
+    console.error("💥 ERRORE IN handleStampaContabileSingola:", err);
+    alert("Errore durante la stampa della contabile.");
+  }
+};
+
+
+const handlePrint = async (movimentoId = null, tipo) => {
+  try {
+    if (!tipo) {
+      alert("Errore: tipo movimento non specificato");
+      return;
+    }
+   const collezione = tipo === "carico" ? "carichi" : "scarichi";
+    let docData;
+
+    // ---------------- RECUPERO DOCUMENTO ----------------
+    if (movimentoId) {
+      const refDoc = doc(db, collezione, movimentoId);
+      const snap = await getDoc(refDoc);
+
+      if (!snap.exists()) {
+        alert("Movimento non trovato");
+        return;
+      }
+
+      docData = snap.data();
+    } else {
+      const utente = getUtenteReact();
+
+      if (!utente) {
+        alert("Utente non loggato");
+        return;
+      }
+
+      const snap = await getDocs(collection(db, collezione));
+      const userDocs = snap.docs
+        .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
+        .sort((a, b) => {
+          const at = a.data().data?.toDate ? a.data().data.toDate().getTime() : 0;
+          const bt = b.data().data?.toDate ? b.data().data.toDate().getTime() : 0;
+          return bt - at;
+        });
+
+      if (!userDocs.length) {
+        alert(`Nessun movimento ${tipo}`);
+        return;
+      }
+
+      docData = userDocs[0].data();
+    }
+
+    // ---------------- HEADER PDF ----------------
+    const { pdf, startY } = await PdfHeader();
+    pdf.setFontSize(16);
+    let y = startY + 26;
+
+    const dataObj = docData.data?.toDate
+      ? docData.data.toDate()
+      : new Date();
+
+    pdf.text(
+      `Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`,
+      10,
+      66
+    );
+
+    pdf.setFontSize(12);
+
+    pdf.text(
+      `${tipo === "carico" ? "Destinatario" : "Fornitore"}: ${docData.fornitore || "-"}`,
+      10,
+      76
+    );
+
+    pdf.text(
+      `Data: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`,
+      10,
+      84
+    );
+
+    pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
+
+    // ---------------- NOTE ----------------
+    if (docData.note && docData.note.trim() !== "") {
+      const noteLines = pdf.splitTextToSize(docData.note, 180);
+      const noteBlockHeight = noteLines.length * 5 + 10;
+
+      if (y + noteBlockHeight > 280) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.setFontSize(12);
+      pdf.text("Note:", 10, y);
+      y += 6;
+
+      pdf.setFontSize(10);
+      pdf.text(noteLines, 10, y);
+
+      y += noteLines.length * 5 + 10;
+    }
+
+    // ---------------- TABELLE CER ----------------
+    const righe = docData.carico || docData.scarico || [];
+
+    const isPrivatoScarico =
+      tipo === "scarico" &&
+      (
+        (docData.fornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO" ||
+        (docData.listino || "").trim().toUpperCase() === "LISTINOPRIVATI"
+      );
+
+    let totaleScaricoEuro = 0;
+
+    for (const c of righe) {
+      pdf.setFontSize(13);
+      pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
+      y += 6;
+
+      if (isPrivatoScarico) {
+        // 🔥 STAMPA PRIVATI (€/kg + totale €)
+        autoTable(pdf, {
+          startY: y,
+          head: [["Materiale", "Netto kg", "€/kg", "Totale €"]],
+          body: (c.righe || []).map(r => {
+            const netto = Number(r.netto || 0);
+            const prezzo = Number(r.prezzoAcquisto || 0);
+            const totale = netto * prezzo;
+            totaleScaricoEuro += totale;
+
+            return [
+              r.materiale,
+              netto.toFixed(2),
+              prezzo.toFixed(2),
+              totale.toFixed(2),
+            ];
+          }),
+          theme: "grid",
+          styles: { fontSize: 10 },
+          margin: { left: 10 },
+        });
+
+        y = pdf.lastAutoTable.finalY + 6;
+
+        pdf.text(`Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`, 10, y);
+        y += 10;
+
+      } else {
+        // 🔵 STAMPA NORMALE
+        autoTable(pdf, {
+          startY: y,
+          head: [["Materiale", "Peso", "Calo", "Netto"]],
+          body: (c.righe || []).map(r => [
+            r.materiale,
+            Number(r.peso || 0).toFixed(2),
+            Number(r.calo || 0).toFixed(2),
+            Number(r.netto || 0).toFixed(2),
+          ]),
+          theme: "grid",
+          styles: { fontSize: 10 },
+          margin: { left: 10 },
+        });
+
+        y = pdf.lastAutoTable.finalY + 6;
+
+        pdf.text(`Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`, 10, y);
+        y += 10;
+      }
+    }
+
+    // ---------------- TOTALE FINALE PRIVATI ----------------
+    if (isPrivatoScarico) {
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.setFontSize(14);
+      pdf.text(
+        `Totale scarico da pagare al fornitore: ${totaleScaricoEuro.toFixed(2)} €`,
+        10,
+        y
+      );
+
+      y += 14;
+    }
+
+    // ---------------- FOTO ----------------
+    const fotos = Array.isArray(docData.fotoURL)
+      ? docData.fotoURL
+      : docData.fotoURL
+      ? [docData.fotoURL]
+      : [];
+
+    if (fotos.length > 0) {
       if (y > 200) {
         pdf.addPage();
         y = 20;
       }
-      pdf.addImage(base64data, "JPEG", 10, y, 80, 80);
-      y += 90;
-    } catch (e) {
-      console.error("Errore immagine:", url, e);
-    }
-  }
-}
 
-   await salvaESharePdfCapacitor(pdf, `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "Sconosciuto"}_${docData.listino || "Sconosciuto"}.pdf`);
+      pdf.setFontSize(12);
+      pdf.text("Foto movimento:", 10, y);
+      y += 10;
+
+      let x = 10;
+      let imgY = y;
+
+      for (let i = 0; i < fotos.length; i++) {
+        try {
+          const response = await fetch(fotos[i]);
+          const blob = await response.blob();
+
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          if (imgY + 60 > 280) {
+            pdf.addPage();
+            x = 10;
+            imgY = 20;
+          }
+
+          pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
+
+          x += 65;
+
+          if (x > 160) {
+            x = 10;
+            imgY += 65;
+          }
+
+        } catch (err) {
+          console.error("Errore immagine PDF:", err);
+        }
+      }
+    }
+
+    // ---------------- SAVE ----------------
+    const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
+
+    await salvaESharePdfCapacitor(pdf, filename);
+    return;
+
   } catch (err) {
-    console.error("Errore generazione PDF:", err);
-    alert("Errore generazione PDF, vedi console");
+    console.error("Errore PDF:", err);
+    alert("Errore generazione PDF");
   }
 };
 
@@ -1277,6 +1707,9 @@ const trovaRigaIndex = (riga) =>
     x.cerIndex === riga.cerIndex &&
     x.rIndex === riga.rIndex
   );
+
+
+  
   // ---------- RENDER ----------
   return (
     <div className="gestione-scarichi-container">
@@ -1521,7 +1954,11 @@ const trovaRigaIndex = (riga) =>
 </thead>
 <tbody>
   {paginatedCarichi.map((r) => (
-    <tr key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}>
+    <tr    key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}    style={{      background: r.movimentoFinanziarioId ? "#d4edda" : "white"    }}  title={
+    r.movimentoFinanziarioId
+      ? "Movimento già consuntivato. Impossibile apportare modifiche."
+      : ""
+  } >
       <td>{r.ora}</td>
       <td>{r.fornitore}</td>
       <td>{r.fir}</td>
@@ -1532,16 +1969,67 @@ const trovaRigaIndex = (riga) =>
       <td>{r.netto}</td>
       <td>{r.prezzoKg}</td>
       <td>{((r.netto || 0) * (r.prezzoKg || 0)).toFixed(2)}</td>
-      <td>
-        <button onClick={() => selezionaRiga(r, "carico")}>✏ Modifica</button>
-        <button onClick={() => handleStampaScaricoRiga(r)}>
-    🖨 Stampa
-  </button>
+<td>
+  {r.movimentoFinanziarioId ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      
+      {/* 🔒 SOLO STAMPA */}
+      <button
+        onClick={() => handleStampaScaricoRiga(r)}
+        title={`Fare click per stampare la contabile del movimento ${r.fornitore} per € ${((r.netto || 0) * (r.prezzoKg || 0)).toLocaleString("it-IT", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}`}
+      >
+        🖨 Stampa
+      </button>
 
-  <button onClick={() => modificaScarico(r)}>
-    🔧 Apri originale
-  </button>
-      </td>
+      {/* 🟢 BADGE PAGATO */}
+      <span
+        style={{
+          background: "#28a745",
+          color: "white",
+          padding: "2px 6px",
+          borderRadius: "4px",
+          fontSize: "12px",
+          textAlign: "center",
+          fontWeight: "bold"
+        }}
+        title="Movimento già consuntivato. Impossibile apportare modifiche."
+      >
+        PAGATO ✔
+      </span>
+    </div>
+  ) : (
+    <>
+      <button onClick={() => selezionaRiga(r, "carico")}>✏ Modifica</button>
+
+  <button
+  onClick={() => {
+    if (r.movimentoFinanziarioId) {
+      // 🔥 SE PAGATO → STAMPA CONTABILE
+      handleStampaContabileSingola(r.movimentoFinanziarioId);
+    } else {
+      // 🔵 NON PAGATO → STAMPA MOVIMENTO
+      handleStampaScaricoRiga(r);
+    }
+  }}
+  title={
+    r.movimentoFinanziarioId
+      ? "Movimento già consuntivato: verrà stampata la CONTABILE"
+      : "Stampa il movimento"
+  }
+>
+  🖨 Stampa
+</button>
+
+
+      <button onClick={() => modificaScarico(r)}>🔧 Apri originale</button>
+    </>
+  )}
+</td>
+
+
     </tr>
   ))}
 </tbody>
@@ -1593,7 +2081,11 @@ const trovaRigaIndex = (riga) =>
 </thead>
 <tbody>
   {paginatedScarichi.map((r) => (
-    <tr key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}>
+   <tr    key={`${r.docId}-${r.cerIndex}-${r.rIndex}`}    style={{      background: r.movimentoFinanziarioId ? "#d4edda" : "white"    }}  title={
+    r.movimentoFinanziarioId
+      ? "Movimento già consuntivato. Impossibile apportare modifiche."
+      : ""
+  } >
       <td>{r.ora}</td>
       <td>{r.fornitore}</td>
       <td>{r.fir}</td>
@@ -1604,16 +2096,57 @@ const trovaRigaIndex = (riga) =>
       <td>{r.netto}</td>
       <td>{r.prezzoKg}</td>
       <td>{((r.netto || 0) * (r.prezzoKg || 0)).toFixed(2)}</td>
-      <td>
-        <button onClick={() => selezionaRiga(r, "scarico")}>✏ Modifica</button>
-        <button onClick={() => handleStampaScaricoRiga(r)}>
-    🖨 Stampa
-  </button>
+<td>
+  {r.movimentoFinanziarioId ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      
+      {/* 🔒 SOLO STAMPA */}
+      <button
+        onClick={() => handleStampaScaricoRiga(r)}
+        title={`Fare click per stampare la contabile del movimento ${r.fornitore} per € ${((r.netto || 0) * (r.prezzoKg || 0)).toLocaleString("it-IT", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}`}
+      >
+        🖨 Stampa
+      </button>
 
-  <button onClick={() => modificaScarico(r)}>
-    🔧 Apri originale
-  </button>
-      </td>
+      {/* 🟢 BADGE PAGATO */}
+      <span
+        style={{
+          background: "#28a745",
+          color: "white",
+          padding: "2px 6px",
+          borderRadius: "4px",
+          fontSize: "12px",
+          textAlign: "center",
+          fontWeight: "bold"
+        }}
+        title="Movimento già consuntivato. Impossibile apportare modifiche."
+      >
+        PAGATO ✔
+      </span>
+    </div>
+  ) : (
+    <>
+      <button onClick={() => selezionaRiga(r, "scarico")}>✏ Modifica</button>
+
+      <button
+        onClick={() => handleStampaScaricoRiga(r)}
+        title={`Fare click per stampare la contabile del movimento ${r.fornitore} per € ${((r.netto || 0) * (r.prezzoKg || 0)).toLocaleString("it-IT", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}`}
+      >
+        🖨 Stampa
+      </button>
+
+      <button onClick={() => modificaScarico(r)}>🔧 Apri originale</button>
+    </>
+  )}
+</td>
+
+
     </tr>
   ))}
 </tbody>

@@ -58,6 +58,8 @@ const formatDate = (d) => {
   }, []);
   useEffect(() => {
   const unsubFin = onSnapshot(collection(db, "MovimentoFinanziario"), (snap) => {
+    console.log("🟦 SNAP MovimentoFinanziario — numero documenti:", snap.docs.length);
+    console.log("🟦 Documenti:", snap.docs.map(d => ({ id: d.id, ...d.data() })));
     setMovFin(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   });
 
@@ -513,41 +515,85 @@ pdf.setTextColor(0, 0, 0); // reset colore
 
 
 const handleConsuntiva = async (row) => {
+  console.log("🟦 handleConsuntiva() START");
+  console.log("➡️ row:", row);
+
   const ok = window.confirm(`Confermare consuntivazione per ${row.controparte}?`);
+  console.log("➡️ Conferma utente:", ok);
   if (!ok) return;
+
   await runSafe(async () => {
-    const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
-      anagraficaId: row.anagraficaId || row.id,
-      data: selectedDate,
-      dataDocumento: row.dataMov,
-      importo: row.importo,
-      tipo: row.tipo
-    });
-    const movimentoId = movRef.id;
+    try {
+      console.log("🟦 runSafe() → dentro FN");
 
-    await linkMovimentiAFinanziario(
-      row.tipo,
-      row.anagraficaId || row.id,
-      movimentoId
-    );
+      console.log("➡️ Creo MovimentoFinanziario...");
+      const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
+        anagraficaId: row.anagraficaId || row.id,
+        data: selectedDate,
+        dataDocumento: row.dataMov,
+        importo: row.importo,
+        tipo: row.tipo
+      });
 
-    if (row.tipo === "fattureCarichi") {
-      await updateDoc(doc(db, "fattureCarichi", row.id), {
-        movimentoFinanziarioId: movimentoId
-      });
-    }
-    if (row.tipo === "prospettiFattura") {
-      await updateDoc(doc(db, "prospettiFattura", row.id), {
-        movimentoFinanziarioId: movimentoId
-      });
-    }
-    if (row.tipo === "PRIVATI") {
-      await updateDoc(doc(db, "scarichi", row.id), {
-        movimentoFinanziarioId: movimentoId
-      });
+      const movimentoId = movRef.id;
+      console.log("✅ MovimentoFinanziario creato:", movimentoId);
+
+      console.log("➡️ linkMovimentiAFinanziario...");
+      await linkMovimentiAFinanziario(
+        row.tipo,
+        row.anagraficaId || row.id,
+        movimentoId
+      );
+      console.log("✅ linkMovimentiAFinanziario OK");
+
+      if (row.tipo === "fattureCarichi") {
+        console.log("➡️ Aggiorno fattureCarichi...");
+        await updateDoc(doc(db, "fattureCarichi", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+        console.log("✅ fattureCarichi aggiornato");
+      }
+
+      if (row.tipo === "prospettiFattura") {
+        console.log("➡️ Aggiorno prospettiFattura...");
+        await updateDoc(doc(db, "prospettiFattura", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+        console.log("✅ prospettiFattura aggiornato");
+      }
+
+      if (row.tipo === "PRIVATI") {
+        console.log("➡️ Aggiorno scarichi PRIVATI...");
+        await updateDoc(doc(db, "scarichi", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+        console.log("✅ scarichi PRIVATI aggiornato");
+      }
+
+      console.log("🟦 TUTTO OK FINO A QUI");
+
+      // 🔥 QUI DOVREBBE PARTIRE IL POPUP
+      console.log("➡️ Popup stampa contabile...");
+      const stampa = window.confirm("Vuoi stampare la contabile di questo movimento?");
+      console.log("➡️ Risposta popup stampa:", stampa);
+
+      if (stampa) {
+        console.log("➡️ handleStampaContabileSingola()...");
+        await handleStampaContabileSingola(movimentoId);
+        console.log("✅ Stampa singola completata");
+      }
+
+      console.log("🟩 handleConsuntiva() FINITA SENZA ERRORI");
+
+    } catch (err) {
+      console.error("💥 ERRORE INTERNO IN handleConsuntiva:", err);
+      throw err; // importantissimo per far uscire l’errore da runSafe
     }
   });
 };
+
+
+
 const handleDeleteFin = async (row) => {
   const ok = window.confirm(
     `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${row.importo}`
@@ -787,6 +833,367 @@ const speseAltri_Da = altriDa
 const introitiAttDaCons = introitiCS_Da + introitiAltri_Da;
 const speseAttDaCons = speseCS_Da + speseAltri_Da;
 const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
+
+
+
+const handleStampaContabiliGiorno = async () => {
+  try {
+    const { PdfHeader } = await import("../utils/dateUtils");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    const movGiorno = movFin.filter(
+      m =>
+        isSameDay(m.data, selectedDate) &&
+        ["prospettiFattura", "fattureCarichi", "PRIVATI"].includes(m.tipo)
+    );
+
+    if (!movGiorno.length) {
+      alert("Nessuna contabile da stampare per questo giorno.");
+      return;
+    }
+
+    const { pdf } = await PdfHeader();
+    let primaPagina = true;
+
+    for (const mf of movGiorno) {
+      if (!primaPagina) pdf.addPage();
+      primaPagina = false;
+
+      await stampaContabileMovimento(pdf, mf);
+    }
+
+    const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
+    await salvaESharePdfCapacitor(pdf, `contabili_giorno_${today}.pdf`);
+
+  } catch (err) {
+    console.error(err);
+    alert("Errore durante la stampa delle contabili del giorno.");
+  }
+};
+
+
+const handleStampaContabileSingola = async (movimentoId) => {
+  console.log("🟦 handleStampaContabileSingola START — movimentoId:", movimentoId);
+
+  try {
+    // 🔥 Leggo il movimento DIRETTAMENTE da Firestore
+    const movRef = doc(db, "MovimentoFinanziario", movimentoId);
+    const movSnap = await getDoc(movRef);
+
+    if (!movSnap.exists()) {
+      console.error("💥 Movimento non trovato su Firestore:", movimentoId);
+      alert("Movimento non trovato su Firestore. Riprova.");
+      return;
+    }
+
+    const mf = { id: movSnap.id, ...movSnap.data() };
+    console.log("✅ Movimento letto da Firestore:", mf);
+
+    const { PdfHeader } = await import("../utils/dateUtils");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    console.log("➡️ Creo PDF...");
+    const { pdf } = await PdfHeader();
+
+    console.log("➡️ Chiamo stampaContabileMovimento...");
+    await stampaContabileMovimento(pdf, mf);
+
+    const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
+    console.log("➡️ Salvo PDF...");
+    await salvaESharePdfCapacitor(pdf, `contabile_${today}_${movimentoId}.pdf`);
+
+    console.log("🟩 handleStampaContabileSingola COMPLETATA");
+  } catch (err) {
+    console.error("💥 ERRORE IN handleStampaContabileSingola:", err);
+    alert("Errore durante la stampa della contabile.");
+  }
+};
+
+
+
+
+
+const stampaContabileMovimento = async (pdf, mf) => {
+  const { PdfHeader } = await import("../utils/dateUtils");
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  // 🔥 CARICO I CARICHI QUI (così mapCarichi ESISTE)
+  const carichiSnap = await getDocs(collection(db, "carichi"));
+  const mapCarichi = {};
+  carichiSnap.docs.forEach(d => {
+    mapCarichi[d.id] = { id: d.id, ...d.data() };
+  });
+
+  const movimentoId = mf.id;
+  const tipo = mf.tipo;
+  const anagraficaId = mf.anagraficaId;
+
+  const { startY } = await PdfHeader(pdf);
+
+  // Recupero MovimentoFinanziario
+  const movimentoRef = doc(db, "MovimentoFinanziario", movimentoId);
+  const movimentoSnap = await getDoc(movimentoRef);
+
+  let dataPagamentoTxt = "-";
+  let dataDocumentoTxt = "-";
+
+  if (movimentoSnap.exists()) {
+    const d = movimentoSnap.data();
+    const dataPagamento = d.data?.toDate ? d.data.toDate() : null;
+    const dataDocumento = d.dataDocumento?.toDate ? d.dataDocumento.toDate() : null;
+
+    if (dataPagamento) dataPagamentoTxt = dataPagamento.toLocaleDateString("it-IT");
+    if (dataDocumento) dataDocumentoTxt = dataDocumento.toLocaleDateString("it-IT");
+  }
+
+  // Recupero documento origine
+  let docOrigine = null;
+  let controparte = "";
+
+  if (tipo === "fattureCarichi") {
+    docOrigine = mapFatture[anagraficaId];
+    controparte = docOrigine?.cliente || "FATTURA";
+  }
+
+  if (tipo === "prospettiFattura") {
+    docOrigine = mapProspetti[anagraficaId];
+    controparte = docOrigine?.cliente || "PROSPETTO";
+  }
+
+  if (tipo === "PRIVATI") {
+    controparte = "FORNITORE PRIVATO";
+  }
+
+  // Recupero indirizzo / piva
+  let indirizzo = null;
+  let piva = null;
+
+  try {
+    const snap = await getDocs(collection(db, "controparti"));
+    snap.docs.forEach(d => {
+      const c = d.data();
+      if ((c.nome || "").trim() === controparte.trim()) {
+        indirizzo = c.indirizzo || null;
+        piva = c.piva || null;
+      }
+    });
+  } catch (e) {}
+
+  // Titolo dinamico
+  let titoloContabile = "CONTABILE DI PAGAMENTO EFFETTUATO";
+  if (tipo === "fattureCarichi") titoloContabile = "CONTABILE DI PAGAMENTO RICEVUTO";
+
+  pdf.setFontSize(16);
+  pdf.text(titoloContabile, 14, startY - 12);
+
+  pdf.setFontSize(12);
+  let y = startY + 2;
+
+  pdf.text(`Controparte: ${controparte}`, 14, y);
+  y += 6;
+
+  if (indirizzo && indirizzo.trim() !== "" && indirizzo !== "-") {
+    pdf.text(`Indirizzo: ${indirizzo}`, 14, y);
+    y += 6;
+  }
+
+  if (piva && piva.trim() !== "" && piva !== "-") {
+    pdf.text(`P.IVA: ${piva}`, 14, y);
+    y += 6;
+  }
+
+  y += 4;
+
+  pdf.text(`Movimento Finanziario: ${movimentoId}`, 14, y);
+  y += 6;
+
+  pdf.text(`Data Pagamento: ${dataPagamentoTxt}`, 14, y);
+  y += 6;
+
+  pdf.text(`Data Documento: ${dataDocumentoTxt}`, 14, y);
+  y += 10;
+
+  // ---------------------------------------------------------
+  // COSTRUZIONE RIGHE FIR
+  // ---------------------------------------------------------
+  const righeFIR = [];
+
+  // PROSPETTI
+  if (tipo === "prospettiFattura" && docOrigine?.blocchi) {
+    const movIds = docOrigine.movimentiIds || [];
+
+    const mapDateFIR = {};
+    movIds.forEach(idMov => {
+      if (mapScarichi[idMov]) mapDateFIR[idMov] = toDate(mapScarichi[idMov].data);
+      else if (mapCarichi[idMov]) mapDateFIR[idMov] = toDate(mapCarichi[idMov].data);
+    });
+
+    docOrigine.blocchi.forEach((b, index) => {
+      const idMov = movIds[index];
+      const dataFIR = mapDateFIR[idMov] || toDate(docOrigine.dataCreazione);
+
+      (b.righe || []).forEach(r => {
+        const prezzo = Number(r.prezzo ?? 0);
+        const netto = Number(r.netto || 0);
+        const tot = netto * prezzo;
+
+        righeFIR.push({
+          fir: b.fir || null,
+          dataFIR,
+          cer: b.cer || "-",
+          materiale: r.materiale || "-",
+          netto,
+          prezzo,
+          totale: tot,
+          note: b.note || "-"
+        });
+      });
+    });
+  }
+
+  // FATTURE CARICHI
+  if (tipo === "fattureCarichi" && docOrigine?.blocchi) {
+    const movIds = docOrigine.movimentiIds || [];
+
+    const mapDateFIR = {};
+    movIds.forEach(idMov => {
+      if (mapScarichi[idMov]) mapDateFIR[idMov] = toDate(mapScarichi[idMov].data);
+      else if (mapCarichi[idMov]) mapDateFIR[idMov] = toDate(mapCarichi[idMov].data);
+    });
+
+    docOrigine.blocchi.forEach((b, index) => {
+      const idMov = movIds[index];
+      const dataFIR = mapDateFIR[idMov] || toDate(docOrigine.dataCreazione);
+
+      (b.righe || []).forEach(r => {
+        const prezzo = Number(r.prezzo ?? 0);
+        const netto = Number(r.netto || 0);
+        const tot = netto * prezzo;
+
+        righeFIR.push({
+          fir: b.fir || null,
+          dataFIR,
+          cer: b.cer || "-",
+          materiale: r.materiale || "-",
+          netto,
+          prezzo,
+          totale: tot,
+          note: b.note || "-"
+        });
+      });
+    });
+  }
+
+  // PRIVATI
+  if (tipo === "PRIVATI") {
+    let scarico = mapScarichi[anagraficaId];
+    if (!scarico) {
+      scarico = Object.values(mapScarichi).find(
+        s => s.movimentoFinanziarioId === movimentoId
+      );
+    }
+
+    if (scarico) {
+      const dataFIR = toDate(scarico.data);
+
+      (scarico.scarico || []).forEach(b => {
+        (b.righe || []).forEach(r => {
+          const prezzo = Number(r.prezzoAcquisto ?? 0);
+          const netto = Number(r.netto || 0);
+          const tot = netto * prezzo;
+
+          righeFIR.push({
+            fir: b.fir || null,
+            dataFIR,
+            cer: b.cer || "-",
+            materiale: r.materiale || "-",
+            netto,
+            prezzo,
+            totale: tot,
+            note: b.note || "-"
+          });
+        });
+      });
+    }
+  }
+
+  // ---------------------------------------------------------
+  // RAGGRUPPO PER FIR
+  // ---------------------------------------------------------
+  const gruppiFIR = {};
+  righeFIR.forEach(r => {
+    const key = r.fir || "NO_FIR";
+    if (!gruppiFIR[key]) {
+      gruppiFIR[key] = { fir: r.fir, dataFIR: r.dataFIR, righe: [] };
+    }
+    gruppiFIR[key].righe.push(r);
+  });
+
+  let totaleGenerale = 0;
+
+  // ---------------------------------------------------------
+  // STAMPA TABELLE
+  // ---------------------------------------------------------
+  for (const key of Object.keys(gruppiFIR)) {
+    const g = gruppiFIR[key];
+
+    const dataFIRtxt = g.dataFIR
+      ? g.dataFIR.toLocaleDateString("it-IT")
+      : "-";
+
+    if (g.fir && g.fir.trim() !== "") {
+      pdf.text(`FIR: ${g.fir} – Data: ${dataFIRtxt}`, 14, y);
+    } else {
+      pdf.text(`Data: ${dataFIRtxt}`, 14, y);
+    }
+    y += 4;
+
+    const totaleFIR = g.righe.reduce((sum, r) => sum + r.totale, 0);
+    totaleGenerale += totaleFIR;
+
+    const body = g.righe.map(r => [
+      r.cer,
+      r.materiale,
+      r.netto.toFixed(2),
+      r.prezzo.toFixed(2),
+      r.totale.toFixed(2),
+      r.note
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      head: [["CER", "Materiale", "Kg", "Prezzo", "Totale", "Note"]],
+      body,
+      styles: { fontSize: 9 },
+      theme: "grid"
+    });
+
+    y = pdf.lastAutoTable.finalY + 10;
+  }
+
+  if (!righeFIR.length) {
+    totaleGenerale = Number(mf.importo || 0);
+  }
+
+  pdf.setFontSize(14);
+  pdf.text(`Totale Pagato: € ${totaleGenerale.toFixed(2)}`, 14, y + 4);
+
+  const pageNumber = pdf.internal.getNumberOfPages();
+  pdf.setFontSize(10);
+  pdf.text(
+    `Pagina ${pageNumber}`,
+    pdf.internal.pageSize.width - 40,
+    pdf.internal.pageSize.height - 10
+  );
+};
+
+
+
+
+
+
+
+
  return (
     <div style={{ padding: 20 }}>
     {globalLoading && (
@@ -811,7 +1218,10 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <button onClick={goDashboard}>🏠 Dashboard</button>
-<button onClick={handlePrintPDF}>  🖨️ Stampa PDF</button>
+ <div style={{ display: "flex", gap: 10 }}>
+    <button onClick={handlePrintPDF}>🖨️ Stampa PDF</button>
+    <button onClick={handleStampaContabiliGiorno}>🧾 Stampa Contabili del giorno</button>
+  </div>
  <button  onClick={() =>  navigate("/MovimentiFinanziari", {  state: { date: selectedDate.toISOString() }})  }>  🔙 Calendario</button>        <button onClick={handleLogout}>          🚪 Logout ({currentUser.username || currentUser.email})        </button>
       </div>      <h2>Movimento Giorno</h2>
 <div id="area-stampa">
@@ -828,7 +1238,7 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
           <h4>🟢 Consuntivati</h4>
  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th> <th>Tipo</th>   </tr>  </thead>
+  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th> <th>Tipo</th>   <th>stampa</th>  </tr>  </thead>
   <tbody>
     {rows.map((r, i) => {      const isEntrata =        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
       return (
@@ -851,6 +1261,30 @@ const guadagnoAttDaCons = introitiAttDaCons - speseAttDaCons;
     maximumFractionDigits: 2
   })} €
 </td><td>{r.tipo}</td>
+<td>
+  <button
+    style={{
+      padding: "4px 8px",
+      background: "#2980b9",
+      color: "white",
+      border: "none",
+      borderRadius: "4px",
+      cursor: "pointer"
+    }}
+    title={`Fare click per stampare la contabile del movimento di ${r.controparte} per € ${r.importo.toLocaleString("it-IT", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`}
+    onClick={(e) => {
+      e.stopPropagation(); // evita lo storno
+      handleStampaContabileSingola(r.id);
+    }}
+  >
+    🧾
+  </button>
+</td>
+
+
         </tr>
       );
     })}  </tbody></table>

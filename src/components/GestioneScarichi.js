@@ -317,6 +317,30 @@ await cleanupDuplicatiMovimenti(movimentiIds);
         }))
       }))
     );
+// 🔥 CONTROLLO PREZZI = 0 PRIMA DEL SALVATAGGIO
+let materialiSenzaPrezzo = [];
+
+blocchi.forEach(b => {
+  (b.righe || []).forEach(r => {
+    if (!r.prezzo || Number(r.prezzo) === 0) {
+      materialiSenzaPrezzo.push(r.materiale || "Materiale sconosciuto");
+    }
+  });
+});
+
+if (materialiSenzaPrezzo.length > 0) {
+  const msg =
+    "⚠️ ATTENZIONE!\n\n" +
+    "I seguenti materiali NON hanno un prezzo associato nel listino:\n\n" +
+    materialiSenzaPrezzo.join("\n") +
+    "\n\nContinuare comunque?";
+
+  const ok = window.confirm(msg);
+  if (!ok) {
+   // alert("❌ Operazione annullata: aggiungi i prezzi nel listino.");
+    return;
+  }
+}
 
     if (!blocchi.length) {
       console.error("❌ BLOCCHI VUOTI:", movs);
@@ -360,6 +384,31 @@ const salvaProspettoUnificato = async (modalData, tipo) => {
   const scarichiIds = modalData.movimentiIds || [];
   if (!scarichiIds.length) {    throw new Error("Nessun movimento selezionato");  }
   await validaEPreparaProspetto(scarichiIds);
+  // 🔥 CONTROLLO PREZZI = 0 PRIMA DEL SALVATAGGIO UNIFICATO
+let materialiSenzaPrezzo = [];
+
+(modalData.blocchi || []).forEach(b => {
+  (b.righe || []).forEach(r => {
+    const prezzo = Number(r.prezzo || 0);
+    if (!prezzo || prezzo === 0) {
+      materialiSenzaPrezzo.push(r.materiale || "Materiale sconosciuto");
+    }
+  });
+});
+
+if (materialiSenzaPrezzo.length > 0) {
+  const msg =
+    "⚠️ ATTENZIONE!\n\n" +
+    "I seguenti materiali NON hanno un prezzo associato nel listino:\n\n" +
+    materialiSenzaPrezzo.join("\n") +
+    "\n\nContinuare comunque?";
+
+  const ok = window.confirm(msg);
+  if (!ok) {
+    throw new Error("Operazione annullata dall’utente: materiali senza prezzo.");
+  }
+}
+
  let totale = 0;
 (modalData.blocchi || []).forEach(b => {
   (b.righe || []).forEach(r => {   const kg = money(r.netto);    const prezzo = money(r.prezzo);    totale += round2(kg * prezzo);  });
@@ -1087,6 +1136,7 @@ const getMovimentiValidi = () => {
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
 
+
 const handleStampaContabilePagamento = async () => {
   try {
     const config = await getConfigAzienda();
@@ -1103,127 +1153,207 @@ const handleStampaContabilePagamento = async () => {
       return;
     }
 
-    // 🔥 Tutti i movimenti contabilizzati hanno la stessa controparte
-    const controparte = contabilizzati[0].fornitore || "Sconosciuto";
-
-    // 🔥 Recupera i dati della controparte da Firestore
-    let datiControparte = {};
-    try {
-      const snap = await getDocs(collection(db, "controparti"));
-      snap.docs.forEach(d => {
-        const c = d.data();
-        if ((c.nome || "").trim() === controparte.trim()) {
-          datiControparte = c;
-        }
-      });
-    } catch (e) {
-      console.warn("⚠️ Impossibile leggere dati controparte:", e);
-    }
-
-    const indirizzo = datiControparte.indirizzo || "-";
-    const piva = datiControparte.piva || "-";
-
-    // 🔥 Raggruppa per FIR + DATA FIR
-    const gruppi = {};
-
+    // 🔥 Raggruppa per movimentoFinanziarioId (UNA CONTABILE PER OGNI FATTURA)
+    const gruppiFatture = {};
     contabilizzati.forEach(m => {
-      const dataFIR =
-        m.dataDocumento ||
-        m.dataScarico ||
-        m.dataCreazione ||
-        m.data ||
-        null;
-
-      (m.cer || []).forEach(c => {
-        const fir = c.fir || "SENZA FIR";
-
-        if (!gruppi[fir]) {
-          gruppi[fir] = {
-            dataFIR: dataFIR ? new Date(dataFIR) : null,
-            righe: []
-          };
-        }
-
-        (c.righe || []).forEach(r => {
-          const prezzo = Number(
-            r.prezzo ??
-            r.prezzoAcquisto ??
-            r.prezzoVendita ??
-            0
-          );
-
-          const tot = Number(r.netto || 0) * prezzo;
-
-          gruppi[fir].righe.push({
-            cer: c.cer || c.codiceCER || "-",
-            materiale: r.materiale || "-",
-            netto: Number(r.netto || 0),
-            prezzo,
-            totale: tot,
-            note: c.note || "-"
-          });
-        });
-      });
+      const id = m.movimentoFinanziarioId;
+      if (!gruppiFatture[id]) gruppiFatture[id] = [];
+      gruppiFatture[id].push(m);
     });
 
     // 🔥 Crea PDF
-    const { pdf, startY } = await PdfHeader();
+    const { pdf } = await PdfHeader();
+    let primaPagina = true;
 
-    pdf.setFontSize(16);
-    pdf.text("CONTABILE DI PAGAMENTO", 14, startY - 12);
+    // 🔥 Per ogni fattura → UNA CONTABILE
+    for (const movimentoId of Object.keys(gruppiFatture)) {
+      const movs = gruppiFatture[movimentoId];
 
-    pdf.setFontSize(12);
-    pdf.text(`Controparte: ${controparte}`, 14, startY + 2);
-    pdf.text(`Indirizzo: ${indirizzo}`, 14, startY + 8);
-    pdf.text(`P.IVA: ${piva}`, 14, startY + 14);
+      if (!primaPagina) pdf.addPage();
+      primaPagina = false;
 
-    let y = startY + 26;
-    let totaleGenerale = 0;
+      const { startY } = await PdfHeader(pdf);
 
-    // 🔥 Stampa FIR + DATA FIR + tabella
-    for (const fir of Object.keys(gruppi)) {
-      const gruppo = gruppi[fir];
+      const controparte = movs[0].fornitore || "Sconosciuto";
 
-      const dataFIRtxt = gruppo.dataFIR
-        ? gruppo.dataFIR.toLocaleDateString("it-IT")
-        : "-";
+      // 🔥 Recupera dati controparte
+      let datiControparte = {};
+      try {
+        const snap = await getDocs(collection(db, "controparti"));
+        snap.docs.forEach(d => {
+          const c = d.data();
+          if ((c.nome || "").trim() === controparte.trim()) {
+            datiControparte = c;
+          }
+        });
+      } catch (e) {}
 
-      pdf.setFontSize(13);
-      pdf.text(`FIR: ${fir}   –   Data: ${dataFIRtxt}`, 14, y);
+      const indirizzo = datiControparte.indirizzo || null;
+      const piva = datiControparte.piva || null;
+
+      // 🔥 Recupera il documento MovimentoFinanziario (COLLECTION CORRETTA)
+      const movimentoRef = doc(db, "MovimentoFinanziario", movimentoId);
+      const movimentoSnap = await getDoc(movimentoRef);
+
+      let dataPagamentoTxt = "-";
+      let dataDocumentoTxt = "-";
+
+      if (movimentoSnap.exists()) {
+        const mf = movimentoSnap.data();
+
+        const dataPagamento = mf.data?.toDate ? mf.data.toDate() : null;
+        const dataDocumento = mf.dataDocumento?.toDate ? mf.dataDocumento.toDate() : null;
+
+        if (dataPagamento) {
+          dataPagamentoTxt = dataPagamento.toLocaleDateString("it-IT");
+        }
+
+        if (dataDocumento) {
+          dataDocumentoTxt = dataDocumento.toLocaleDateString("it-IT");
+        }
+      }
+
+      // 🔥 Intestazione contabile
+      pdf.setFontSize(16);
+      pdf.text("CONTABILE DI PAGAMENTO", 14, startY - 12);
+
+      pdf.setFontSize(12);
+
+      let y = startY + 2;
+
+      pdf.text(`Controparte: ${controparte}`, 14, y);
+      y += 6;
+
+      // Mostra indirizzo solo se valido
+      if (indirizzo && indirizzo !== "-" && indirizzo.trim() !== "") {
+        pdf.text(`Indirizzo: ${indirizzo}`, 14, y);
+        y += 6;
+      }
+
+      // Mostra P.IVA solo se valida
+      if (piva && piva !== "-" && piva.trim() !== "") {
+        pdf.text(`P.IVA: ${piva}`, 14, y);
+        y += 6;
+      }
+
       y += 4;
 
-      const body = gruppo.righe.map(r => {
-        totaleGenerale += r.totale;
-        return [
-          r.cer,
-          r.materiale,
-          r.netto.toFixed(2),
-          r.prezzo.toFixed(2),
-          r.totale.toFixed(2),
-          r.note
-        ];
+      pdf.text(`Movimento Finanziario: ${movimentoId}`, 14, y);
+      y += 6;
+
+      pdf.text(`Data Pagamento: ${dataPagamentoTxt}`, 14, y);
+      y += 6;
+
+      pdf.text(`Data Documento: ${dataDocumentoTxt}`, 14, y);
+      y += 10;
+
+      let totaleGenerale = 0;
+
+      // 🔥 Raggruppa FIR per questa fattura
+      const gruppiFIR = {};
+
+      movs.forEach(m => {
+        const dataFIR =
+          m.dataDocumento ||
+          m.dataScarico ||
+          m.dataCreazione ||
+          m.data ||
+          null;
+
+        (m.cer || []).forEach(c => {
+          const fir = c.fir || null;
+
+          if (!gruppiFIR[fir || "NO_FIR"]) {
+            gruppiFIR[fir || "NO_FIR"] = {
+              fir: fir,
+              dataFIR: dataFIR ? new Date(dataFIR) : null,
+              righe: []
+            };
+          }
+
+          (c.righe || []).forEach(r => {
+            const prezzo = Number(
+              r.prezzo ??
+              r.prezzoAcquisto ??
+              r.prezzoVendita ??
+              0
+            );
+
+            const tot = Number(r.netto || 0) * prezzo;
+
+            gruppiFIR[fir || "NO_FIR"].righe.push({
+              cer: c.cer || c.codiceCER || "-",
+              materiale: r.materiale || "-",
+              netto: Number(r.netto || 0),
+              prezzo,
+              totale: tot,
+              note: c.note || "-"
+            });
+          });
+        });
       });
 
-      autoTable(pdf, {
-        startY: y,
-        head: [["CER", "Materiale", "Kg", "Prezzo", "Totale", "Note"]],
-        body,
-        styles: { fontSize: 9 },
-        theme: "grid"
-      });
+      // 🔥 Stampa FIR
+      for (const key of Object.keys(gruppiFIR)) {
+        const gruppo = gruppiFIR[key];
 
-      y = pdf.lastAutoTable.finalY + 10;
+        const dataFIRtxt = gruppo.dataFIR
+          ? gruppo.dataFIR.toLocaleDateString("it-IT")
+          : "-";
+
+        // FIR solo se esiste
+        if (gruppo.fir && gruppo.fir !== "-" && gruppo.fir.trim() !== "") {
+          pdf.setFontSize(13);
+          pdf.text(`FIR: ${gruppo.fir}   –   Data: ${dataFIRtxt}`, 14, y);
+        } else {
+          pdf.setFontSize(13);
+          pdf.text(`Data: ${dataFIRtxt}`, 14, y);
+        }
+
+        y += 4;
+
+        const body = gruppo.righe.map(r => {
+          totaleGenerale += r.totale;
+          return [
+            r.cer,
+            r.materiale,
+            r.netto.toFixed(2),
+            r.prezzo.toFixed(2),
+            r.totale.toFixed(2),
+            r.note
+          ];
+        });
+
+        autoTable(pdf, {
+          startY: y,
+          head: [["CER", "Materiale", "Kg", "Prezzo", "Totale", "Note"]],
+          body,
+          styles: { fontSize: 9 },
+          theme: "grid"
+        });
+
+        y = pdf.lastAutoTable.finalY + 10;
+      }
+
+      // 🔥 Totale finale della fattura
+      pdf.setFontSize(14);
+      pdf.text(`Totale Pagato: € ${totaleGenerale.toFixed(2)}`, 14, y + 4);
+
+      // 🔥 Numerazione pagina
+      const pageNumber = pdf.internal.getNumberOfPages();
+      pdf.setFontSize(10);
+      pdf.text(
+        `Pagina ${pageNumber}`,
+        pdf.internal.pageSize.width - 40,
+        pdf.internal.pageSize.height - 10
+      );
     }
-
-    // 🔥 Totale finale
-    pdf.setFontSize(14);
-    pdf.text(`Totale Pagato: € ${totaleGenerale.toFixed(2)}`, 14, y + 4);
 
     const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
 
     await salvaESharePdfCapacitor(
       pdf,
-      `contabile_pagamento_${controparte.replace(/[^a-zA-Z0-9]/g, "_")}_${today}.pdf`
+      `contabili_pagamento_${today}.pdf`
     );
 
   } catch (err) {
@@ -1231,7 +1361,6 @@ const handleStampaContabilePagamento = async () => {
     alert("Errore durante la stampa della contabile.");
   }
 };
-
 
 
 
