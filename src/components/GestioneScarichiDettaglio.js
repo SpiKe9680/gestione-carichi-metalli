@@ -147,43 +147,50 @@ useEffect(() => {
     setRighe([]);
     return;
   }
-  const righePronte = scarichiDelGiorno.flatMap(scarico => {
-const movimenti = [
-  ...(scarico.scarico || []).map((c, i) => ({
-    ...c,
-    tipoMov: "scarico",
-    cerIndex: i,
-    sourceCollection: "scarichi"
-  })),
-  ...(scarico.carico || []).map((c, i) => ({
-    ...c,
-    tipoMov: "carico",
-    cerIndex: i,
-    sourceCollection: "carichi"
-  }))
-];
 
-return movimenti.flatMap((cer) => {
-  const tipoMov = cer.tipoMov;
-  const cerIndex = cer.cerIndex;
+  const righePronte = scarichiDelGiorno.flatMap(scarico => {
+    const movimenti = [
+      ...(scarico.scarico || []).map((c, i) => ({
+        ...c,
+        tipoMov: "scarico",
+        cerIndex: i,
+        sourceCollection: "scarichi"
+      })),
+      ...(scarico.carico || []).map((c, i) => ({
+        ...c,
+        tipoMov: "carico",
+        cerIndex: i,
+        sourceCollection: "carichi"
+      }))
+    ];
+
+    return movimenti.flatMap((cer) => {
+      const tipoMov = cer.tipoMov;
+      const cerIndex = cer.cerIndex;
+
+      // 🔥 FIR FIX: prende FIR dal CER o dal documento
+      const firFinale = (cer.fir || scarico.fir || "").toString().trim();
+
       if (cer.righe && cer.righe.length > 0) {
         return cer.righe.map((r, rIndex) => {
           const netto = Number(r.netto) || 0;
           const prezzo = Number(r.prezzoAcquisto || r.prezzoVendita) || 0;
+
           const dataObj =
-  scarico.data?.toDate?.() ||
-  parseData(scarico.dataScaricoStr) ||
-  parseData(scarico.data) ||
-  null;
+            scarico.data?.toDate?.() ||
+            parseData(scarico.dataScaricoStr) ||
+            parseData(scarico.data) ||
+            null;
+
           return {
             ...r,
             docId: scarico.id,
             cerIndex,
             rIndex,
             cer: cer.cer,
-            fir: cer.fir,
+            fir: firFinale,   // 🔥 FIX
             sourceCollection: cer.sourceCollection,
-tipo: tipoMov,
+            tipo: tipoMov,
             fornitore: scarico.fornitore,
             listino: scarico.listino,
             movimentoFinanziarioId: scarico.movimentoFinanziarioId || null,
@@ -197,19 +204,22 @@ tipo: tipoMov,
           };
         });
       }
+
+      // 🔥 CER SENZA RIGHE
       const netto = Number(cer.netto || cer.peso || 0);
       const prezzoVendita = Number(cer.prezzoVendita ?? 0);
-const prezzoAcquisto = Number(cer.prezzoAcquisto ?? 0);
+      const prezzoAcquisto = Number(cer.prezzoAcquisto ?? 0);
       const dataObj = scarico.data?.toDate?.() || null;
+
       return [{
         docId: scarico.id,
         cerIndex,
         rIndex: 0,
         cer: cer.cer,
-        fir: cer.fir || "",
+        fir: firFinale,   // 🔥 FIX
         materiale: cer.materiale || "N/D",
-       sourceCollection: cer.sourceCollection,
-tipo: tipoMov,
+        sourceCollection: cer.sourceCollection,
+        tipo: tipoMov,
         fornitore: scarico.fornitore,
         listino: scarico.listino,
         movimentoFinanziarioId: scarico.movimentoFinanziarioId || null,
@@ -219,15 +229,16 @@ tipo: tipoMov,
           : "",
         utente: getUtenteReact(),
         prezzoVendita,
-prezzoAcquisto,
-prezzoKg: tipoMov === "carico" ? prezzoVendita : prezzoAcquisto,
-costoTotale: netto * (tipoMov === "carico" ? prezzoVendita : prezzoAcquisto)
+        prezzoAcquisto,
+        prezzoKg: tipoMov === "carico" ? prezzoVendita : prezzoAcquisto,
+        costoTotale: netto * (tipoMov === "carico" ? prezzoVendita : prezzoAcquisto)
       }];
     });
   });
-  const sorted = [...righePronte];
-  setRighe(sorted);
+
+  setRighe([...righePronte]);
 }, [scarichiDelGiorno, sortConfig]);
+
   const ordinaDropdown = (valori) => {
   // Estrai tutti tranne "tutti" e ordina
   const ordinati = valori.filter(v => v !== "tutti").sort((a,b) => a.localeCompare(b));
@@ -240,7 +251,11 @@ const valoriFornitore = ordinaDropdown([...new Set(righe.map(r => r.fornitore))]
 const valoriCER = ordinaDropdown([...new Set(righe.map(r => r.cer))].map(v => v || ""));
 const valoriListino = ordinaDropdown([...new Set(righe.map(r => r.listino))].map(v => v || ""));
 const valoriUtente = ordinaDropdown([...new Set(righe.map(r => r.utente).filter(u => u))]);
-const valoriFIR = ordinaDropdown([...new Set(righe.map(r => r.fir || ""))]);
+const valoriFIR = ordinaDropdown(
+  [...new Set(righe.map(r => (r.fir || "").toString().trim()))]
+    .filter(v => v !== "")
+);
+
 const valoriMateriale = ordinaDropdown([...new Set(righe.map(r => r.materiale))]);
 const righeFiltrate = righe.filter(r =>
   (filtroOra==="tutti" || r.ora===filtroOra) &&

@@ -35,7 +35,12 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
       <div className="admin-actions">
         <button onClick={() => navigate("/scarichi")}>
           <FaExchangeAlt style={{ marginRight: "8px" }} />
-          Inserisci Scarico/Carico
+          Inserisci Scarico/Carico FIR
+        </button>
+
+        <button onClick={() => navigate("/ddt")}>
+          <FaExchangeAlt style={{ marginRight: "8px" }} />
+          Inserisci Scarico/Carico DDT
         </button>
 
         <button onClick={() => navigate("/gestione-scarichi")}>

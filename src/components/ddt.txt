@@ -1,0 +1,711 @@
+// src/components/DDT.jsx
+import React, { useEffect, useState } from "react";
+import CreatableSelect from "react-select/creatable";
+import { db } from "../firebase";
+import {
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  setDoc,
+  addDoc,
+  collection
+} from "firebase/firestore";
+import { useNavigate, useLocation } from "react-router-dom";
+import { FaSignOutAlt } from "react-icons/fa";
+import DatePicker from "react-datepicker";
+import autoTable from "jspdf-autotable";
+import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+
+const formattaDataIt = (d) =>
+  d ? new Date(d).toLocaleDateString("it-IT") : "";
+
+const DDT = ({ logout }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentUser =
+    JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
+
+  const editingId = location.state?.id || null;
+
+  // ------------------------------
+  // STATI PRINCIPALI
+  // ------------------------------
+  const [tipoMovimento, setTipoMovimento] = useState("scarico");
+  const [numeroDDT, setNumeroDDT] = useState("");
+  const [dataDDT, setDataDDT] = useState(new Date());
+  const [oraDDT, setOraDDT] = useState("08:00");
+  const [usaOra, setUsaOra] = useState(true);
+
+  const [selectedControparte, setSelectedControparte] = useState("");
+  const [controparti, setControparti] = useState([]);
+  const [nomeControparte, setNomeControparte] = useState("");
+  const [indirizzoControparte, setIndirizzoControparte] = useState("");
+  const [pivaControparte, setPivaControparte] = useState("");
+
+  const [vettore, setVettore] = useState("");
+  const [conducente, setConducente] = useState("");
+  const [targa, setTarga] = useState("");
+  const [rimorchio, setRimorchio] = useState("");
+  const [colli, setColli] = useState("");
+  const [porto, setPorto] = useState("FRANCO");
+  const [causale, setCausale] = useState("");
+  const [luogo, setLuogo] = useState("");
+
+  const [riferimentoOrdine, setRiferimentoOrdine] = useState("");
+
+  const [descrizioneMateriale, setDescrizioneMateriale] = useState("");
+  const [composizione, setComposizione] = useState("");
+  const [dimensione, setDimensione] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [caratteristiche, setCaratteristiche] = useState("");
+
+  const [pesoDichiarato, setPesoDichiarato] = useState("");
+  const [pesoRiscontrato, setPesoRiscontrato] = useState("");
+
+  const [note, setNote] = useState("");
+
+  const [config, setConfig] = useState(null);
+
+  // ------------------------------
+  // CARICA CONFIG
+  // ------------------------------
+  useEffect(() => {
+    const loadConfig = async () => {
+      const ref = doc(db, "ddt_config", "default");
+      const snap = await getDoc(ref);
+
+      if (snap.exists()) {
+        setConfig(snap.data());
+      } else {
+        const base = {
+          vettori: [],
+          conducenti: [],
+          targhe: [],
+          rimorchi: [],
+          causali: [],
+          descrizioniMateriali: [],
+          composizioni: [],
+          dimensioni: [],
+          tipi: [],
+          caratteristiche: [],
+          luoghi: [],
+          riferimentiOrdine: []
+        };
+        await setDoc(ref, base);
+        setConfig(base);
+      }
+    };
+
+    loadConfig();
+  }, []);
+
+  // ------------------------------
+  // CARICA CONTROPARTI
+  // ------------------------------
+  useEffect(() => {
+    const loadControparti = async () => {
+      const snap = await getDocs(collection(db, "fornitori"));
+      const lista = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }));
+      setControparti(lista);
+    };
+
+    loadControparti();
+  }, []);
+
+  // ------------------------------
+  // SE ARRIVA editingId → CARICA DDT
+  // ------------------------------
+  useEffect(() => {
+    if (!editingId) return;
+
+    const loadDDT = async () => {
+      const ref = doc(db, "carichi", editingId);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) return;
+
+      const d = snap.data();
+
+      setTipoMovimento(d.tipoMovimento || "carico");
+      setNumeroDDT(d.numeroDocumento || d.numeroDDT || "");
+      setDataDDT(d.dataDDT?.toDate?.() || new Date());
+      setOraDDT(d.oraDDT || "08:00");
+
+      setNomeControparte(d.nomeControparte || "");
+      setIndirizzoControparte(d.indirizzoControparte || "");
+      setPivaControparte(d.pivaControparte || "");
+
+      setVettore(d.vettore || "");
+      setConducente(d.conducente || "");
+      setTarga(d.targa || "");
+      setRimorchio(d.rimorchio || "");
+      setColli(d.colli || "");
+      setPorto(d.porto || "FRANCO");
+      setCausale(d.causale || "");
+      setLuogo(d.luogo || "");
+
+      setRiferimentoOrdine(d.riferimentoOrdine || "");
+
+      setDescrizioneMateriale(d.descrizioneMateriale || "");
+      setComposizione(d.composizione || "");
+      setDimensione(d.dimensione || "");
+      setTipo(d.tipo || "");
+      setCaratteristiche(d.caratteristiche || "");
+
+      setPesoDichiarato(d.pesoDichiarato || "");
+      setPesoRiscontrato(d.pesoRiscontrato || "");
+
+      setNote(d.note || "");
+    };
+
+    loadDDT();
+  }, [editingId]);
+
+  // ------------------------------
+  // AGGIUNTA A CONFIG
+  // ------------------------------
+  const addToConfig = async (field, value) => {
+    if (!value || !value.trim()) return;
+
+    const ref = doc(db, "ddt_config", "default");
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const list = data[field] || [];
+
+    if (!list.includes(value)) {
+      const updated = [...list, value];
+      await updateDoc(ref, { [field]: updated });
+      setConfig((prev) => ({ ...prev, [field]: updated }));
+    }
+  };
+
+  // ------------------------------
+  // SALVATAGGIO DDT (FIR‑COMPATIBILE)
+  // ------------------------------
+  const handleSave = async () => {
+    if (!numeroDDT.trim()) return alert("Inserire il numero DDT");
+    if (!nomeControparte.trim()) return alert("Inserire la controparte");
+    if (!indirizzoControparte.trim()) return alert("Inserire indirizzo valido");
+    if (!pivaControparte.trim()) return alert("Inserire P.IVA valida");
+
+    const movimento = tipoMovimento === "carico" ? "carichi" : "scarichi";
+
+    const peso = Number(pesoDichiarato || 0);
+    const netto = Number(pesoRiscontrato || 0);
+    const calo = peso - netto;
+
+    const payload = {
+      tipoMovimento,
+      tipoDocumento: "DDT",
+      numeroDocumento: numeroDDT,
+
+      data: dataDDT,
+      ora: oraDDT,
+
+      nomeControparte,
+      indirizzoControparte,
+      pivaControparte,
+
+      vettore,
+      conducente,
+      targa,
+      rimorchio,
+      colli,
+      porto,
+      causale,
+      luogo,
+
+      riferimentoOrdine,
+
+      descrizioneMateriale,
+      composizione,
+      dimensione,
+      tipo,
+      caratteristiche,
+
+      pesoDichiarato,
+      pesoRiscontrato,
+
+      note,
+
+      [movimento]: [
+        {
+          cer: "DDT",
+          numeroDocumento: numeroDDT,
+          tipoDocumento: "DDT",
+          righe: [
+            {
+              materiale: descrizioneMateriale,
+              peso,
+              calo,
+              netto,
+              prezzoKg: 0
+            }
+          ]
+        }
+      ],
+
+      createdAt: new Date(),
+      createdBy: currentUser.username || currentUser.email || "Sconosciuto"
+    };
+
+    if (editingId) {
+      await updateDoc(doc(db, movimento, editingId), payload);
+      alert("DDT aggiornato");
+    } else {
+      await addDoc(collection(db, movimento), payload);
+      alert("DDT salvato");
+    }
+
+    navigate("/admin");
+  };
+
+  // ------------------------------
+  // STAMPA DDT
+  // ------------------------------
+  const handleStampaDDT = async () => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(16);
+    pdf.text(`DDT ${numeroDDT}`, 14, 20);
+
+    pdf.setFontSize(12);
+    pdf.text(`Data: ${formattaDataIt(dataDDT)}`, 14, 30);
+    pdf.text(`Controparte: ${nomeControparte}`, 14, 38);
+    pdf.text(`Materiale: ${descrizioneMateriale}`, 14, 46);
+    pdf.text(`Peso dichiarato: ${pesoDichiarato} Kg`, 14, 54);
+    pdf.text(`Peso riscontrato: ${pesoRiscontrato} Kg`, 14, 62);
+
+    autoTable(pdf, {
+      startY: 80,
+      head: [["Campo", "Valore"]],
+      body: [
+        ["Numero DDT", numeroDDT],
+        ["Tipo", "DDT"],
+        ["Targa", targa],
+        ["Conducente", conducente],
+        ["Note", note || "-"]
+      ]
+    });
+
+    await salvaESharePdfCapacitor(pdf, `DDT_${numeroDDT}.pdf`);
+  };
+
+  // ------------------------------
+  // STAMPA LETTERA DI CONFORMITÀ
+  // ------------------------------
+  const handleStampaLettera = async () => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(16);
+    pdf.text("DICHIARAZIONE DI CONFORMITÀ", 14, 20);
+
+    pdf.setFontSize(12);
+    pdf.text(`DDT: ${numeroDDT}`, 14, 30);
+    pdf.text(`Data: ${formattaDataIt(dataDDT)}`, 14, 38);
+    pdf.text(`Materiale: ${descrizioneMateriale}`, 14, 46);
+    pdf.text(`Peso riscontrato: ${pesoRiscontrato} Kg`, 14, 54);
+
+    pdf.text(
+      "Il materiale trasportato è conforme alle normative vigenti.",
+      14,
+      70,
+      { maxWidth: 180 }
+    );
+
+    await salvaESharePdfCapacitor(pdf, `LetteraConformita_${numeroDDT}.pdf`);
+  };
+
+  if (!config) return <p>Caricamento configurazione DDT...</p>;
+
+  return (
+    <div className="ddt-container">
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <button onClick={() => navigate("/admin")}>🏠 Dashboard</button>
+        <button onClick={logout}>
+          <FaSignOutAlt /> Logout (
+          {currentUser.username || currentUser.email || "Sconosciuto"})
+        </button>
+      </div>
+
+      <h2>{editingId ? "Modifica DDT" : "Inserimento DDT 333"}</h2>
+
+      {/* 🔵 Tipo movimento */}
+      <label>Tipo Movimento:</label>
+      <select
+        value={tipoMovimento}
+        onChange={(e) => setTipoMovimento(e.target.value)}
+      >
+        <option value="scarico">Scarico</option>
+        <option value="carico">Carico</option>
+      </select>
+
+      {/* 🔵 Numero DDT */}
+      <label>Numero DDT:</label>
+      <input
+        type="text"
+        value={numeroDDT}
+        onChange={(e) => setNumeroDDT(e.target.value)}
+      />
+
+      {/* 🔵 DATA + ORA */}
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+          marginTop: "8px",
+          alignItems: "center"
+        }}
+      >
+        <label>
+          Data:
+          <DatePicker
+            selected={dataDDT}
+            onChange={(date) => {
+              setDataDDT(date);
+
+              const oggi = new Date();
+              const isToday =
+                date.toLocaleDateString("it-IT") ===
+                oggi.toLocaleDateString("it-IT");
+
+              if (isToday) {
+                const [hh, mm] = oraDDT.split(":").map(Number);
+                if (
+                  hh > oggi.getHours() ||
+                  (hh === oggi.getHours() && mm > oggi.getMinutes())
+                ) {
+                  setOraDDT(
+                    `${String(oggi.getHours()).padStart(2, "0")}:${String(
+                      oggi.getMinutes()
+                    ).padStart(2, "0")}`
+                  );
+                }
+              } else {
+                setOraDDT("00:00");
+              }
+            }}
+            dateFormat="dd MMM yyyy"
+            locale="it"
+            placeholderText="DD MMM YYYY"
+          />
+        </label>
+
+        <label>
+          Ora:
+          <DatePicker
+            selected={
+              oraDDT
+                ? new Date(0, 0, 0, ...oraDDT.split(":").map(Number))
+                : new Date()
+            }
+            onChange={(time) => {
+              const hh = String(time.getHours()).padStart(2, "0");
+              const mm = String(time.getMinutes()).padStart(2, "0");
+              setOraDDT(`${hh}:${mm}`);
+            }}
+            showTimeSelect
+            showTimeSelectOnly
+            timeIntervals={15}
+            timeFormat="HH:mm"
+            dateFormat="HH:mm"
+            placeholderText="HH:mm"
+            minTime={new Date(0, 0, 0, 0, 0)}
+            maxTime={
+              formattaDataIt(dataDDT) === formattaDataIt(new Date())
+                ? new Date(
+                    0,
+                    0,
+                    0,
+                    new Date().getHours(),
+                    new Date().getMinutes()
+                  )
+                : new Date(0, 0, 0, 23, 59)
+            }
+          />
+        </label>
+
+        <label style={{ marginLeft: "12px" }}>
+          <input
+            type="checkbox"
+            checked={usaOra}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setUsaOra(checked);
+
+              if (checked) {
+                const now = new Date();
+                setDataDDT(now);
+                setOraDDT(
+                  `${String(now.getHours()).padStart(2, "0")}:${String(
+                    now.getMinutes()
+                  ).padStart(2, "0")}`
+                );
+              }
+            }}
+          />{" "}
+          Adesso
+        </label>
+      </div>
+
+      {/* 🔵 Controparte */}
+      <label>
+        {tipoMovimento === "scarico"
+          ? "Fornitore / Mittente"
+          : "Cliente / Destinatario"}
+        :
+      </label>
+      <CreatableSelect
+        options={controparti.map((c) => ({
+          label: c.nome,
+          value: c.id,
+          indirizzo: c.indirizzo || "",
+          piva: c.piva_cf || ""
+        }))}
+        onChange={(opt) => {
+          if (!opt) {
+            setSelectedControparte("");
+            setNomeControparte("");
+            setIndirizzoControparte("");
+            setPivaControparte("");
+            return;
+          }
+
+          setSelectedControparte(opt.value);
+          setNomeControparte(opt.label);
+          setIndirizzoControparte(opt.indirizzo || "");
+          setPivaControparte(opt.piva || "");
+        }}
+        onCreateOption={(text) => {
+          setSelectedControparte(text);
+          setNomeControparte(text);
+          setIndirizzoControparte("");
+          setPivaControparte("");
+        }}
+        isClearable
+      />
+
+      {/* 🔵 Riferimento ordine */}
+      <label>Rif. ordine / commessa:</label>
+      <CreatableSelect
+        options={config.riferimentiOrdine.map((v) => ({
+          label: v,
+          value: v
+        }))}
+        onChange={(v) => setRiferimentoOrdine(v?.value || "")}
+        onCreateOption={(text) => {
+          setRiferimentoOrdine(text);
+          addToConfig("riferimentiOrdine", text);
+        }}
+        isClearable
+      />
+
+      <label>Indirizzo:</label>
+      <input
+        type="text"
+        value={indirizzoControparte}
+       onChange={(e) => setIndirizzoControparte(e.target.value)}
+      />
+
+      <label>Partita IVA / CF:</label>
+      <input
+        type="text"
+        value={pivaControparte}
+        onChange={(e) => setPivaControparte(e.target.value)}
+      />
+
+      <hr />
+
+      {/* 🔵 DATI DI TRASPORTO */}
+      <h3>Dati di Trasporto</h3>
+
+      <label>Vettore:</label>
+      <CreatableSelect
+        options={config.vettori.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setVettore(v?.value || "")}
+        onCreateOption={(text) => {
+          setVettore(text);
+          addToConfig("vettori", text);
+        }}
+        isClearable
+      />
+
+      <label>Conducente:</label>
+      <CreatableSelect
+        options={config.conducenti.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setConducente(v?.value || "")}
+        onCreateOption={(text) => {
+          setConducente(text);
+          addToConfig("conducenti", text);
+        }}
+        isClearable
+      />
+
+      <label>Targa mezzo:</label>
+      <CreatableSelect
+        options={config.targhe.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setTarga(v?.value || "")}
+        onCreateOption={(text) => {
+          setTarga(text);
+          addToConfig("targhe", text);
+        }}
+        isClearable
+      />
+
+      <label>Targa rimorchio:</label>
+      <CreatableSelect
+        options={config.rimorchi.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setRimorchio(v?.value || "")}
+        onCreateOption={(text) => {
+          setRimorchio(text);
+          addToConfig("rimorchi", text);
+        }}
+        isClearable
+      />
+
+      <label>Colli:</label>
+      <input
+        type="number"
+        value={colli}
+        onChange={(e) => setColli(e.target.value)}
+      />
+
+      <label>Porto:</label>
+      <select value={porto} onChange={(e) => setPorto(e.target.value)}>
+        <option value="FRANCO">FRANCO</option>
+        <option value="ASSEGNATO">ASSEGNATO</option>
+      </select>
+
+      <label>Causale Trasporto:</label>
+      <CreatableSelect
+        options={config.causali.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setCausale(v?.value || "")}
+        onCreateOption={(text) => {
+          setCausale(text);
+          addToConfig("causali", text);
+        }}
+        isClearable
+      />
+
+      <label>
+        {tipoMovimento === "carico"
+          ? "Luogo di consegna:"
+          : "Luogo di prelievo:"}
+      </label>
+      <CreatableSelect
+        options={config.luoghi.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setLuogo(v?.value || "")}
+        onCreateOption={(text) => {
+          setLuogo(text);
+          addToConfig("luoghi", text);
+        }}
+        isClearable
+      />
+
+      <hr />
+
+      {/* 🔵 DESCRIZIONE BENI */}
+      <h3>Descrizione dei Beni</h3>
+
+      <label>Descrizione materiale:</label>
+      <CreatableSelect
+        options={config.descrizioniMateriali.map((v) => ({
+          label: v,
+          value: v
+        }))}
+        onChange={(v) => setDescrizioneMateriale(v?.value || "")}
+        onCreateOption={(text) => {
+          setDescrizioneMateriale(text);
+          addToConfig("descrizioniMateriali", text);
+        }}
+        isClearable
+      />
+
+      <label>Composizione:</label>
+      <CreatableSelect
+        options={config.composizioni.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setComposizione(v?.value || "")}
+        onCreateOption={(text) => {
+          setComposizione(text);
+          addToConfig("composizioni", text);
+        }}
+        isClearable
+      />
+
+      <label>Dimensione:</label>
+      <CreatableSelect
+        options={config.dimensioni.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setDimensione(v?.value || "")}
+        onCreateOption={(text) => {
+          setDimensione(text);
+          addToConfig("dimensioni", text);
+        }}
+        isClearable
+      />
+
+      <label>Tipo:</label>
+      <CreatableSelect
+        options={config.tipi.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setTipo(v?.value || "")}
+        onCreateOption={(text) => {
+          setTipo(text);
+          addToConfig("tipi", text);
+        }}
+        isClearable
+      />
+
+      <label>Caratteristiche:</label>
+      <CreatableSelect
+        options={config.caratteristiche.map((v) => ({ label: v, value: v }))}
+        onChange={(v) => setCaratteristiche(v?.value || "")}
+        onCreateOption={(text) => {
+          setCaratteristiche(text);
+          addToConfig("caratteristiche", text);
+        }}
+        isClearable
+      />
+
+      <label>Peso dichiarato (Kg):</label>
+      <input
+        type="number"
+        value={pesoDichiarato}
+        onChange={(e) => setPesoDichiarato(e.target.value)}
+      />
+
+      <label>Peso riscontrato (Kg):</label>
+      <input
+        type="number"
+        value={pesoRiscontrato}
+        onChange={(e) => setPesoRiscontrato(e.target.value)}
+      />
+
+      <label>Note:</label>
+      <textarea value={note} onChange={(e) => setNote(e.target.value)} />
+
+      <hr />
+
+      <button onClick={handleSave} className="btn-save">
+        💾 Salva DDT
+      </button>
+
+      <button onClick={handleStampaDDT} style={{ marginTop: 10 }}>
+        🖨️ Stampa DDT
+      </button>
+
+      <button onClick={handleStampaLettera} style={{ marginTop: 10 }}>
+        📄 Lettera di Conformità
+      </button>
+
+    </div>
+  );
+};
+
+export default DDT;
