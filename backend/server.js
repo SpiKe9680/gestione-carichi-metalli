@@ -125,6 +125,8 @@ app.post("/previewOdt", async (req, res) => {
 // ======================================================
 // AVVIO SERVER
 // ======================================================
-app.listen(3001, () => {
-  console.log("🚀 ODT backend running on http://localhost:3001");
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log("🚀 ODT backend running on port", PORT);
 });
+
