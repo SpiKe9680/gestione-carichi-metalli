@@ -106,6 +106,16 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
   </button>
 )}
 
+ {role === "ADMIN" && (
+  <button
+    onClick={() => navigate("/configuratore-docs")}
+    style={{ backgroundColor: "#4CAF50", color: "#fff", marginTop: "10px" }}
+  >
+    <FaCog style={{ marginRight: "8px" }} />
+   Configuratore Documenti
+  </button>
+)}
+
  
 
 

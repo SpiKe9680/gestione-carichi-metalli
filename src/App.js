@@ -19,6 +19,8 @@ import MovimentiFinanziari from "./components/MovimentiFinanziari";
 import MovimentiGiorno from "./components/MovimentiGiorno";
 import AnaMovFin from "./components/AnagraficaMovimentoFinanziario"
 import DDT from "./components/ddt"
+import ConfiguratoreDocs from "./components/ConfiguratoreDocs";
+
 
 const getUser = () => {
   try {
@@ -111,6 +113,10 @@ const App = () => {
 
        <Route path="/ddt" element={<PrivateRoute><DDT logout={logout} /></PrivateRoute>} />
 
+
+
+<Route path="/configuratore-docs"
+          element={<PrivateRoute><ConfiguratoreDocs logout={logout} /></PrivateRoute>} />
 
         <Route path="/gestione-scarichi"
           element={<PrivateRoute><GestioneScarichi logout={logout} /></PrivateRoute>} />

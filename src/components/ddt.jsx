@@ -629,33 +629,171 @@ const handleStampaDDT = async () => {
 
 
 
+const handleStampaConformita = async () => {
 
+  const { jsPDF } = await import("jspdf");
 
-  // ------------------------------
-  // STAMPA LETTERA DI CONFORMITÀ
-  // ------------------------------
-  const handleStampaConformita = async () => {
-    const { jsPDF } = await import("jspdf");
-    const pdf = new jsPDF();
+  const pdf = new jsPDF();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const leftX = 14;
 
-    pdf.setFontSize(16);
-    pdf.text("DICHIARAZIONE DI CONFORMITÀ", 14, 20);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
 
-    pdf.setFontSize(12);
-    pdf.text(`DDT: ${numeroDDT}`, 14, 30);
-    pdf.text(`Data: ${formattaDataIt(dataDDT)}`, 14, 38);
-    pdf.text(`Materiale: ${descrizioneMateriale}`, 14, 46);
-    pdf.text(`Peso riscontrato: ${pesoRiscontrato} Kg`, 14, 54);
-
-    pdf.text(
-      "Il materiale trasportato è conforme alle normative vigenti.",
-      14,
-      70,
-      { maxWidth: 180 }
+  // LOGO A SINISTRA (OK)
+  if (configAzienda.logoBase64) {
+    pdf.addImage(
+      configAzienda.logoBase64,
+      "PNG",
+      leftX,
+      10,
+      35,
+      20
     );
+  }
 
-    await salvaESharePdfCapacitor(pdf, `LetteraConformita_${numeroDDT}.pdf`);
-  };
+  // INTESTAZIONE A DESTRA
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.text(configAzienda.ragioneSociale, pageWidth - 14, 20, { align: "right" });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text(configAzienda.indirizzo, pageWidth - 14, 26, { align: "right" });
+  pdf.text(configAzienda.capCitta, pageWidth - 14, 31, { align: "right" });
+  pdf.text(`P.IVA ${configAzienda.piva}`, pageWidth - 14, 36, { align: "right" });
+
+  // TITOLO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+  pdf.text("DICHIARAZIONE DI CONFORMITÀ", leftX, 60);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text(
+    "(Ai criteri che determinano quando un rifiuto cessa di essere tale di cui all'art. 5 paragrafo 1 del reg. (CE) 31.03-2011, n.333/2011 “END OF WASTE”)",
+    leftX,
+    68,
+    { maxWidth: 180 }
+  );
+
+  let y = 85;
+
+  // SEZIONE 1
+  pdf.setFont("helvetica", "bold");
+  pdf.text("1. PRODUTTORE/IMPORTATORE DEI ROTTAMI METALLICI", leftX, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text(`NOME: ${configAzienda.ragioneSociale}`, leftX, y); y += 6;
+  pdf.text(`INDIRIZZO: ${configAzienda.indirizzo} - ${configAzienda.capCitta}`, leftX, y); y += 6;
+  pdf.text(`REFERENTE: ${configAzienda.referente}`, leftX, y); y += 6;
+  pdf.text(`E-MAIL: ${configAzienda.mailRecupero}`, leftX, y); y += 12;
+
+  // SEZIONE 2
+  pdf.setFont("helvetica", "bold");
+  pdf.text("2. DENOMINAZIONE O CODICE DELLA CATEGORIA DI ROTTAMI METALLICI", leftX, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text("TRATTASI DI END OF WASTE AI SENSI DEL REG. UE 333/2011", leftX, y); y += 6;
+  pdf.text(`NORMA TECNICA: ${descrizioneMateriale}`, leftX, y); y += 6;
+  pdf.text(`PARTITA N./DDT N°: ${numeroDDT}`, leftX, y); y += 12;
+
+  // SEZIONE 3
+  pdf.setFont("helvetica", "bold");
+  pdf.text("3. PRINCIPALI DISPOSIZIONI TECNICHE DELLA SPECIFICA (SE CONCORDATE CON IL CLIENTE)", leftX, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text("COMPOSIZIONE:", leftX, y); y += 6;
+  pdf.text("DIMENSIONE:", leftX, y); y += 6;
+  pdf.text("TIPO:", leftX, y); y += 6;
+  pdf.text("CARATTERISTICHE:", leftX, y); y += 12;
+
+  // SEZIONE 4
+  pdf.setFont("helvetica", "bold");
+  pdf.text(
+    "4. LA SUDDETTA PARTITA DI ROTTAMI METALLICI È CONFORME ALLA SPECIFICA DELLA NORMA DI CUI AL PUNTO 2",
+    leftX,
+    y,
+    { maxWidth: 180 }
+  );
+  y += 12;
+
+  // SEZIONE 5
+  pdf.setFont("helvetica", "bold");
+  pdf.text("5. PESO DELLA PARTITA", leftX, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text(`TONNELLATE/Kg: ${pesoDichiarato}`, leftX, y);
+  y += 15;
+
+  // CERTIFICAZIONI
+  pdf.text(
+    "1. Si certifica che sulla partita dei rottami è stato eseguito il controllo radiometrico,",
+    leftX,
+    y
+  ); y += 6;
+
+  pdf.text(
+    "   con strumento “Contatore Geiger - Radiazioni α, β, γ, χ”. Da tale controllo il materiale è risultato NON RADIOATTIVO.",
+    leftX,
+    y,
+    { maxWidth: 180 }
+  ); y += 10;
+
+  pdf.text(
+    "2. TAMMARO METALLI SRL applica un sistema di gestione della qualità conforme all'art. 6",
+    leftX,
+    y
+  ); y += 6;
+
+  pdf.text(
+    "   Regolamento (UE) n. 333/2011 controllato da un verificatore riconosciuto.",
+    leftX,
+    y
+  ); y += 10;
+
+  pdf.text(
+    "3. La partita di rottami metallici soddisfa i criteri di cui alle lettere A), B), C),",
+    leftX,
+    y
+  ); y += 6;
+
+  pdf.text(
+    "   degli art. 3 e 4 del Regolamento (UE) n. 333/2011.",
+    leftX,
+    y
+  ); y += 15;
+
+  // FIRMA
+  pdf.setFont("helvetica", "bold");
+  pdf.text(
+    `Il sottoscritto ${configAzienda.referente} dichiara in fede che le informazioni fornite`,
+    leftX,
+    y
+  ); y += 6;
+
+  pdf.text(
+    "nella presente dichiarazione sono complete ed esatte.",
+    leftX,
+    y
+  ); y += 15;
+
+  // LUOGO E DATA
+  pdf.setFont("helvetica", "normal");
+  pdf.text("LUOGO E DATA", leftX, y); y += 8;
+
+  pdf.text(configAzienda.capCitta, leftX, y); y += 6;
+  pdf.text(formattaDataIt(dataDDT), leftX, y);
+
+  // SALVA
+  await salvaESharePdfCapacitor(pdf, `CONFORMITA_${numeroDDT}.pdf`);
+};
+
+
 
   if (!config || !configAzienda) return <p>Caricamento configurazione DDT...</p>;
 

@@ -167,3 +167,23 @@
   color: white;
   border: none;
 }
+
+.docx {
+  background: white;
+  padding: 20px;
+}
+
+.docx-page {
+  background: white;
+  margin-bottom: 20px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.2);
+  padding: 20px;
+}
+section.docx-preview {
+  min-width: 800px !important;
+  min-height: 1120px !important;
+  background: white !important;
+  position: relative !important;
+  padding: 40px !important;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}

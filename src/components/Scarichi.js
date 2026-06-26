@@ -18,6 +18,8 @@ import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 import {  saveOfflinePhotos,  loadOfflinePhotos,  clearOfflinePhotos} from "../utils/offlinePhotos";
+import CreatableSelect from "react-select/creatable";
+
 
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
@@ -57,6 +59,9 @@ const getLogUser = () => {
   const [listini, setListini] = useState([]);
   const [materiali, setMateriali] = useState([]);
   const [firCer, setFirCer] = useState("");
+ const [fornitoriOptionsState, setFornitoriOptionsState] = useState([]);
+
+
   const [selectedFornitore, setSelectedFornitore] = useState("");
   const [selectedListino, setSelectedListino] = useState("");
   const [selectedCer, setSelectedCer] = useState("");
@@ -511,6 +516,15 @@ useEffect(() => {
   previewFoto
 ]);
 
+useEffect(() => {
+  const opts = fornitori.sort(sortByLabel).map(f => ({
+    value: f.nome,
+    label: f.nome
+  }));
+  setFornitoriOptionsState(opts);
+}, [fornitori]);
+
+
 const salvaPdfSuDisco = async (pdf, filename) => {
   try {
     if (!window.showSaveFilePicker) return false;
@@ -835,28 +849,41 @@ const handleAdd = () => {
     prezzoAcquisto
   };
 
+  // 🔥 LOGICA CORRETTA FIR + CER
   setScarico(prev => {
     const updated = [...prev];
 
-    const cerIdx = updated.findIndex(c => c.cer === cer);
+    // 1️⃣ CERCA BLOCCO FIR
+    const firIdx = updated.findIndex(b => b.fir === fir);
 
-    if (cerIdx === -1) {
+    // 2️⃣ SE NON ESISTE BLOCCO FIR → CREALO
+    if (firIdx === -1) {
       updated.push({
-        cer,
         fir,
+        cer,
         righe: [nuovoRigo],
         totaleCer: nuovoRigo.netto
       });
-
       return updated;
     }
 
-    const existing = updated[cerIdx];
-    const righe = [...(existing.righe || [])];
+    const firBlock = updated[firIdx];
 
-    const rigaIdx = righe.findIndex(
-      r => r.materiale === selectedMateriale
-    );
+    // 3️⃣ SE IL CER È DIVERSO → NUOVO BLOCCO (FIR PUÒ AVERE PIÙ CER)
+    if (firBlock.cer !== cer) {
+      updated.push({
+        fir,
+        cer,
+        righe: [nuovoRigo],
+        totaleCer: nuovoRigo.netto
+      });
+      return updated;
+    }
+
+    // 4️⃣ CER UGUALE → CERCA MATERIALE
+    const righe = [...(firBlock.righe || [])];
+
+    const rigaIdx = righe.findIndex(r => r.materiale === selectedMateriale);
 
     if (rigaIdx !== -1) {
       righe[rigaIdx] = nuovoRigo;
@@ -864,9 +891,8 @@ const handleAdd = () => {
       righe.push(nuovoRigo);
     }
 
-    updated[cerIdx] = {
-      ...existing,
-      fir,
+    updated[firIdx] = {
+      ...firBlock,
       righe,
       totaleCer: righe.reduce((s, r) => s + r.netto, 0)
     };
@@ -879,6 +905,7 @@ const handleAdd = () => {
   setCalo("");
   setDirty(true);
 };
+
 
 const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
@@ -1636,7 +1663,7 @@ const scaricoConTotali = scarico.map(c => {
                     setOraStr(formattaOra24(now));
                   }
                 } else {
-                  setOraStr("00:00");
+                  setOraStr("12:00");
                 }
               }}
               dateFormat="dd MMM yyyy"
@@ -1707,36 +1734,72 @@ setTimeout(() => {
     {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
   </label>
 
-<Select
-  options={fornitoriOptions}
-  value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
-onChange={(selected) => {
-  const nome = selected?.value || "";
-  setSelectedFornitore(nome);
+<CreatableSelect
+  options={fornitoriOptionsState}
+  value={fornitoriOptionsState.find(o => o.value === selectedFornitore) || null}
 
-  // 🔥 LOGICA FORNITORE PRIVATO (solo SCARICO)
-  if (nome.trim().toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico") {
-    setSelectedListino("LISTINOPRIVATI");
-    return;
-  }
+formatCreateLabel={(inputValue) => `Crea "${inputValue}"`}
 
-  // 🔵 Logica normale
-  const forn = fornitori.find(f => f.nome === nome);
-  if (!forn) return;
+  // 🔥 CREA NUOVO FORNITORE SE NON ESISTE
+  onCreateOption={async (inputValue) => {
+    const nome = inputValue.trim();
+    if (!nome) return;
 
-  const primoCompatibile = listini.find(
-    l => (l.tipoListino || "").trim() === tipoMovimento
-  );
+    // 📌 CREA DOCUMENTO FIRESTORE
+    const docRef = await addDoc(collection(db, "fornitori"), {
+      nome,
+      indirizzo: "",
+      piva_cf: "",
+      predefListino: "",
+      createdAt: new Date(),
+    });
 
-  if (primoCompatibile) {
-    setSelectedListino(primoCompatibile.nome);
-  }
-}}
+    // 📌 AGGIORNA SELECT
+    const newOption = { value: nome, label: nome };
+    setFornitoriOptionsState(prev => [...prev, newOption]);
+    setSelectedFornitore(nome);
+
+    // 🔥 LOGICA FORNITORE PRIVATO
+    if (nome.toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico") {
+      setSelectedListino("LISTINOPRIVATI");
+      return;
+    }
+
+    // 🔵 LOGICA NORMALE
+    const primoCompatibile = listini.find(
+      l => (l.tipoListino || "").trim() === tipoMovimento
+    );
+    if (primoCompatibile) {
+      setSelectedListino(primoCompatibile.nome);
+    }
+  }}
+
+  // 🔵 SELEZIONE NORMALE
+  onChange={(selected) => {
+    const nome = selected?.value || "";
+    setSelectedFornitore(nome);
+
+    if (nome.toUpperCase() === "FORNITORE PRIVATO" && tipoMovimento === "scarico") {
+      setSelectedListino("LISTINOPRIVATI");
+      return;
+    }
+
+    const forn = fornitori.find(f => f.nome === nome);
+    if (!forn) return;
+
+    const primoCompatibile = listini.find(
+      l => (l.tipoListino || "").trim() === tipoMovimento
+    );
+    if (primoCompatibile) {
+      setSelectedListino(primoCompatibile.nome);
+    }
+  }}
 
   placeholder={tipoMovimento === "carico" ? "Cerca cliente..." : "Cerca fornitore..."}
   isSearchable
   isClearable
 />
+
 
   {/* PULSANTE NUOVO FORNITORE / DESTINATARIO */}
   <button     type="button"    onClick={() => { // 🔥 SALVA STATO CORRENTE PRIMA DI USCIRE
