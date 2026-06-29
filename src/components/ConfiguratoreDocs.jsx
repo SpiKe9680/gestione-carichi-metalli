@@ -49,13 +49,16 @@ export default function ConfiguratoreDocs() {
 
     setGlobalConfig(initialConfig);
 
-    const previewRes = await fetch("http://localhost:3001/previewOdt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        odt: Array.from(new Uint8Array(arrayBuffer)),
-      }),
-    });
+  const BASE_URL = process.env.REACT_APP_ODT_BACKEND;
+
+const previewRes = await fetch(`${BASE_URL}/previewOdt`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    odt: Array.from(new Uint8Array(arrayBuffer)),
+  }),
+});
+
 
     if (previewRes.ok) {
       const pdfBlob = await previewRes.blob();
@@ -64,38 +67,40 @@ export default function ConfiguratoreDocs() {
     }
   };
 
-  // GENERA PDF COMPILATO (ODT → PDF)
-  const handleGeneratePdf = async () => {
-    if (!originalOdtFile) {
-      alert("Carica prima un ODT");
-      return;
-    }
+const handleGeneratePdf = async () => {
+  if (!originalOdtFile) {
+    alert("Carica prima un ODT");
+    return;
+  }
 
-    const odtBuffer = await originalOdtFile.arrayBuffer();
+  const odtBuffer = await originalOdtFile.arrayBuffer();
 
-    const replacements = {};
-    for (const [tag, cfg] of Object.entries(globalConfig)) {
-      replacements[tag] = { value: cfg?.value || "" };
-    }
+  const replacements = {};
+  for (const [tag, cfg] of Object.entries(globalConfig)) {
+    replacements[tag] = { value: cfg?.value || "" };
+  }
 
-    const res = await fetch("http://localhost:3001/compileOdt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        odt: Array.from(new Uint8Array(odtBuffer)),
-        replacements,
-      }),
-    });
+  const BASE_URL = process.env.REACT_APP_ODT_BACKEND;
 
-    if (!res.ok) {
-      alert("Errore nella generazione del PDF");
-      return;
-    }
+  const res = await fetch(`${BASE_URL}/compileOdt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      odt: Array.from(new Uint8Array(odtBuffer)),
+      replacements,
+    }),
+  });
 
-    const pdfBlob = await res.blob();
-    const urlBlob = URL.createObjectURL(pdfBlob);
-    setOutputPdfUrl(urlBlob);
-  };
+  if (!res.ok) {
+    alert("Errore nella generazione del PDF");
+    return;
+  }
+
+  const pdfBlob = await res.blob();
+  const urlBlob = URL.createObjectURL(pdfBlob);
+  setOutputPdfUrl(urlBlob);
+};
+
 
   const handleChange = (tag, value) => {
     setGlobalConfig((prev) => ({
