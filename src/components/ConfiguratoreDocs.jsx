@@ -3,19 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import JSZip from "jszip";
-import {
-  FaSignOutAlt,
-  FaExchangeAlt,
-  FaList,
-  FaUsers,
-  FaTags,
-  FaTruck,
-  FaRecycle,
-  FaClipboardList,
-  FaCog,
-  FaCalendarAlt,
-  FaMoneyBillWave
-} from "react-icons/fa";
+import {  FaSignOutAlt} from "react-icons/fa";
 export default function ConfiguratoreDocs() {
   const navigate = useNavigate();
 
@@ -26,9 +14,6 @@ export default function ConfiguratoreDocs() {
   const [pageHashtags, setPageHashtags] = useState({ 1: [] });
 
   const [outputPdfUrl, setOutputPdfUrl] = useState(null);
-
-  const currentPage = 1;
-  const numPages = 1;
 
   // CARICAMENTO ODT + ESTRAZIONE TAG + ANTEPRIMA PDF
   const handleUpload = async (e) => {
