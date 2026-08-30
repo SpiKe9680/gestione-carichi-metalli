@@ -2,7 +2,17 @@
 
 import React, { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc, arrayUnion } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  arrayUnion
+} from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { scriviLog } from "../utils/log";
@@ -11,318 +21,396 @@ import { useNavigate } from "react-router-dom";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import {  PdfHeader , loadConfigAzienda } from "../utils/dateUtils";
+import { PdfHeader, loadConfigAzienda } from "../utils/dateUtils";
 import Select from "react-select";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+
+import { useLocation } from "react-router-dom";
+
+
 registerLocale("it", it);
 const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
-
 const Scarichi = ({ logout, role, goToDashboard }) => {
-const [activeUser, setactiveUser] = useState(() => {
-  return JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-});
-const [isEditing, setIsEditing] = useState(false);
-const handleGoToDashboard = () => {
-  if (goToDashboard) goToDashboard();
-  else navigate("/admin");
-};
-const [note, setNote] = useState("");
-const [firError, setFirError] = useState(false);
-const [snapshotIniziale, setSnapshotIniziale] = useState(null);
-  const [firExists, setFirExists] = useState(false);
-const [firCheckLoading, setFirCheckLoading] = useState(false);
- const [tipoMovimento, setTipoMovimento] = useState("scarico");
-  const navigate = useNavigate();
-  const getLogUser = () => {
-  const u =
-    activeUser?.username ||
-    authUser?.username ||
-    JSON.parse(sessionStorage.getItem("utenteLoggato"))?.username;
+  const [activeUser, setactiveUser] = useState(() => {
+    return JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
+  });
 
-  return u || authUser?.email || "Sconosciuto";
-};
+  const [isEditing, setIsEditing] = useState(false);
+  const navigate = useNavigate();
+const [configurazioni, setConfigurazioni] = useState({});
+
+  const handleGoToDashboard = () => {
+    if (goToDashboard) goToDashboard();
+    else navigate("/admin");
+  };
+const location = useLocation();
+const returnToDettaglio = location.state?.returnToDettaglio || false;
+  const [note, setNote] = useState("");
+  const [firError, setFirError] = useState(false);
+  const [snapshotIniziale, setSnapshotIniziale] = useState(null);
+  const [firExists, setFirExists] = useState(false);
+  const [firCheckLoading, setFirCheckLoading] = useState(false);
+
+  const [tipoMovimento, setTipoMovimento] = useState("scarico");
+
+  const getLogUser = () => {
+    const u =
+      activeUser?.username ||
+      authUser?.username ||
+      JSON.parse(sessionStorage.getItem("utenteLoggato"))?.username;
+
+    return u || authUser?.email || "Sconosciuto";
+  };
 
   const [fornitori, setFornitori] = useState([]);
   const [listini, setListini] = useState([]);
   const [materiali, setMateriali] = useState([]);
+
   const [firCer, setFirCer] = useState("");
   const [selectedFornitore, setSelectedFornitore] = useState("");
   const [selectedListino, setSelectedListino] = useState("");
   const [selectedCer, setSelectedCer] = useState("");
   const [selectedMateriale, setSelectedMateriale] = useState("");
+
   const [peso, setPeso] = useState("");
   const [calo, setCalo] = useState("");
-const [authUser, setAuthUser] = useState(null);
-const [scarico, setScarico] = useState([]);
-const [fotoFile, setFotoFile] = useState([]);
-const autosaveTimerRef = React.useRef(null);
-const lastSnapshotRef = React.useRef(null);
-const [dirty, setDirty] = useState(false);
-const removeFoto = (index) => {
-  setPreviewFoto(prev => prev.filter((_, i) => i !== index));
-  setFotoFile(prev => prev.filter((_, i) => i !== index));
 
-  setDirty(true); // 🔥 FIX: abilita autosave e salvataggio
-};
-const utenteLoggato = getLogUser() || activeUser?.email;
-const [previewFoto, setPreviewFoto] = useState([]);
-const [lockDraftSync, setLockDraftSync] = useState(false);
-const [activeUserRole, setActiveUserRole] = useState(null);
-const [docIdOriginale, setDocIdOriginale] = useState(null);
+  // 🔥 NUOVO STATO caloTipo
+  const [caloTipo, setCaloTipo] = useState("kg");
+
+  const [authUser, setAuthUser] = useState(null);
+  const [scarico, setScarico] = useState([]);
+
+  const [fotoFile, setFotoFile] = useState([]);
+  const autosaveTimerRef = React.useRef(null);
+  const lastSnapshotRef = React.useRef(null);
+  const [dirty, setDirty] = useState(false);
+
+  const removeFoto = (index) => {
+    setPreviewFoto(prev => prev.filter((_, i) => i !== index));
+    setFotoFile(prev => prev.filter((_, i) => i !== index));
+    setDirty(true);
+  };
+
+  const utenteLoggato = getLogUser() || activeUser?.email;
+  const [previewFoto, setPreviewFoto] = useState([]);
+
+  const [lockDraftSync, setLockDraftSync] = useState(false);
+  const [activeUserRole, setActiveUserRole] = useState(null);
+  const [docIdOriginale, setDocIdOriginale] = useState(null);
+
   const [usaOra, setUsaOra] = useState(true);
   const [dataScaricoStr, setDataScaricoStr] = useState("");
   const [oraStr, setOraStr] = useState("");
-const headerBtnStyle = {
-  height: "38px",
-  padding: "0 12px",
-  borderRadius: "6px",
-  fontSize: "13px",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  whiteSpace: "nowrap"
-};
-  const [userEmail, setUserEmail] = useState(null);
-const [configAzienda, setConfigAzienda] = useState(null);
 
-useEffect(() => {
-  const load = async () => {
-    const config = await loadConfigAzienda();
-    setConfigAzienda(config);
+  const headerBtnStyle = {
+    height: "38px",
+    padding: "0 12px",
+    borderRadius: "6px",
+    fontSize: "13px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    whiteSpace: "nowrap"
   };
-  load();
-}, []);
+
+  const [userEmail, setUserEmail] = useState(null);
+  const [configAzienda, setConfigAzienda] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      const config = await loadConfigAzienda();
+      setConfigAzienda(config);
+    };
+    load();
+  }, []);
   const formattaDataItaliana = (date) => {
     const gg = String(date.getDate()).padStart(2, "0");
     const mese = mesiItaliani[date.getMonth()];
     const yyyy = date.getFullYear();
     return `${gg} ${mese} ${yyyy}`;
   };
-const checkFirExists = async (value) => {
-  if (isEditing) return;
-  if (!value?.trim()) {
-    setFirExists(false);
-    return;
-  }
 
-  setFirCheckLoading(true);
+  const checkFirExists = async (value) => {
+    if (isEditing) return;
+    if (!value?.trim()) {
+      setFirExists(false);
+      return;
+    }
 
-  try {
-    const fir = value.trim().toUpperCase();
+    setFirCheckLoading(true);
 
-    let exists = false;
-
-    const checkDocs = (docs) => {
-      for (const snap of docs) {
-        const data = snap.data();
-        const blocchi = data.scarico || data.carico || [];
-
-        for (const c of blocchi) {
-          if ((c.fir || "").toUpperCase() !== fir) continue;
-          if (docIdOriginale && snap.id === docIdOriginale) continue;
-
-          exists = true;
-          return;
-        }
-      }
-    };
-
-    const [scarichiSnap, carichiSnap] = await Promise.all([
-      getDocs(collection(db, "scarichi")),
-      getDocs(collection(db, "carichi")),
-    ]);
-
-    checkDocs(scarichiSnap.docs);
-    if (!exists) checkDocs(carichiSnap.docs);
-
-    setFirExists(exists);
-  } catch (err) {
-    console.error("Errore FIR check:", err);
-  } finally {
-    setFirCheckLoading(false);
-  }
-};
-
-const getClientIP = async () => {
-  try {
-    const res = await fetch("https://api.ipify.org?format=json");
-    const data = await res.json();
-    return data.ip || "NON_DISPONIBILE";
-  } catch (e) {
-    return "NON_DISPONIBILE";
-  }
-};
-const buildLogUser = (user, fallback = "ADMIN") => {
-  const ruolo = user?.ruolo || fallback;
-
-  const username =
-    user?.username?.trim() ||
-    (user?.email ? user.email.split("@")[0] : null) ||
-    "UTENTE_SCONOSCIUTO";
-
-  return `${ruolo} - ${username}`;
-};
-
-  const formattaOra24 = (date) => {
-  if (!date) return "";
-
-  return (
-    date.getHours().toString().padStart(2, "0") +
-    ":" +
-    date.getMinutes().toString().padStart(2, "0")
-  );
-};
- const inizializzatoRef = React.useRef(false);
-const [listinoValid, setListinoValid] = useState(true);
-useEffect(() => {
-  if (inizializzatoRef.current) return;
-
-  // 🔥 NON toccare mai la draft o edit mode
-  if (isEditing || docIdOriginale) {
-    inizializzatoRef.current = true;
-    return;
-  }
-
-  if (!dataScaricoStr && !oraStr && usaOra) {
-    const now = new Date();
-    setDataScaricoStr(formattaDataItaliana(now));
-    setOraStr(formattaOra24(now));
-  }
-
-  inizializzatoRef.current = true;
-}, [usaOra, dataScaricoStr, oraStr, isEditing, docIdOriginale]);
-useEffect(() => {
-  console.log("Ruolo utente corrente: ", activeUserRole);
-}, [activeUserRole]);
-
-useEffect(() => {
-  const syncQueue = async () => {
     try {
-      const snap = await getDocs(collection(db, "scarichi_images_queue"));
+      const fir = value.trim().toUpperCase();
+      let exists = false;
 
-      for (const docSnap of snap.docs) {
-        const data = docSnap.data();
+      const checkDocs = (docs) => {
+        for (const snap of docs) {
+          const data = snap.data();
+          const blocchi = data.scarico || data.carico || [];
 
-        if (data.uploaded) continue;
+          for (const c of blocchi) {
+            if ((c.fir || "").toUpperCase() !== fir) continue;
+            if (docIdOriginale && snap.id === docIdOriginale) continue;
 
-        try {
-          // riconversione base64 → file
-          const res = await fetch(data.fileData);
-          const blob = await res.blob();
-
-          const file = new File([blob], data.fileName, {
-            type: data.fileType
-          });
-
-          const url = await uploadSistema3Parti(file);
-
-          await setDoc(
-  doc(db, "scarichi", data.docTempId),
-  {
-    fotoURL: arrayUnion(url),
-  },
-  { merge: true }
-);
-await setDoc(
-  doc(db, "scarichi_draft", data.utenteId),
-  {
-    fotoURL: arrayUnion(url),
-  },
-  { merge: true }
-);
-          await setDoc(doc(db, "scarichi_images_queue", docSnap.id), {
-            uploaded: true,
-            url
-          }, { merge: true });
-
-        } catch (err) {
-          console.warn("Retry upload fallito", err);
+            exists = true;
+            return;
+          }
         }
-      }
-    } catch (e) {
-      console.error("Queue sync error", e);
+      };
+
+      const [scarichiSnap, carichiSnap] = await Promise.all([
+        getDocs(collection(db, "scarichi")),
+        getDocs(collection(db, "carichi")),
+      ]);
+
+      checkDocs(scarichiSnap.docs);
+      if (!exists) checkDocs(carichiSnap.docs);
+
+      setFirExists(exists);
+    } catch (err) {
+      console.error("Errore FIR check:", err);
+    } finally {
+      setFirCheckLoading(false);
     }
   };
 
-  const interval = setInterval(syncQueue, 30000); // ogni 30 sec
-  syncQueue();
+  const getClientIP = async () => {
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      const data = await res.json();
+      return data.ip || "NON_DISPONIBILE";
+    } catch (e) {
+      return "NON_DISPONIBILE";
+    }
+  };
 
-  return () => clearInterval(interval);
+  const buildLogUser = (user, fallback = "ADMIN") => {
+    const ruolo = user?.ruolo || fallback;
+
+    const username =
+      user?.username?.trim() ||
+      (user?.email ? user.email.split("@")[0] : null) ||
+      "UTENTE_SCONOSCIUTO";
+
+    return `${ruolo} - ${username}`;
+  };
+
+  const formattaOra24 = (date) => {
+    if (!date) return "";
+    return (
+      date.getHours().toString().padStart(2, "0") +
+      ":" +
+      date.getMinutes().toString().padStart(2, "0")
+    );
+  };
+
+  const inizializzatoRef = React.useRef(false);
+  const [listinoValid, setListinoValid] = useState(true);
+
+  useEffect(() => {
+    if (inizializzatoRef.current) return;
+
+    if (isEditing || docIdOriginale) {
+      inizializzatoRef.current = true;
+      return;
+    }
+
+    if (!dataScaricoStr && !oraStr && usaOra) {
+      const now = new Date();
+      setDataScaricoStr(formattaDataItaliana(now));
+      setOraStr(formattaOra24(now));
+    }
+
+    inizializzatoRef.current = true;
+  }, [usaOra, dataScaricoStr, oraStr, isEditing, docIdOriginale]);
+
+  useEffect(() => {
+    console.log("Ruolo utente corrente: ", activeUserRole);
+  }, [activeUserRole]);
+
+  useEffect(() => {
+  const fetchConfig = async () => {
+    try {
+      const docRef = doc(db, "configurazioni", "datiAzienda");
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setConfigurazioni(snap.data());
+      }
+    } catch (err) {
+      console.error("Errore caricamento configurazioni:", err);
+    }
+  };
+
+  fetchConfig();
 }, []);
-useEffect(() => {
-  if (isEditing) {
-    setFirExists(false);
-  }
-}, [isEditing]);
+
+  
 useEffect(() => {
   if (!selectedFornitore || !fornitori.length || !listini.length) return;
 
   const forn = fornitori.find(f => f.nome === selectedFornitore);
-  if (!forn?.predefListino) return;
 
-  const listinoAssoc = listini.find(
-    l =>
-      l.id === forn.predefListino &&
-      (l.tipoListino || "").trim().toLowerCase() ===
-      (tipoMovimento || "").trim().toLowerCase()
+  // 1️⃣ Fornitore con predefListino
+  if (forn?.predefListino) {
+    const listinoAssoc = listini.find(l => l.id === forn.predefListino);
+    if (listinoAssoc) {
+      setSelectedListino(listinoAssoc.nome);
+      return;
+    }
+  }
+
+  // 2️⃣ Default aziendale
+  const defaultAziendaId =
+    tipoMovimento === "carico"
+      ? configurazioni.ListinoCARICODefault
+      : configurazioni.ListinoSCARICODefault;
+
+  if (defaultAziendaId) {
+    const listinoDefault = listini.find(l => l.id === defaultAziendaId);
+    if (listinoDefault) {
+      setSelectedListino(listinoDefault.nome);
+      return;
+    }
+  }
+
+  // 3️⃣ Fallback generico
+  const generico = listini.find(
+    l => (l.tipoListino || "").trim().toLowerCase() ===
+         (tipoMovimento || "").trim().toLowerCase()
   );
 
-  if (listinoAssoc) {
-    setSelectedListino(listinoAssoc.nome);
+  if (generico) {
+    setSelectedListino(generico.nome);
   }
-}, [selectedFornitore, fornitori, listini, tipoMovimento]);
-useEffect(() => {
-  console.log("🟡 EDIT MODE:", {
-    isEditing,
-    docIdOriginale,
-    selectedCer,
-    firCer
+}, [selectedFornitore, fornitori, listini, tipoMovimento, configurazioni]);
+
+
+
+  useEffect(() => {
+    const syncQueue = async () => {
+      try {
+        const snap = await getDocs(collection(db, "scarichi_images_queue"));
+
+        for (const docSnap of snap.docs) {
+          const data = docSnap.data();
+          if (data.uploaded) continue;
+
+          try {
+            const res = await fetch(data.fileData);
+            const blob = await res.blob();
+
+            const file = new File([blob], data.fileName, {
+              type: data.fileType
+            });
+
+            const url = await uploadSistema3Parti(file);
+
+            await setDoc(
+              doc(db, "scarichi", data.docTempId),
+              { fotoURL: arrayUnion(url) },
+              { merge: true }
+            );
+
+            await setDoc(
+              doc(db, "scarichi_draft", data.utenteId),
+              { fotoURL: arrayUnion(url) },
+              { merge: true }
+            );
+
+            await setDoc(
+              doc(db, "scarichi_images_queue", docSnap.id),
+              { uploaded: true, url },
+              { merge: true }
+            );
+
+          } catch (err) {
+            console.warn("Retry upload fallito", err);
+          }
+        }
+      } catch (e) {
+        console.error("Queue sync error", e);
+      }
+    };
+
+    const interval = setInterval(syncQueue, 30000);
+    syncQueue();
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (isEditing) {
+      setFirExists(false);
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (!selectedFornitore || !fornitori.length || !listini.length) return;
+
+    const forn = fornitori.find(f => f.nome === selectedFornitore);
+    if (!forn?.predefListino) return;
+
+    const listinoAssoc = listini.find(
+      l =>
+        l.id === forn.predefListino &&
+        (l.tipoListino || "").trim().toLowerCase() ===
+        (tipoMovimento || "").trim().toLowerCase()
+    );
+
+    if (listinoAssoc) {
+      setSelectedListino(listinoAssoc.nome);
+    }
+  }, [selectedFornitore, fornitori, listini, tipoMovimento]);
+
+  useEffect(() => {
+    console.log("🟡 EDIT MODE:", {
+      isEditing,
+      docIdOriginale,
+      selectedCer,
+      firCer
+    });
+  }, [isEditing, docIdOriginale, selectedCer, firCer]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (!scarico?.length) return;
+
+    const match =
+      scarico.find(c => c.cer === selectedCer) || scarico[0];
+
+    if (match) {
+      setSelectedCer(match.cer || "");
+      setFirCer(match.fir || "");
+    }
+  }, [scarico]);
+  const prevImgRef = React.useRef({
+    files: 0,
+    preview: 0
   });
-}, [isEditing, docIdOriginale, selectedCer, firCer]);
 
+  useEffect(() => {
+    if (isEditing && !docIdOriginale) return;
 
+    const fLen = fotoFile?.length || 0;
+    const pLen = previewFoto?.length || 0;
 
+    const prev = prevImgRef.current;
 
+    if (prev.files !== fLen || prev.preview !== pLen) {
+      setDirty(true);
+    }
 
-useEffect(() => {
-  if (isEditing) return;
-  if (!scarico?.length) return;
+    prevImgRef.current = {
+      files: fLen,
+      preview: pLen
+    };
+  }, [fotoFile, previewFoto]);
 
-  const match =
-    scarico.find(c => c.cer === selectedCer) || scarico[0];
-
-  if (match) {
-    setSelectedCer(match.cer || "");
-    setFirCer(match.fir || "");
-  }
-}, [scarico]);
-const prevImgRef = React.useRef({
-  files: 0,
-  preview: 0
-});
-
-useEffect(() => {
-  // evita trigger iniziale inutile
-  if (isEditing && !docIdOriginale) return;
-
-  const fLen = fotoFile?.length || 0;
-  const pLen = previewFoto?.length || 0;
-
-  const prev = prevImgRef.current;
-
-  if (prev.files !== fLen || prev.preview !== pLen) {
-    setDirty(true);
-  }
-
-  prevImgRef.current = {
-    files: fLen,
-    preview: pLen
-  };
-}, [fotoFile, previewFoto]);
   const handleUsaOraChange = (e) => {
     const checked = e.target.checked;
     setUsaOra(checked);
@@ -334,1072 +422,1116 @@ useEffect(() => {
       setDataScaricoStr("");
       setOraStr("");
     }
-    setDirty(true); // 🔥 FIX: modifica data/ora = modifica reale
+    setDirty(true);
   };
 
+  const parseDataOra = (dataStr, oraStr) => {
+    if (!dataStr) return null;
 
-const parseDataOra = (dataStr, oraStr) => {
-  if (!dataStr) return null;
+    const [gg, meseStr, yyyy] = dataStr.split(" ");
+    const mm = mesiItaliani.indexOf(meseStr);
+    if (mm < 0) return null;
 
-  const [gg, meseStr, yyyy] = dataStr.split(" ");
-  const mm = mesiItaliani.indexOf(meseStr);
-  if (mm < 0) return null;
+    const d = new Date(Number(yyyy), mm, Number(gg));
 
-  const d = new Date(Number(yyyy), mm, Number(gg));
-
-  if (oraStr) {
-    const [hh, min] = oraStr.split(":").map(Number);
-    if (!isNaN(hh) && !isNaN(min)) {
-      d.setHours(hh, min, 0, 0);
+    if (oraStr) {
+      const [hh, min] = oraStr.split(":").map(Number);
+      if (!isNaN(hh) && !isNaN(min)) {
+        d.setHours(hh, min, 0, 0);
+      }
     }
-  }
 
-  return d;
-};
-const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
-// --- AUTOSAVE BOZZA SCARICO ---
-const triggerAutosave = () => {
-  if (!initialized) return;
-  if (uploadingImages) return;
-  if (lockDraftSync) return;
+    return d;
+  };
 
-  // snapshot reale (NON dirty fragile)
-  const snapshot = JSON.stringify({
+  const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
+
+  const triggerAutosave = () => {
+    if (!initialized) return;
+    if (uploadingImages) return;
+    if (lockDraftSync) return;
+
+    const snapshot = JSON.stringify({
+      scarico,
+      selectedFornitore,
+      selectedListino,
+      firCer,
+      tipoMovimento,
+      dataScaricoStr,
+      oraStr,
+      foto: previewFoto
+        .map(p => (typeof p === "string" ? p : p?.url))
+        .filter(p => p && !p.startsWith("blob:"))
+        .sort()
+        .join("|")
+    });
+
+    if (snapshot === lastSnapshotRef.current) return;
+    lastSnapshotRef.current = snapshot;
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      requestAnimationFrame(() => {
+        salvaBozza();
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    triggerAutosave();
+  }, [
     scarico,
     selectedFornitore,
     selectedListino,
     firCer,
+    selectedCer,
     tipoMovimento,
     dataScaricoStr,
     oraStr,
-  foto: previewFoto
-  .map(p => (typeof p === "string" ? p : p?.url))
-  .filter(p => p && !p.startsWith("blob:"))
-  .sort()
-  .join("|")
-  });
+    previewFoto
+  ]);
 
-  // evita salvataggi inutili
-  if (snapshot === lastSnapshotRef.current) return;
-
-  lastSnapshotRef.current = snapshot;
-
-  if (autosaveTimerRef.current) {
-    clearTimeout(autosaveTimerRef.current);
-  }
-
-  autosaveTimerRef.current = setTimeout(() => {
-  requestAnimationFrame(() => {
-    salvaBozza();
-  });
-}, 1000);
-};
-useEffect(() => {
-  triggerAutosave();
-}, [
-  scarico,
-  selectedFornitore,
-  selectedListino,
-  firCer,
-  selectedCer, // 🔥 FIX
-  tipoMovimento,
-  dataScaricoStr,
-  oraStr,
-  previewFoto
-]);
-
-const salvaPdfSuDisco = async (pdf, filename) => {
-  try {
-    if (!window.showSaveFilePicker) return false;
-
-    const handle = await window.showSaveFilePicker({
-      suggestedName: filename,
-      types: [
-        {
-          description: "PDF",
-          accept: { "application/pdf": [".pdf"] },
-        },
-      ],
-    });
-
-    const writable = await handle.createWritable();
-    const blob = pdf.output("blob");
-
-    await writable.write(blob);
-    await writable.close();
-
-    return true;
-  } catch (err) {
-    console.warn("Salvataggio su disco annullato o fallito", err);
-    return false;
-  }
-};
-const salvaBozza = async () => {
-  try {
-    const utenteId = getLogUser();
-    if (!utenteId) return;
-
-    const draftRef = doc(db, "scarichi_draft", utenteId);
-
-    const payload = {
-      tipoMovimento,
-      fornitore: selectedFornitore || "",
-      listino: selectedListino || "",
-
-      scarico: tipoMovimento === "scarico" ? scarico : [],
-      carico: tipoMovimento === "carico" ? scarico : [],
-
-      firCer: firCer || "",
-      selectedCer: selectedCer || "",
-
-      utente: utenteLoggato,
-
-      dataScaricoStr,
-      oraStr,
-
-      data:
-        dataScaricoStr && oraStr
-          ? parseDataOra(dataScaricoStr, oraStr)
-          : null,
-
-      fotoURL: (previewFoto || []).filter(
-        p => typeof p === "string" && !p.startsWith("blob:")
-      ),
-note: note || "",
-      inModifica: true,
-      updatedAt: serverTimestamp()
-    };
-
-    await setDoc(draftRef, payload, { merge: true });
-  } catch (e) {
-    console.error("Errore salvaBozza:", e);
-  }
-};
-const [uploadingImages, setUploadingImages] = useState(false);
-const [initialized, setInitialized] = useState(false);
-
-useEffect(() => {
-  if (initialized) return;
-
-  const init = async () => {
+  const salvaPdfSuDisco = async (pdf, filename) => {
     try {
-      const user = await new Promise((resolve) => {
-        const unsub = auth.onAuthStateChanged((u) => {
-          unsub();
-          resolve(u);
-        });
+      if (!window.showSaveFilePicker) return false;
+
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: "PDF",
+            accept: { "application/pdf": [".pdf"] },
+          },
+        ],
       });
 
-      if (user) {
-        setAuthUser({ email: user.email, uid: user.uid });
-        setUserEmail(user.email);
-      }
+      const writable = await handle.createWritable();
+      const blob = pdf.output("blob");
 
-      const storedUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+      await writable.write(blob);
+      await writable.close();
 
-      setActiveUserRole(
-        storedUser?.ruolo ||
-        storedUser?.role ||
-        user?.ruolo ||
-        user?.role ||
-        null
-      );
-
-      const [fornSnap, listSnap, matSnap] = await Promise.all([
-        getDocs(collection(db, "fornitori")),
-        getDocs(collection(db, "listini")),
-        getDocs(collection(db, "materiali")),
-      ]);
-
-      setFornitori(fornSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setListini(listSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setMateriali(matSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-      const utenteId = getLogUser();
-
-      if (utenteId && !isEditing && !docIdOriginale) {
-        const draftSnap = await getDoc(doc(db, "scarichi_draft", utenteId));
-
-        if (draftSnap.exists()) {
-          const d = draftSnap.data();
-
-          const tipo = d.tipoMovimento || "scarico";
-          setTipoMovimento(tipo);
-
-          setSelectedFornitore(d.fornitore || "");
-          setSelectedListino(d.listino || "");
-
-          setFirCer(d.firCer || "");
-          setSelectedCer(d.selectedCer || "");
-
-          const blocchi =
-            tipo === "carico"
-              ? d.carico || []
-              : d.scarico || [];
-
-          setScarico(
-            Array.isArray(blocchi)
-              ? blocchi.map(c => ({
-                  cer: c.cer || "",
-                  fir: c.fir || "",
-                  righe: Array.isArray(c.righe) ? c.righe : [],
-                  totaleCer: c.totaleCer || 0
-                }))
-              : []
-          );
-
-          const foto = Array.isArray(d.fotoURL)
-            ? d.fotoURL.filter(f => typeof f === "string" && f.length > 10)
-            : [];
-
-          setPreviewFoto(foto);
-setNote(d.note || "");
-          setDocIdOriginale(d.docIdOriginale || null);
-
-          // 🔥 FIX DATA/ORA BOZZA
-          if (d.data) {
-            const date = d.data.toDate ? d.data.toDate() : new Date(d.data);
-
-            setDataScaricoStr(formattaDataItaliana(date));
-            setOraStr(formattaOra24(date));
-          }
-
-          setUsaOra(false); // evita overwrite automatico
-        }
-      }
-
-      setInitialized(true);
+      return true;
     } catch (err) {
-      console.error("INIT ERROR:", err);
+      console.warn("Salvataggio su disco annullato o fallito", err);
+      return false;
     }
   };
 
-  init();
-}, [initialized]);
+  const salvaBozza = async () => {
+    try {
+      const utenteId = getLogUser();
+      if (!utenteId) return;
+
+      const draftRef = doc(db, "scarichi_draft", utenteId);
+
+      const payload = {
+        tipoMovimento,
+        fornitore: selectedFornitore || "",
+        listino: selectedListino || "",
+        scarico: tipoMovimento === "scarico" ? scarico : [],
+        carico: tipoMovimento === "carico" ? scarico : [],
+        firCer: firCer || "",
+        selectedCer: selectedCer || "",
+        utente: utenteLoggato,
+        dataScaricoStr,
+        oraStr,
+        data:
+          dataScaricoStr && oraStr
+            ? parseDataOra(dataScaricoStr, oraStr)
+            : null,
+        fotoURL: (previewFoto || []).filter(
+          p => typeof p === "string" && !p.startsWith("blob:")
+        ),
+        note: note || "",
+        inModifica: true,
+        updatedAt: serverTimestamp()
+      };
+
+      await setDoc(draftRef, payload, { merge: true });
+    } catch (e) {
+      console.error("Errore salvaBozza:", e);
+    }
+  };
+
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (initialized) return;
+
+    const init = async () => {
+      try {
+        const user = await new Promise((resolve) => {
+          const unsub = auth.onAuthStateChanged((u) => {
+            unsub();
+            resolve(u);
+          });
+        });
+
+        if (user) {
+          setAuthUser({ email: user.email, uid: user.uid });
+          setUserEmail(user.email);
+        }
+
+        const storedUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+
+        setActiveUserRole(
+          storedUser?.ruolo ||
+          storedUser?.role ||
+          user?.ruolo ||
+          user?.role ||
+          null
+        );
+
+        const [fornSnap, listSnap, matSnap] = await Promise.all([
+          getDocs(collection(db, "fornitori")),
+          getDocs(collection(db, "listini")),
+          getDocs(collection(db, "materiali")),
+        ]);
+
+        setFornitori(fornSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setListini(listSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setMateriali(matSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        const utenteId = getLogUser();
+
+        if (utenteId && !isEditing && !docIdOriginale) {
+          const draftSnap = await getDoc(doc(db, "scarichi_draft", utenteId));
+
+          if (draftSnap.exists()) {
+            const d = draftSnap.data();
+
+            const tipo = d.tipoMovimento || "scarico";
+            setTipoMovimento(tipo);
+
+            setSelectedFornitore(d.fornitore || "");
+            setSelectedListino(d.listino || "");
+            setFirCer(d.firCer || "");
+            setSelectedCer(d.selectedCer || "");
+
+            const blocchi =
+              tipo === "carico"
+                ? d.carico || []
+                : d.scarico || [];
+
+            setScarico(
+              Array.isArray(blocchi)
+                ? blocchi.map(c => ({
+                    cer: c.cer || "",
+                    fir: c.fir || "",
+                    righe: Array.isArray(c.righe) ? c.righe : [],
+                    totaleCer: c.totaleCer || 0
+                  }))
+                : []
+            );
+
+            const foto = Array.isArray(d.fotoURL)
+              ? d.fotoURL.filter(f => typeof f === "string" && f.length > 10)
+              : [];
+
+            setPreviewFoto(foto);
+            setNote(d.note || "");
+            setDocIdOriginale(d.docIdOriginale || null);
+
+            if (d.data) {
+              const date = d.data.toDate ? d.data.toDate() : new Date(d.data);
+              setDataScaricoStr(formattaDataItaliana(date));
+              setOraStr(formattaOra24(date));
+            }
+
+            setUsaOra(false);
+          }
+        }
+
+        setInitialized(true);
+      } catch (err) {
+        console.error("INIT ERROR:", err);
+      }
+    };
+
+    init();
+  }, [initialized]);
+
   const cerDisponibili = [...new Set(materiali.map((m) => m.codiceCER).filter((c) => c))];
   const materialiFiltrati = selectedCer ? materiali.filter((m) => m.codiceCER === selectedCer) : [];
+
   useEffect(() => {
     if (materialiFiltrati.length === 1) setSelectedMateriale(materialiFiltrati[0].nome);
   }, [selectedCer, materialiFiltrati]);
-const listinoUserChangeRef = React.useRef(false);
 
-useEffect(() => {
-  if (!selectedListino || listini.length === 0) {
-    setListinoValid(true);
-    return;
-  }
+  const listinoUserChangeRef = React.useRef(false);
 
-  const ok = listini.some((l) => {
-    const tipo = (l.tipoListino || "").trim().toLowerCase();
-    return (
-      l.nome === selectedListino &&
-      tipo === tipoMovimento.trim().toLowerCase()
-    );
-  });
+  useEffect(() => {
+    if (!selectedListino || listini.length === 0) {
+      setListinoValid(true);
+      return;
+    }
 
-  setListinoValid(ok);
-}, [selectedListino, listini, tipoMovimento]);
-useEffect(() => {
-  return () => {
-    previewFoto.forEach((p) => {
-      if (typeof p === "string" && p.startsWith("blob:")) {
-        URL.revokeObjectURL(p);
-      }
+    const ok = listini.some((l) => {
+      const tipo = (l.tipoListino || "").trim().toLowerCase();
+      return (
+        l.nome === selectedListino &&
+        tipo === tipoMovimento.trim().toLowerCase()
+      );
     });
-  };
-}, [previewFoto]);
-useEffect(() => {
-  const nuovoFornitore = localStorage.getItem("nuovoFornitore");
-if (nuovoFornitore) {
-  const utente = getLogUser();
 
-  if (utente) {
-    deleteDoc(doc(db, "scarichi_draft", utente))
-      .then(() => {
-        console.log("🧹 Draft eliminata dopo creazione fornitore");
-      })
-      .catch(err => {
-        console.warn("Errore delete draft:", err);
+    setListinoValid(ok);
+  }, [selectedListino, listini, tipoMovimento]);
+
+  useEffect(() => {
+    return () => {
+      previewFoto.forEach((p) => {
+        if (typeof p === "string" && p.startsWith("blob:")) {
+          URL.revokeObjectURL(p);
+        }
       });
-  }
+    };
+  }, [previewFoto]);
 
-  // 🔥 RESET HARD STATO (fondamentale)
-  setScarico([]);
-  setSelectedCer("");
-  setSelectedMateriale("");
-  setPeso("");
-  setCalo("");
-  setFirCer("");
-  setPreviewFoto([]);
-  setFotoFile([]);
-  setNote("");
-}
-  const savedData = localStorage.getItem("scarico_temp_data");
-  const savedOra = localStorage.getItem("scarico_temp_ora");
-  const savedUsaOra = localStorage.getItem("scarico_temp_usaOra");
+  useEffect(() => {
+    const nuovoFornitore = localStorage.getItem("nuovoFornitore");
+    if (nuovoFornitore) {
+      const utente = getLogUser();
 
-  if (savedData) setDataScaricoStr(savedData);
-  if (savedOra) setOraStr(savedOra);
+      if (utente) {
+        deleteDoc(doc(db, "scarichi_draft", utente))
+          .then(() => {
+            console.log("🧹 Draft eliminata dopo creazione fornitore");
+          })
+          .catch(err => {
+            console.warn("Errore delete draft:", err);
+          });
+      }
 
-  if (savedUsaOra !== null) {
-    setUsaOra(savedUsaOra === "1");
-  }
+      setScarico([]);
+      setSelectedCer("");
+      setSelectedMateriale("");
+      setPeso("");
+      setCalo("");
+      setFirCer("");
+      setPreviewFoto([]);
+      setFotoFile([]);
+      setNote("");
+    }
 
-  localStorage.removeItem("scarico_temp_data");
-  localStorage.removeItem("scarico_temp_ora");
-  localStorage.removeItem("scarico_temp_usaOra");
+    const savedData = localStorage.getItem("scarico_temp_data");
+    const savedOra = localStorage.getItem("scarico_temp_ora");
+    const savedUsaOra = localStorage.getItem("scarico_temp_usaOra");
 
-  if (nuovoFornitore && fornitori.length > 0) {
-    const exists = fornitori.find(f => f.nome === nuovoFornitore);
+    if (savedData) setDataScaricoStr(savedData);
+    if (savedOra) setOraStr(savedOra);
+    if (savedUsaOra !== null) {
+      setUsaOra(savedUsaOra === "1");
+    }
 
-    if (exists) {
-      setSelectedFornitore(nuovoFornitore);
+    localStorage.removeItem("scarico_temp_data");
+    localStorage.removeItem("scarico_temp_ora");
+    localStorage.removeItem("scarico_temp_usaOra");
 
-      if (exists.predefListino) {
-        const listinoAssoc = listini.find(
-         l => l.id === exists.predefListino && ((l.tipoListino || "").trim() === tipoMovimento)
-        );
+    if (nuovoFornitore && fornitori.length > 0) {
+      const exists = fornitori.find(f => f.nome === nuovoFornitore);
 
-        if (listinoAssoc) {
-          setSelectedListino(listinoAssoc.nome);
+      if (exists) {
+        setSelectedFornitore(nuovoFornitore);
+
+        if (exists.predefListino) {
+          const listinoAssoc = listini.find(
+            l => l.id === exists.predefListino && ((l.tipoListino || "").trim() === tipoMovimento)
+          );
+
+          if (listinoAssoc) {
+            setSelectedListino(listinoAssoc.nome);
+          }
         }
       }
+
+      localStorage.removeItem("nuovoFornitore");
+    }
+  }, [fornitori, listini, tipoMovimento]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (dirty) {
+        salvaBozza();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
+
+  const isFornitorePrivato =
+    (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
+
+  // 🔥🔥🔥 HANDLE ADD — VERSIONE MINIMALE CON caloTipo
+  const handleAdd = () => {
+    if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
+
+    const cer = selectedCer || "SENZA_CER";
+    const fir = firCer || "";
+
+    const listinoObj = listini.find(l => l.nome === selectedListino);
+
+    let prezzoVendita = 0;
+    let prezzoAcquisto = 0;
+
+    const key = Object.keys(listinoObj?.prezzi || {}).find(
+      k => k.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
+    );
+
+    if (key) {
+      prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
+      prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
     }
 
-    localStorage.removeItem("nuovoFornitore");
-  }
-}, [fornitori, listini, tipoMovimento]);
+    const pesoNum = Number(peso.replace(",", "."));
+    const caloNum = Number(calo?.replace(",", ".") || 0);
 
-useEffect(() => {
-  const handleBeforeUnload = () => {
-    if (dirty) {
-      salvaBozza();
+    // 🔥 VALIDAZIONI MINIME
+    if (pesoNum <= 0) {
+      alert("Il peso deve essere maggiore di zero");
+      return;
     }
-  };
 
-  
+    if (caloNum < 0) {
+      alert("Il calo non può essere negativo");
+      return;
+    }
 
-  window.addEventListener("beforeunload", handleBeforeUnload);
+    if (caloTipo === "kg" && caloNum > pesoNum) {
+      alert("Il calo non può superare il peso");
+      return;
+    }
 
-  return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-}, [dirty]);
-const isFornitorePrivato =
-  (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
-const handleAdd = () => {
-  if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
+    if (caloTipo === "perc" && caloNum > 100) {
+      alert("Il calo percentuale non può superare il 100%");
+      return;
+    }
 
-  const cer = selectedCer || "SENZA_CER";
-  const fir = firCer || "";
+    // 🔥 CALCOLO NETTO CORRETTO
+    let caloKg = caloTipo === "perc"
+      ? (pesoNum * caloNum) / 100
+      : caloNum;
 
-  const listinoObj = listini.find(l => l.nome === selectedListino);
+const nettoCalc = pesoNum - caloKg;
 
-  let prezzoVendita = 0;
-  let prezzoAcquisto = 0;
+// 🔥 arrotondamento commerciale
+const nettoRounded =
+  (nettoCalc % 1) <= 0.50
+    ? Math.floor(nettoCalc)
+    : Math.ceil(nettoCalc);
 
-  const key = Object.keys(listinoObj?.prezzi || {}).find(
-    k => k.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
-  );
+const nuovoRigo = {
+  materiale: selectedMateriale,
+  peso: pesoNum,
+  calo: caloNum,
+  caloTipo,
+  netto: nettoRounded,
+  prezzoVendita,
+  prezzoAcquisto
+};
 
-  if (key) {
-    prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
-    prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
-  }
 
-  const nuovoRigo = {
-    materiale: selectedMateriale,
-    peso: Number(peso.replace(",", ".")),
-    calo: Number(calo?.replace(",", ".") || 0),
-    netto:
-      Number(peso.replace(",", ".")) -
-      Number(calo?.replace(",", ".") || 0),
-    prezzoVendita,
-    prezzoAcquisto
-  };
+    setScarico(prev => {
+      const updated = [...prev];
 
-  setScarico(prev => {
-    const updated = [...prev];
+      const cerIdx = updated.findIndex(c => c.cer === cer);
 
-    // 🔥 FIX: IDENTITÀ SOLO CER (NON FIR)
-    const cerIdx = updated.findIndex(c => c.cer === cer);
+      if (cerIdx === -1) {
+        updated.push({
+          cer,
+          fir,
+          righe: [nuovoRigo],
+          totaleCer: nuovoRigo.netto
+        });
 
-    if (cerIdx === -1) {
-      updated.push({
-        cer,
+        return updated;
+      }
+
+      const existing = updated[cerIdx];
+      const righe = [...(existing.righe || [])];
+
+      const rigaIdx = righe.findIndex(
+        r => r.materiale === selectedMateriale
+      );
+
+      if (rigaIdx !== -1) {
+        righe[rigaIdx] = nuovoRigo;
+      } else {
+        righe.push(nuovoRigo);
+      }
+
+      updated[cerIdx] = {
+        ...existing,
         fir,
-        righe: [nuovoRigo],
-        totaleCer: nuovoRigo.netto
-      });
+        righe,
+        totaleCer: righe.reduce((s, r) => s + r.netto, 0)
+      };
 
       return updated;
-    }
+    });
 
-    const existing = updated[cerIdx];
-
-    const righe = [...(existing.righe || [])];
-
-    const rigaIdx = righe.findIndex(
-      r => r.materiale === selectedMateriale
-    );
-
-    if (rigaIdx !== -1) {
-      righe[rigaIdx] = nuovoRigo;
-    } else {
-      righe.push(nuovoRigo);
-    }
-
-    updated[cerIdx] = {
-      ...existing,
-      fir, // FIR aggiornabile senza duplicare blocchi
-      righe,
-      totaleCer: righe.reduce((s, r) => s + r.netto, 0)
-    };
-
-    return updated;
-  });
-
-  setSelectedMateriale("");
-  setPeso("");
-  setCalo("");
-  setDirty(true);
-};
-const stampaUltimoMovimento = (tipo) => {
+    setSelectedMateriale("");
+    setPeso("");
+    setCalo("");
+    setDirty(true);
+  };
+  const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
 };
-const handleEdit = (cer, fir, materiale) => {
-  const cerObj = scarico.find(c => c.cer === cer && c.fir === fir);
-  if (!cerObj) return;
-  const riga = cerObj.righe.find(r => r.materiale === materiale);
-  if (!riga) return;
+  const handleEdit = (cer, fir, materiale) => {
+    const cerObj = scarico.find(c => c.cer === cer && c.fir === fir);
+    if (!cerObj) return;
 
-  setSelectedCer(cer);
-  setFirCer(fir);
-  setSelectedMateriale(materiale);
-  setPeso(riga.peso.toString().replace(".", ","));
-  setCalo(riga.calo.toString().replace(".", ","));
-};
-const handleDelete = (cer, fir, materiale) => {
-  setScarico(prev =>
-    prev
-      .map(c => {
-        if (c.cer === cer && c.fir === fir) {
-          const newRighe = c.righe.filter(r => r.materiale !== materiale);
-          const totaleCer = newRighe.reduce((sum, r) => sum + r.netto, 0);
-          return { ...c, righe: newRighe, totaleCer };
-        }
-        return c;
-      })
-      .filter(c => c.righe.length > 0)
-  );
-  setDirty(true);
-};
+    const riga = cerObj.righe.find(r => r.materiale === materiale);
+    if (!riga) return;
 
-const handleReset = async () => {
-  setSelectedFornitore("");
-  setSelectedListino("");
-  setSelectedCer("");
-  setSelectedMateriale("");
-  setPeso("");
-  setCalo("");
-  setScarico([]);
-  setFotoFile([]);
-  setPreviewFoto([]);
-  setFirCer("");
-  setDocIdOriginale(null);
+    setSelectedCer(cer);
+    setFirCer(fir);
+    setSelectedMateriale(materiale);
+    setPeso(riga.peso.toString().replace(".", ","));
+    setCalo(riga.calo.toString().replace(".", ","));
+    setCaloTipo(riga.caloTipo || "kg");   // 🔥 NUOVO
+  };
 
-  const now = new Date();
-
-  setDataScaricoStr(formattaDataItaliana(now));
-  setOraStr(formattaOra24(now));
-
-  const utente = getLogUser();
-  if (!utente) return;
-
-  try {
-    await deleteDoc(doc(db, "scarichi_draft", utente));
-  } catch (err) {
-    console.error("Errore delete draft:", err);
-  }
-};
-
-const salvaInCodaImmagini = async ({ files, utenteId, docTempId }) => {
-  if (!files || files.length === 0) return;
-
-  const promises = files.map(async (file) => {
-    return addDoc(collection(db, "scarichi_images_queue"), {
-      fileName: file.name,
-      fileType: file.type,
-      fileData: await new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      }),
-      utenteId,
-      docTempId,
-      uploaded: false,
-      createdAt: serverTimestamp()
-    });
-  });
-
-  await Promise.all(promises);
-};
-const handlePrint = async (movimentoId = null, tipo) => {
-  try {
-    if (!tipo) {
-      alert("Errore: tipo movimento non specificato");
-      return;
-    }
-
-    const collezione = tipo === "carico" ? "carichi" : "scarichi";
-    let docData;
-
-    // ---------------- RECUPERO DOCUMENTO ----------------
-    if (movimentoId) {
-      const refDoc = doc(db, collezione, movimentoId);
-      const snap = await getDoc(refDoc);
-
-      if (!snap.exists()) {
-        alert("Movimento non trovato");
-        return;
-      }
-
-      docData = snap.data();
-    } else {
-     const utente = getLogUser();
-
-      if (!utente) {
-        alert("Utente non loggato");
-        return;
-      }
-      const snap = await getDocs(collection(db, collezione));
-      const userDocs = snap.docs
-        .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
-        .sort((a, b) => {
-          const at = a.data().data?.toDate ? a.data().data.toDate().getTime() : 0;
-          const bt = b.data().data?.toDate ? b.data().data.toDate().getTime() : 0;
-          return bt - at;
-        });
-
-      if (!userDocs.length) {
-        alert(`Nessun movimento ${tipo}`);
-        return;
-      }
-
-      docData = userDocs[0].data();
-    }
-    const { pdf, startY } = await PdfHeader();
-    pdf.setFontSize(16);
-    let y = startY + 26;
-    const dataObj = docData.data?.toDate
-      ? docData.data.toDate()
-      : new Date();
-
-    pdf.text(
-      `Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`,
-      10,
-      66
-    );
-
-    pdf.setFontSize(12);
-
-    pdf.text(
-      `${tipo === "carico" ? "Destinatario" : "Fornitore"}: ${docData.fornitore || "-"}`,
-      10,
-      76
-    );
-
-    pdf.text(
-      `Data: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`,
-      10,
-      84
-    );
-
-    pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
-if (docData.note && docData.note.trim() !== "") {
-  const noteLines = pdf.splitTextToSize(docData.note, 180);
-
-  const noteBlockHeight = noteLines.length * 5 + 10;
-
-  // se non c'è spazio sufficiente → nuova pagina
-  if (y + noteBlockHeight > 280) {
-    pdf.addPage();
-    y = 20;
-  }
-
-  pdf.setFontSize(12);
-  pdf.text("Note:", 10, y);
-  y += 6;
-
-  pdf.setFontSize(10);
-  pdf.text(noteLines, 10, y);
-
-  y += noteLines.length * 5 + 10;
-}
-
-
-    // ---------------- TABELLE CER ----------------
-    const righe = docData.carico || docData.scarico || [];
-    for (const c of righe) {
-      pdf.setFontSize(13);
-      pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
-      y += 6;
-
-      autoTable(pdf, {
-        startY: y,
-        head: [["Materiale", "Peso", "Calo", "Netto"]],
-        body: (c.righe || []).map(r => [
-          r.materiale,
-          Number(r.peso || 0).toFixed(2),
-          Number(r.calo || 0).toFixed(2),
-          Number(r.netto || 0).toFixed(2),
-        ]),
-        theme: "grid",
-        styles: { fontSize: 10 },
-        margin: { left: 10 },
-      });
-
-      y = pdf.lastAutoTable.finalY + 6;
-
-      pdf.text(
-        `Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`,
-        10,
-        y
-      );
-
-      y += 10;
-    }
-    const fotos = Array.isArray(docData.fotoURL)
-      ? docData.fotoURL
-      : docData.fotoURL
-      ? [docData.fotoURL]
-      : [];
-
-    if (fotos.length > 0) {
-      if (y > 200) {
-        pdf.addPage();
-        y = 20;
-      }
-
-      pdf.setFontSize(12);
-      pdf.text("Foto movimento:", 10, y);
-      y += 10;
-
-      let x = 10;
-      let imgY = y;
-
-      for (let i = 0; i < fotos.length; i++) {
-        try {
-          const response = await fetch(fotos[i]);
-          const blob = await response.blob();
-
-          const base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-
-          pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
-
-          x += 65;
-
-          if (x > 160) {
-            x = 10;
-            imgY += 65;
+  const handleDelete = (cer, fir, materiale) => {
+    setScarico(prev =>
+      prev
+        .map(c => {
+          if (c.cer === cer && c.fir === fir) {
+            const newRighe = c.righe.filter(r => r.materiale !== materiale);
+            const totaleCer = newRighe.reduce((sum, r) => sum + r.netto, 0);
+            return { ...c, righe: newRighe, totaleCer };
           }
-        } catch (err) {
-          console.error("Errore immagine PDF:", err);
-        }
-      }
-    }
-
-    // ---------------- SAVE ----------------
-    const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
-
-
- await salvaESharePdfCapacitor(pdf, filename);
-return;
-
-  } catch (err) {
-    console.error("Errore PDF:", err);
-    alert("Errore generazione PDF");
-  }
-};
-const uploadSistema3Parti = async (file) => {
-  const toBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = reject;
-    });
-
-
-
-
-  const base64 = await toBase64(file);
-
-  const formData = new FormData();
-  formData.append("key", "104a4faded51e531311077f0412b6a38");
-  formData.append("image", base64);
-
-  const res = await fetch("https://api.imgbb.com/1/upload", {
-    method: "POST",
-    body: formData
-  });
-
-  const data = await res.json();
-
-  if (!res.ok || !data?.data?.url) {
-    console.error("IMGBB ERROR:", data);
-    throw new Error("Upload fallito");
-  }
-
-  return data.data.url;
-};
-const uploadFotoFiles = async (files) => {
-  const urls = [];
-
-  for (const file of files) {
-    const url = await uploadSistema3Parti(file); 
-    urls.push(url);
-  }
-
-  return urls;
-};
-
-const handleSave = async () => {
-  console.log("🔥 HANDLE SAVE PARTITO");
-
-  if (salvataggioInCorso) return;
-  setSalvataggioInCorso(true);
-
-  try {
-    const utenteNome = getLogUser();
-
-    if (!utenteNome) {
-      alert("Utente non valido");
-      return;
-    }
-
-    if (
-      !selectedFornitore ||
-      !selectedListino ||
-      !scarico ||
-      scarico.length === 0
-    ) {
-      alert("Completa fornitore, listino e scarico");
-      return;
-    }
-
-    const isFornitorePrivato =
-      (selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
-
-    // 🔥 FIX FIR PER CER (VALIDAZIONE REALE)
-    if (!isFornitorePrivato) {
-      const missingFir = (scarico || []).some(
-        (c) => !c.fir || c.fir.trim() === ""
-      );
-
-      if (missingFir) {
-        setFirError(true);
-        alert("FIR mancante per alcuni codici CER");
-
-        setTimeout(() => {
-          const el = document.getElementById("fir-input");
-          if (el) el.focus();
-        }, 0);
-
-        return;
-      }
-    }
-
-    const hasImages =
-      (fotoFile && fotoFile.length > 0) ||
-      (previewFoto &&
-        previewFoto.some(
-          (p) => typeof p === "string" && !p.startsWith("blob:")
-        ));
-
-    if (!isFornitorePrivato && !hasImages) {
-      alert("Devi caricare almeno un'immagine prima di salvare");
-      return;
-    }
-
-    const draftRef = doc(db, "scarichi_draft", utenteNome);
-    const draftSnap = await getDoc(draftRef);
-
-    let inModifica = false;
-    let docIdOriginaleState = docIdOriginale;
-    let sourceCollection = "scarichi";
-
-    if (draftSnap.exists()) {
-      const d = draftSnap.data();
-      inModifica = !!d.inModifica;
-
-      docIdOriginaleState =
-        d.docIdOriginale || docIdOriginale || null;
-
-      sourceCollection = d.sourceCollection || "scarichi";
-    }
-
-    let before = null;
-
-    if (inModifica && docIdOriginaleState) {
-      const ref = doc(db, sourceCollection, docIdOriginaleState);
-      const snap = await getDoc(ref);
-      before = snap.exists() ? snap.data() : null;
-    }
-
-    let uploadedUrls = [];
-
-    if (fotoFile && fotoFile.length > 0) {
-      try {
-        uploadedUrls = await uploadFotoFiles(fotoFile);
-      } catch (e) {
-        console.warn("Upload fallito → coda", e);
-
-        await salvaInCodaImmagini({
-          files: fotoFile,
-          utenteId: utenteNome,
-          docTempId: docIdOriginaleState || "new"
-        });
-
-        uploadedUrls = [];
-      }
-    }
-
-    const existingUrls = (previewFoto || []).filter(
-      (u) => typeof u === "string" && !u.startsWith("blob:")
+          return c;
+        })
+        .filter(c => c.righe.length > 0)
     );
+    setDirty(true);
+  };
 
-    const fotoURLs = Array.from(new Set([...existingUrls, ...uploadedUrls]));
-
-    const payload = {
-      fornitore: selectedFornitore || "",
-      listino: selectedListino || "",
-      tipo: tipoMovimento || "scarico",
-
-      [tipoMovimento === "carico" ? "carico" : "scarico"]: scarico || [],
-
-      utente: utenteLoggato,
-
-      data: usaOra
-        ? new Date()
-        : dataScaricoStr && oraStr
-        ? parseDataOra(dataScaricoStr, oraStr)
-        : new Date(),
-
-      fotoURL: fotoURLs,
-      note: note || "",
-      lastUpdate: new Date()
-    };
-
-    const targetCollection =
-      tipoMovimento === "carico" ? "carichi" : "scarichi";
-
-    let isUpdate = false;
-
-    if (inModifica && docIdOriginaleState) {
-      await setDoc(
-        doc(db, targetCollection, docIdOriginaleState),
-        payload,
-        { merge: true }
-      );
-      isUpdate = true;
-    } else {
-      const newDoc = await addDoc(
-        collection(db, targetCollection),
-        payload
-      );
-
-      docIdOriginaleState = newDoc.id;
-      isUpdate = false;
-    }
-
-    const refDocFinale = doc(db, targetCollection, docIdOriginaleState);
-    const snapFinale = await getDoc(refDocFinale);
-    const after = snapFinale.exists() ? snapFinale.data() : payload;
-
-const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
-
-    await scriviLog({
-      pagina: targetCollection,
-      evento: isUpdate ? "MODIFICA_MOVIMENTO" : "CREAZIONE_MOVIMENTO",
-
-      riferimento: {
-        collezione: targetCollection,
-        documentoId: docIdOriginaleState
-      },
-
-      utente: buildLogUser(activeUser, "OPERATORE"),
-
-      before: isUpdate
-        ? {
-            fornitore: before?.fornitore || "-",
-            listino: before?.listino || "-",
-            tipo: before?.tipo || "-"
-          }
-        : null,
-
-      after: {
-        fornitore: after?.fornitore || "-",
-        listino: after?.listino || "-",
-        tipo: after?.tipo || "-",
-        righe: (after?.scarico || after?.carico || []).length
-      },
-
-      ripristinabile: !!before
-    });
-
-    await deleteDoc(doc(db, "scarichi_draft", utenteNome));
-
-    setScarico([]);
-    setFotoFile([]);
-    setPreviewFoto([]);
-    setFirCer("");
+  const handleReset = async () => {
+    setSelectedFornitore("");
+    setSelectedListino("");
     setSelectedCer("");
     setSelectedMateriale("");
     setPeso("");
     setCalo("");
-    setSelectedFornitore("");
-    setSelectedListino("");
+    setCaloTipo("kg");   // 🔥 NUOVO
+    setScarico([]);
+    setFotoFile([]);
+    setPreviewFoto([]);
+    setFirCer("");
+    setDocIdOriginale(null);
 
-    setDirty(false);
+    const now = new Date();
+    setDataScaricoStr(formattaDataItaliana(now));
+    setOraStr(formattaOra24(now));
 
-    console.log("✅ SALVATAGGIO COMPLETATO");
+    const utente = getLogUser();
+    if (!utente) return;
 
-    const vuoleStampare = window.confirm("Vuoi stampare il movimento in PDF?");
-
-    if (vuoleStampare) {
-      await handlePrint(docIdOriginaleState, tipoMovimento);
+    try {
+      await deleteDoc(doc(db, "scarichi_draft", utente));
+    } catch (err) {
+      console.error("Errore delete draft:", err);
     }
-  } catch (err) {
-    console.error("❌ ERRORE SAVE:", err);
-    alert("Errore salvataggio");
-  } finally {
-    setSalvataggioInCorso(false);
-  }
-};
+  };
 
+  const salvaInCodaImmagini = async ({ files, utenteId, docTempId }) => {
+    if (!files || files.length === 0) return;
 
+    const promises = files.map(async (file) => {
+      return addDoc(collection(db, "scarichi_images_queue"), {
+        fileName: file.name,
+        fileType: file.type,
+        fileData: await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        }),
+        utenteId,
+        docTempId,
+        uploaded: false,
+        createdAt: serverTimestamp()
+      });
+    });
 
-const listinoBloccato = selectedFornitore !== "";
+    await Promise.all(promises);
+  };
 
-const sortByLabel = (a, b) => {
-  const strA = (typeof a === "string" ? a : a?.nome || "").toString();
-  const strB = (typeof b === "string" ? b : b?.nome || "").toString();
+  const handlePrint = async (movimentoId = null, tipo) => {
+    try {
+      if (!tipo) {
+        alert("Errore: tipo movimento non specificato");
+        return;
+      }
 
-  return strA.localeCompare(strB, "it", { sensitivity: "base" });
-};
+      const collezione = tipo === "carico" ? "carichi" : "scarichi";
+      let docData;
 
-// FORNITORI
-const fornitoriOptions = fornitori.sort(sortByLabel).map(f => ({
-  value: f.nome,
-  label: f.nome
-}));
+      if (movimentoId) {
+        const refDoc = doc(db, collezione, movimentoId);
+        const snap = await getDoc(refDoc);
 
+        if (!snap.exists()) {
+          alert("Movimento non trovato");
+          return;
+        }
 
-const listiniOptions = listini
-  .filter(l =>
-    (l.tipoListino || "").trim().toLowerCase() ===
-    (tipoMovimento || "").trim().toLowerCase()
-  )
-  .sort((a, b) =>
-    (a.nome || "").localeCompare(b.nome || "", "it", {
-      sensitivity: "base"
-    })
-  )
-  .map(l => ({
-    value: l.nome,
-    label: l.nome
+        docData = snap.data();
+      } else {
+        const utente = getLogUser();
+        if (!utente) {
+          alert("Utente non loggato");
+          return;
+        }
+
+        const snap = await getDocs(collection(db, collezione));
+        const userDocs = snap.docs
+          .filter(d => (d.data().utente || "").toLowerCase() === utente.toLowerCase())
+          .sort((a, b) => {
+            const at = a.data().data?.toDate ? a.data().data.toDate().getTime() : 0;
+            const bt = b.data().data?.toDate ? b.data().data.toDate().getTime() : 0;
+            return bt - at;
+          });
+
+        if (!userDocs.length) {
+          alert(`Nessun movimento ${tipo}`);
+          return;
+        }
+
+        docData = userDocs[0].data();
+      }
+
+      const { pdf, startY } = await PdfHeader();
+      pdf.setFontSize(16);
+      let y = startY + 26;
+
+      const dataObj = docData.data?.toDate
+        ? docData.data.toDate()
+        : new Date();
+
+      pdf.text(
+        `Movimento: ${tipo === "carico" ? "Carico" : "Scarico"}`,
+        10,
+        66
+      );
+
+      pdf.setFontSize(12);
+      pdf.text(
+        `${tipo === "carico" ? "Destinatario" : "Fornitore"}: ${docData.fornitore || "-"}`,
+        10,
+        76
+      );
+
+      pdf.text(
+        `Data: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`,
+        10,
+        84
+      );
+
+      pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
+
+      if (docData.note && docData.note.trim() !== "") {
+        const noteLines = pdf.splitTextToSize(docData.note, 180);
+        const noteBlockHeight = noteLines.length * 5 + 10;
+
+        if (y + noteBlockHeight > 280) {
+          pdf.addPage();
+          y = 20;
+        }
+
+        pdf.setFontSize(12);
+        pdf.text("Note:", 10, y);
+        y += 6;
+
+        pdf.setFontSize(10);
+        pdf.text(noteLines, 10, y);
+
+        y += noteLines.length * 5 + 10;
+      }
+
+      const righe = docData.carico || docData.scarico || [];
+
+      for (const c of righe) {
+        pdf.setFontSize(13);
+        pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
+        y += 6;
+
+        autoTable(pdf, {
+          startY: y,
+          head: [["Materiale", "Peso", "Calo", "Netto"]],
+          body: (c.righe || []).map(r => [
+            r.materiale,
+            Number(r.peso || 0).toFixed(2),
+            r.caloTipo === "perc"
+              ? `${Number(r.calo).toFixed(2)}%`
+              : Number(r.calo).toFixed(2),
+            Number(r.netto || 0).toFixed(2),
+          ]),
+          theme: "grid",
+          styles: { fontSize: 10 },
+          margin: { left: 10 },
+        });
+
+        y = pdf.lastAutoTable.finalY + 6;
+
+        pdf.text(
+          `Totale CER: ${(c.totaleCer || 0).toFixed(2)} kg`,
+          10,
+          y
+        );
+
+        y += 10;
+      }
+
+      const fotos = Array.isArray(docData.fotoURL)
+        ? docData.fotoURL
+        : docData.fotoURL
+        ? [docData.fotoURL]
+        : [];
+
+      if (fotos.length > 0) {
+        if (y > 200) {
+          pdf.addPage();
+          y = 20;
+        }
+
+        pdf.setFontSize(12);
+        pdf.text("Foto movimento:", 10, y);
+        y += 10;
+
+        let x = 10;
+        let imgY = y;
+
+        for (let i = 0; i < fotos.length; i++) {
+          try {
+            const response = await fetch(fotos[i]);
+            const blob = await response.blob();
+
+            const base64 = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+
+            pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
+
+            x += 65;
+
+            if (x > 160) {
+              x = 10;
+              imgY += 65;
+            }
+          } catch (err) {
+            console.error("Errore immagine PDF:", err);
+          }
+        }
+      }
+
+      const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
+
+      await salvaESharePdfCapacitor(pdf, filename);
+      return;
+
+    } catch (err) {
+      console.error("Errore PDF:", err);
+      alert("Errore generazione PDF");
+    }
+  };
+  const uploadSistema3Parti = async (file) => {
+    const toBase64 = (file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+      });
+
+    const base64 = await toBase64(file);
+
+    const formData = new FormData();
+    formData.append("key", "104a4faded51e531311077f0412b6a38");
+    formData.append("image", base64);
+
+    const res = await fetch("https://api.imgbb.com/1/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data?.data?.url) {
+      console.error("IMGBB ERROR:", data);
+      throw new Error("Upload fallito");
+    }
+
+    return data.data.url;
+  };
+
+  const uploadFotoFiles = async (files) => {
+    const urls = [];
+
+    for (const file of files) {
+      const url = await uploadSistema3Parti(file);
+      urls.push(url);
+    }
+
+    return urls;
+  };
+
+  const handleSave = async () => {
+    console.log("🔥 HANDLE SAVE PARTITO");
+
+    if (salvataggioInCorso) return;
+    setSalvataggioInCorso(true);
+
+    try {
+      const utenteNome = getLogUser();
+
+      if (!utenteNome) {
+        alert("Utente non valido");
+        return;
+      }
+
+      if (
+        !selectedFornitore ||
+        !selectedListino ||
+        !scarico ||
+        scarico.length === 0
+      ) {
+        alert("Completa fornitore, listino e scarico");
+        return;
+      }
+
+      const isFornitorePrivato =
+        (selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
+
+      if (!isFornitorePrivato) {
+        const missingFir = (scarico || []).some(
+          (c) => !c.fir || c.fir.trim() === ""
+        );
+
+        if (missingFir) {
+          setFirError(true);
+          alert("FIR mancante per alcuni codici CER");
+
+          setTimeout(() => {
+            const el = document.getElementById("fir-input");
+            if (el) el.focus();
+          }, 0);
+
+          return;
+        }
+      }
+
+      const hasImages =
+        (fotoFile && fotoFile.length > 0) ||
+        (previewFoto &&
+          previewFoto.some(
+            (p) => typeof p === "string" && !p.startsWith("blob:")
+          ));
+
+      if (!isFornitorePrivato && !hasImages) {
+        alert("Devi caricare almeno un'immagine prima di salvare");
+        return;
+      }
+
+      const draftRef = doc(db, "scarichi_draft", utenteNome);
+      const draftSnap = await getDoc(draftRef);
+
+      let inModifica = false;
+      let docIdOriginaleState = docIdOriginale;
+      let sourceCollection = "scarichi";
+
+      if (draftSnap.exists()) {
+        const d = draftSnap.data();
+        inModifica = !!d.inModifica;
+
+        docIdOriginaleState =
+          d.docIdOriginale || docIdOriginale || null;
+
+        sourceCollection = d.sourceCollection || "scarichi";
+      }
+
+      let before = null;
+
+      if (inModifica && docIdOriginaleState) {
+        const ref = doc(db, sourceCollection, docIdOriginaleState);
+        const snap = await getDoc(ref);
+        before = snap.exists() ? snap.data() : null;
+      }
+
+      let uploadedUrls = [];
+
+      if (fotoFile && fotoFile.length > 0) {
+        try {
+          uploadedUrls = await uploadFotoFiles(fotoFile);
+        } catch (e) {
+          console.warn("Upload fallito → coda", e);
+
+          await salvaInCodaImmagini({
+            files: fotoFile,
+            utenteId: utenteNome,
+            docTempId: docIdOriginaleState || "new"
+          });
+
+          uploadedUrls = [];
+        }
+      }
+
+      const existingUrls = (previewFoto || []).filter(
+        (u) => typeof u === "string" && !u.startsWith("blob:")
+      );
+
+      const fotoURLs = Array.from(new Set([...existingUrls, ...uploadedUrls]));
+
+      const payload = {
+        fornitore: selectedFornitore || "",
+        listino: selectedListino || "",
+        tipo: tipoMovimento || "scarico",
+
+        [tipoMovimento === "carico" ? "carico" : "scarico"]: scarico || [],
+
+        utente: utenteLoggato,
+
+        data: usaOra
+          ? new Date()
+          : dataScaricoStr && oraStr
+          ? parseDataOra(dataScaricoStr, oraStr)
+          : new Date(),
+
+        fotoURL: fotoURLs,
+        note: note || "",
+        lastUpdate: new Date()
+      };
+
+      const targetCollection =
+        tipoMovimento === "carico" ? "carichi" : "scarichi";
+
+      let isUpdate = false;
+
+      if (inModifica && docIdOriginaleState) {
+        await setDoc(
+          doc(db, targetCollection, docIdOriginaleState),
+          payload,
+          { merge: true }
+        );
+        isUpdate = true;
+      } else {
+        const newDoc = await addDoc(
+          collection(db, targetCollection),
+          payload
+        );
+
+        docIdOriginaleState = newDoc.id;
+        isUpdate = false;
+      }
+
+      const refDocFinale = doc(db, targetCollection, docIdOriginaleState);
+      const snapFinale = await getDoc(refDocFinale);
+      const after = snapFinale.exists() ? snapFinale.data() : payload;
+
+      const clientIP = await getClientIP?.() || "NON_DISPONIBILE";
+
+      await scriviLog({
+        pagina: targetCollection,
+        evento: isUpdate ? "MODIFICA_MOVIMENTO" : "CREAZIONE_MOVIMENTO",
+
+        riferimento: {
+          collezione: targetCollection,
+          documentoId: docIdOriginaleState
+        },
+
+        utente: buildLogUser(activeUser, "OPERATORE"),
+
+        before: isUpdate
+          ? {
+              fornitore: before?.fornitore || "-",
+              listino: before?.listino || "-",
+              tipo: before?.tipo || "-"
+            }
+          : null,
+
+        after: {
+          fornitore: after?.fornitore || "-",
+          listino: after?.listino || "-",
+          tipo: after?.tipo || "-",
+          righe: (after?.scarico || after?.carico || []).length
+        },
+
+        ripristinabile: !!before
+      });
+
+      await deleteDoc(doc(db, "scarichi_draft", utenteNome));
+
+      setScarico([]);
+      setFotoFile([]);
+      setPreviewFoto([]);
+      setFirCer("");
+      setSelectedCer("");
+      setSelectedMateriale("");
+      setPeso("");
+      setCalo("");
+      setCaloTipo("kg");
+      setSelectedFornitore("");
+      setSelectedListino("");
+
+      setDirty(false);
+
+      console.log("✅ SALVATAGGIO COMPLETATO : inModifica && returnToDettaglio",inModifica , returnToDettaglio);
+// 🔥 SE SIAMO IN MODIFICA E SIAMO STATI CHIAMATI DAL DETTAGLIO → TORNA INDIETRO
+if (inModifica && returnToDettaglio) {
+    navigate(-1);   // torna alla pagina chiamante
+    return;
+}
+      const vuoleStampare = window.confirm("Vuoi stampare il movimento in PDF?");
+      if (vuoleStampare) {
+        await handlePrint(docIdOriginaleState, tipoMovimento);
+      }
+
+    } catch (err) {
+      console.error("❌ ERRORE SAVE:", err);
+      alert("Errore salvataggio");
+    } finally {
+      setSalvataggioInCorso(false);
+    }
+  };
+
+  const listinoBloccato = selectedFornitore !== "";
+
+  const sortByLabel = (a, b) => {
+    const strA = (typeof a === "string" ? a : a?.nome || "").toString();
+    const strB = (typeof b === "string" ? b : b?.nome || "").toString();
+
+    return strA.localeCompare(strB, "it", { sensitivity: "base" });
+  };
+
+  const fornitoriOptions = fornitori.sort(sortByLabel).map(f => ({
+    value: f.nome,
+    label: f.nome
   }));
 
-// CER
-const cerOptions = cerDisponibili.sort(sortByLabel).map(c => ({
-  value: c,
-  label: c
-}));
+  const listiniOptions = listini
+    .filter(l =>
+      (l.tipoListino || "").trim().toLowerCase() ===
+      (tipoMovimento || "").trim().toLowerCase()
+    )
+    .sort((a, b) =>
+      (a.nome || "").localeCompare(b.nome || "", "it", {
+        sensitivity: "base"
+      })
+    )
+    .map(l => ({
+      value: l.nome,
+      label: l.nome
+    }));
 
-// MATERIALI
-const materialiOptions = materialiFiltrati.map(m => ({
-  value: m.nome,
-  label: m.nome
-}));
+  const cerOptions = cerDisponibili.sort(sortByLabel).map(c => ({
+    value: c,
+    label: c
+  }));
 
+  const materialiOptions = materialiFiltrati.map(m => ({
+    value: m.nome,
+    label: m.nome
+  }));
   return (
     <div className="scarichi-container">
       <div className="scarichi-header" style={{
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between"
-}}>
-<div style={{
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "8px",
-  marginBottom: "15px"
-}}>
-  
-  {configAzienda?.logoBase64 && (
-    <img
-      src={`data:image/png;base64,${configAzienda.logoBase64}`}
-      alt="logo"
-      style={{
-        height: "150px",
-        maxWidth: "300px",
-        objectFit: "contain"
-      }}
-    />
-  )}
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}>
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "15px"
+        }}>
+          {configAzienda?.logoBase64 && (
+            <img
+              src={`data:image/png;base64,${configAzienda.logoBase64}`}
+              alt="logo"
+              style={{
+                height: "150px",
+                maxWidth: "300px",
+                objectFit: "contain"
+              }}
+            />
+          )}
 
-  <h2 style={{ margin: 0 }}>
-    {docIdOriginale
-      ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
-      : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
-    }
-  </h2>
+          <h2 style={{ margin: 0 }}>
+            {docIdOriginale
+              ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
+              : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
+            }
+          </h2>
+        </div>
 
-</div>
         <div>
-        {["admin", "manager"].includes(
-  (activeUserRole || role || "").toLowerCase().trim()
-) && (
-  <div style={{ display: "flex", gap: "8px" }}>
-  <button style={headerBtnStyle}  onClick={handleGoToDashboard}>
-    Torna alla Dashboard
-  </button>
-  </div>
-)}
-<div style={{ display: "flex", gap: "8px" }}>
-         <button style={headerBtnStyle}  onClick={logout}>
-  🚪Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
-</button>
-</div>
-         {/* --- PULSANTE STAMPA ULTIMO SCARICO --- */}
-    
-  <div style={{ display: "flex", gap: "8px" }}>
-  <button style={headerBtnStyle}  onClick={() => stampaUltimoMovimento("scarico")}>
-    Stampa Ultimo Scarico
-  </button></div><div style={{ display: "flex", gap: "8px" }}>
-  <button style={headerBtnStyle}  onClick={() => stampaUltimoMovimento("carico")} style={{ marginLeft: "8px" }}>
-    Stampa Ultimo Carico
-  </button>
-</div>
-<div style={{ display: "flex", gap: "8px" }}>
-       <button onClick={handleReset} style={{ marginLeft: "15px" }}>    {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
-  </button></div>
-       </div>
+          {["admin", "manager"].includes(
+            (activeUserRole || role || "").toLowerCase().trim()
+          ) && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button style={headerBtnStyle} onClick={handleGoToDashboard}>
+                Torna alla Dashboard
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button style={headerBtnStyle} onClick={logout}>
+              🚪Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button style={headerBtnStyle} onClick={() => stampaUltimoMovimento("scarico")}>
+              Stampa Ultimo Scarico
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              style={headerBtnStyle}
+              onClick={() => stampaUltimoMovimento("carico")}
+            >
+              Stampa Ultimo Carico
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={handleReset} style={{ marginLeft: "15px" }}>
+              {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* DATA / ORA */}
       <div>
         <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-          <label>            Data:            
+          <label>
+            Data:
             <DatePicker
               selected={dataScaricoStr ? parseDataOra(dataScaricoStr, oraStr) : new Date()}
-              onChange={(date) => {          setDirty(true);        setDataScaricoStr(formattaDataItaliana(date));
-                if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {                  const now = new Date();
-                  const [hh, mm] = oraStr.split(":").map(Number);                  if (hh > now.getHours() || (hh === now.getHours() && mm > now.getMinutes())) {
+              onChange={(date) => {
+                setDirty(true);
+                setDataScaricoStr(formattaDataItaliana(date));
+
+                if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {
+                  const now = new Date();
+                  const [hh, mm] = oraStr.split(":").map(Number);
+                  if (hh > now.getHours() || (hh === now.getHours() && mm > now.getMinutes())) {
                     setOraStr(formattaOra24(now));
                   }
                 } else {
@@ -1408,22 +1540,34 @@ const materialiOptions = materialiFiltrati.map(m => ({
               }}
               dateFormat="dd MMM yyyy"
               locale="it"
-             disabled={usaOra && !isEditing}
+              disabled={usaOra && !isEditing}
               placeholderText="DD MMM YYYY"
             />
           </label>
 
           <label>
             Ora:
-            <DatePicker              selected={                oraStr                  ? new Date(0, 0, 0, ...oraStr.split(":").map(Number))
+            <DatePicker
+              selected={
+                oraStr
+                  ? new Date(0, 0, 0, ...oraStr.split(":").map(Number))
                   : new Date()
-              }              onChange={(time) => {
-  setOraStr(formattaOra24(time));
-  setDirty(true); // 🔥 FIX
-}}             showTimeSelect
-              showTimeSelectOnly              timeIntervals={15}              timeFormat="HH:mm"              dateFormat="HH:mm"
-             disabled={usaOra && !isEditing}             placeholderText="HH:mm"              minTime={new Date(0, 0, 0, 0, 0)}              maxTime={
-                dataScaricoStr === formattaDataItaliana(new Date())                  ? new Date(0, 0, 0, new Date().getHours(), new Date().getMinutes())
+              }
+              onChange={(time) => {
+                setOraStr(formattaOra24(time));
+                setDirty(true);
+              }}
+              showTimeSelect
+              showTimeSelectOnly
+              timeIntervals={15}
+              timeFormat="HH:mm"
+              dateFormat="HH:mm"
+              disabled={usaOra && !isEditing}
+              placeholderText="HH:mm"
+              minTime={new Date(0, 0, 0, 0, 0)}
+              maxTime={
+                dataScaricoStr === formattaDataItaliana(new Date())
+                  ? new Date(0, 0, 0, new Date().getHours(), new Date().getMinutes())
                   : new Date(0, 0, 0, 23, 59)
               }
             />
@@ -1434,269 +1578,296 @@ const materialiOptions = materialiFiltrati.map(m => ({
           </label>
         </div>
 
-      {/* BLOCCO FORNITORE */}
-{/* BLOCCO FORNITORE / DESTINATARIO */}
-<div style={{ marginTop: "12px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-    <label style={{ marginRight: "10px" }}>
-    Tipo Movimento:
-<select
-  value={tipoMovimento}
-onChange={(e) => {
-  const nuovoTipo = e.target.value;
+        {/* TIPO MOVIMENTO */}
+        <div style={{ marginTop: "12px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <label style={{ marginRight: "10px" }}>
+            Tipo Movimento:
+            <select
+              value={tipoMovimento}
+              onChange={(e) => {
+                const nuovoTipo = e.target.value;
 
-setLockDraftSync(true);
+                setLockDraftSync(true);
+                setTimeout(() => setLockDraftSync(false), 500);
 
-setTimeout(() => {
-  setLockDraftSync(false);
-}, 500);
-  setTipoMovimento(nuovoTipo);
+                setTipoMovimento(nuovoTipo);
 
-  if (!isEditing && !docIdOriginale) {
-    setSelectedFornitore("");
-    setSelectedListino("");
-    setScarico([]);
-    setSelectedCer("");
-    setSelectedMateriale("");
-    setPeso("");
-    setCalo("");
-    setFirCer("");
-    setFotoFile([]);
-  }
+                if (!isEditing && !docIdOriginale) {
+                  setSelectedFornitore("");
+                  setSelectedListino("");
+                  setScarico([]);
+                  setSelectedCer("");
+                  setSelectedMateriale("");
+                  setPeso("");
+                  setCalo("");
+                  setCaloTipo("kg");
+                  setFirCer("");
+                  setFotoFile([]);
+                }
 
-  setSalvataggioInCorso(false);
-}}>
-      <option value="scarico">Scarico</option>
-      <option value="carico">Carico</option>
-    </select>
-  </label>
-</div><div>
-  <label style={{ marginRight: "6px" }}>
-    {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
-  </label>
+                setSalvataggioInCorso(false);
+              }}
+            >
+              <option value="scarico">Scarico</option>
+              <option value="carico">Carico</option>
+            </select>
+          </label>
+        </div>
 
-<Select
-  options={fornitoriOptions}
-  value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
-  onChange={(selected) => {
-    const nome = selected?.value || "";
-    setSelectedFornitore(nome);
+        {/* FORNITORE */}
+        <div>
+          <label style={{ marginRight: "6px" }}>
+            {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
+          </label>
 
-    const forn = fornitori.find(f => f.nome === nome);
-    if (!forn) return;
+          <Select
+            options={fornitoriOptions}
+            value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
+            onChange={(selected) => {
+              const nome = selected?.value || "";
+              setSelectedFornitore(nome);
 
-      const primoCompatibile = listini.find(
-      l => (l.tipoListino || "").trim() === tipoMovimento
-    );
+              const forn = fornitori.find(f => f.nome === nome);
+              if (!forn) return;
 
-    if (primoCompatibile) {
-      setSelectedListino(primoCompatibile.nome);
-    }
-  }}
-  placeholder="Cerca fornitore..."
-  isSearchable
-  isClearable
-/>
-  {/* PULSANTE NUOVO FORNITORE / DESTINATARIO */}
-  <button     type="button"    onClick={() => { // 🔥 SALVA STATO CORRENTE PRIMA DI USCIRE
-    localStorage.setItem("scaricoReturnPage", "/scarichi");
+              const primoCompatibile = listini.find(
+                l => (l.tipoListino || "").trim() === tipoMovimento
+              );
 
-    localStorage.setItem("scarico_temp_data", dataScaricoStr || "");
-    localStorage.setItem("scarico_temp_ora", oraStr || "");
-    localStorage.setItem("scarico_temp_usaOra", usaOra ? "1" : "0");
-localStorage.setItem("fornitore_prefill_nome", "");
-    navigate("/fornitori?openNew=true");  }}    
-     style={{ marginLeft: "10px" }}  >+ {tipoMovimento === "carico" ? "Nuovo Destinatario" : "Nuovo Fornitore"}  </button>
-</div>
-        <label>Listino:</label>
-<Select
-  options={listiniOptions}
-  value={listiniOptions.find(o => o.value === selectedListino) || null}
-  onChange={(selected) => {
-    setSelectedListino(selected?.value || "");
-  }}
-  placeholder="Cerca listino..."
-  isSearchable
-  isClearable
-  menuPortalTarget={document.body}
-  styles={{
-    menuPortal: base => ({ ...base, zIndex: 9999 })
-  }}
-/>
-        
- 
+              if (primoCompatibile) {
+                setSelectedListino(primoCompatibile.nome);
+              }
+            }}
+            placeholder="Cerca fornitore..."
+            isSearchable
+            isClearable
+          />
+
+          {/* NUOVO FORNITORE */}
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem("scaricoReturnPage", "/scarichi");
+              localStorage.setItem("scarico_temp_data", dataScaricoStr || "");
+              localStorage.setItem("scarico_temp_ora", oraStr || "");
+              localStorage.setItem("scarico_temp_usaOra", usaOra ? "1" : "0");
+              localStorage.setItem("fornitore_prefill_nome", "");
+              navigate("/fornitori?openNew=true");
+            }}
+            style={{ marginLeft: "10px" }}
+          >
+            + {tipoMovimento === "carico" ? "Nuovo Destinatario" : "Nuovo Fornitore"}
+          </button>
+        </div>
+
+      {/* LISTINO — visibile SOLO per admin/manager */}
+{["admin", "manager"].includes((activeUserRole || "").toLowerCase()) && (
+  <>
+    <label>Listino:</label>
+    <Select
+      options={listiniOptions}
+      value={listiniOptions.find(o => o.value === selectedListino) || null}
+      onChange={(selected) => {
+        setSelectedListino(selected?.value || "");
+      }}
+      placeholder="Cerca listino..."
+      isSearchable
+      isClearable
+      menuPortalTarget={document.body}
+      styles={{
+        menuPortal: base => ({ ...base, zIndex: 9999 })
+      }}
+    />
+  </>
+)}
+
+
+
+
+        {/* FOTO */}
         {listinoBloccato && (
           <>
-           <label>Foto scarico:</label>
-<input
-  type="file"
-  accept="image/*"
-  capture="environment"
-  multiple
-onChange={async (e) => {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
+            <label>Foto scarico:</label>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              onChange={async (e) => {
+                const files = Array.from(e.target.files);
+                if (!files.length) return;
 
-  setUploadingImages(true);
+                setUploadingImages(true);
+                setFotoFile(prev => [...prev, ...files]);
 
-  // mantieni file per upload vero
-  setFotoFile(prev => [...prev, ...files]);
+                const previews = files.map(file => URL.createObjectURL(file));
+                setPreviewFoto(prev => [...prev, ...previews]);
 
-  // 🔥 SOLO PREVIEW LEGGERO (NO BASE64)
-  const previews = files.map(file => URL.createObjectURL(file));
-  setPreviewFoto(prev => [...prev, ...previews]);
+                setTimeout(() => {
+                  setUploadingImages(false);
+                  setDirty(true);
+                }, 300);
+              }}
+            />
 
-  setTimeout(() => {
-    setUploadingImages(false);
-    setDirty(true);
-  }, 300);
-}}
-/>
-{previewFoto.length > 0 && (
-  <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-    {previewFoto.map((src, i) => (
-      <div key={i} style={{ position: "relative" }}>
-        <img
-          src={src}
-          alt="preview"
-          style={{
-            width: "80px",
-            height: "80px",
-            objectFit: "cover",
-            borderRadius: "6px",
-            border: "1px solid #ccc"
-          }}
-        />
+            {previewFoto.length > 0 && (
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                {previewFoto.map((src, i) => (
+                  <div key={i} style={{ position: "relative" }}>
+                    <img
+                      src={src}
+                      alt="preview"
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                        objectFit: "cover",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc"
+                      }}
+                    />
 
-        {/* 🔥 bottone elimina */}
-        <button
-          onClick={() => removeFoto(i)}
-          style={{
-            position: "absolute",
-            top: "-6px",
-            right: "-6px",
-            width: "22px",
-            height: "22px",
-            borderRadius: "50%",
-            border: "none",
-            background: "red",
-            color: "white",
-            fontSize: "14px",
-            cursor: "pointer",
-            lineHeight: "22px"
-          }}
-        >
-          ×
-        </button>
-      </div>
-    ))}
-  </div>
-)}
+                    <button
+                      onClick={() => removeFoto(i)}
+                      style={{
+                        position: "absolute",
+                        top: "-6px",
+                        right: "-6px",
+                        width: "22px",
+                        height: "22px",
+                        borderRadius: "50%",
+                        border: "none",
+                        background: "red",
+                        color: "white",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        lineHeight: "22px"
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
+
+        {/* NOTE */}
         <div style={{ marginTop: "12px" }}>
-  <label>Note:</label>
-  <textarea
-    value={note}
-    onChange={(e) => {
-      setNote(e.target.value);
-      setDirty(true);
-    }}
-    rows={3}
-    style={{ width: "100%" }}
-  />
-</div>
-          {/* --- PULSANTE SALVA SCARICO FINALE --- */}
-<div style={{ marginTop: "20px", textAlign: "center" }}>
-<button
-  onClick={handleSave}
- disabled={
-  salvataggioInCorso ||
-  firExists ||
-  !listinoValid ||
-  !dirty
-}
-  style={{
-    padding: "10px 20px",
-    fontSize: "16px",
-    backgroundColor: "#4CAF50",
-    color: "white",
-    border: "none",
-    borderRadius: "5px",
-    cursor: firExists ? "not-allowed" : "pointer"
-  }}
->
-  {salvataggioInCorso ? "Salvataggio..." : tipoMovimento === "carico" ? "Salva Carico" : "Salva Scarico"}
-</button>
-</div>
+          <label>Note:</label>
+          <textarea
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              setDirty(true);
+            }}
+            rows={3}
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        {/* SALVA */}
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button
+            onClick={handleSave}
+            disabled={
+              salvataggioInCorso ||
+              firExists ||
+              !listinoValid ||
+              !dirty
+            }
+            style={{
+              padding: "10px 20px",
+              fontSize: "16px",
+              backgroundColor: "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: "5px",
+              cursor: firExists ? "not-allowed" : "pointer"
+            }}
+          >
+            {salvataggioInCorso ? "Salvataggio..." : tipoMovimento === "carico" ? "Salva Carico" : "Salva Scarico"}
+          </button>
+        </div>
       </div>
+
       <hr />
+
+      {/* CER */}
       {listinoBloccato && (
         <>
           <label>Codice CER:</label>
-<Select
-  options={cerOptions}
-  value={cerOptions.find(o => o.value === selectedCer) || null}
-  onChange={(selected) => {
-    setSelectedCer(selected?.value || "");
-  }}
-  placeholder="Cerca CER..."
-  isSearchable
-/>
+          <Select
+            options={cerOptions}
+            value={cerOptions.find(o => o.value === selectedCer) || null}
+            onChange={(selected) => {
+              setSelectedCer(selected?.value || "");
+            }}
+            placeholder="Cerca CER..."
+            isSearchable
+          />
+
           <label>F.I.R (CER)/DDT:</label>
-          
-<input
-id="fir-input"
-className={firError ? "input-error" : ""}
-  type="text"
-  value={firCer}
-  disabled={isFornitorePrivato}
-  onChange={(e) => {
-  setFirCer(e.target.value.toUpperCase());
-  setFirError(false);
-  setDirty(true);
-}}
-  onBlur={() => {
-  if (!isFornitorePrivato) {
-    setFirError(!firCer);
-    checkFirExists(firCer);
-  }
-  }}
-  placeholder={
-  isFornitorePrivato
-    ? "FIR non richiesto per fornitore privato"
-    : firError
-      ? "FIR obbligatorio"
-      : "Numero formulario (FIR)"
-}
-  style={{
-    textTransform: "uppercase",
-    backgroundColor: isFornitorePrivato ? "#eee" : "white"
-  }}
-/>
-        {firExists && (
-  <p style={{ color: "red", fontWeight: "bold" }}>
-    il FIR immesso {firCer} è già presente a sistema, impossibile continuare
-  </p>
-)}{firCheckLoading && (
-  <p style={{ color: "#999" }}>
-    Controllo FIR in corso...
-  </p>
-)}
+          <input
+            id="fir-input"
+            className={firError ? "input-error" : ""}
+            type="text"
+            value={firCer}
+            disabled={isFornitorePrivato}
+            onChange={(e) => {
+              setFirCer(e.target.value.toUpperCase());
+              setFirError(false);
+              setDirty(true);
+            }}
+            onBlur={() => {
+              if (!isFornitorePrivato) {
+                setFirError(!firCer);
+                checkFirExists(firCer);
+              }
+            }}
+            placeholder={
+              isFornitorePrivato
+                ? "FIR non richiesto per fornitore privato"
+                : firError
+                  ? "FIR obbligatorio"
+                  : "Numero formulario (FIR)"
+            }
+            style={{
+              textTransform: "uppercase",
+              backgroundColor: isFornitorePrivato ? "#eee" : "white"
+            }}
+          />
+
+          {firExists && (
+            <p style={{ color: "red", fontWeight: "bold" }}>
+              il FIR immesso {firCer} è già presente a sistema, impossibile continuare
+            </p>
+          )}
+
+          {firCheckLoading && (
+            <p style={{ color: "#999" }}>
+              Controllo FIR in corso...
+            </p>
+          )}
         </>
       )}
+
+      {/* MATERIALE */}
       {selectedCer && (
         <>
           <label>Materiale:</label>
-<Select
-  options={materialiOptions}
-  value={materialiOptions.find(o => o.value === selectedMateriale) || null}
-  onChange={(selected) => {
-    setSelectedMateriale(selected?.value || "");
-  }}
-  placeholder="Cerca materiale..."
-  isSearchable
-/>
-<br/>
+          <Select
+            options={materialiOptions}
+            value={materialiOptions.find(o => o.value === selectedMateriale) || null}
+            onChange={(selected) => {
+              setSelectedMateriale(selected?.value || "");
+            }}
+            placeholder="Cerca materiale..."
+            isSearchable
+          />
+
+          <br />
+
           <label>Peso (kg):</label>
           <input
             type="text"
@@ -1707,48 +1878,82 @@ className={firError ? "input-error" : ""}
               setPeso(val);
             }}
           />
-          <label>Calo (kg):</label>
-          <input type="text" value={calo} onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))} />
-          <button onClick={handleAdd} disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}>
+
+          <label>Calo:</label>
+          <input
+            type="text"
+            value={calo}
+            onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))}
+          />
+
+          {/* 🔥 SELECT CALO TIPO */}
+          <label>Tipo Calo:</label>
+          <select
+            value={caloTipo}
+            onChange={(e) => setCaloTipo(e.target.value)}
+          >
+            <option value="kg">kg</option>
+            <option value="perc">%</option>
+          </select>
+
+          <button
+            onClick={handleAdd}
+            disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
+          >
             Aggiungi / Aggiorna
           </button>
         </>
       )}
+
       <hr />
-{scarico.map((c) => (
-  <div key={c.cer + c.fir} style={{ marginBottom: "20px" }}>
-    <h4>CER {c.cer} {c.fir && `- FIR: ${c.fir}`}</h4>
-    <table>
-      <thead>
-        <tr>          
-          <th>Materiale</th>          
-          <th>Peso</th>          
-          <th>Calo</th>          
-          <th>Netto</th>          
-          <th>Azioni</th>        
-       </tr>
-      </thead>
-      <tbody>
-  {c.righe.map((r) => (
-    <tr key={r.materiale}>
-      <td>{r.materiale}</td>
-      <td>{r.peso}</td>
-      <td>{r.calo}</td>
-      <td>{r.netto}</td>
-      <td>
-        <button onClick={() => handleEdit(c.cer, c.fir, r.materiale)}>✏️</button>
-        <button onClick={() => handleDelete(c.cer, c.fir, r.materiale)}>🗑️</button>
-      </td>
-    </tr>
-  ))}
-</tbody>
-    </table>
-    <p style={{ fontWeight: "bold", marginTop: "6px" }}>
-      Totale CER: {c.totaleCer} kg
-    </p>
-  </div>
-))}
+
+      {/* TABELLA CER */}
+      {scarico.map((c) => (
+        <div key={c.cer + c.fir} style={{ marginBottom: "20px" }}>
+          <h4>CER {c.cer} {c.fir && `- FIR: ${c.fir}`}</h4>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Materiale</th>
+                <th>Peso</th>
+                <th>Calo</th>
+                <th>Netto</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {c.righe.map((r) => (
+                <tr key={r.materiale}>
+                  <td>{r.materiale}</td>
+                  <td>{r.peso}</td>
+
+                  {/* 🔥 CALO CON UNITÀ */}
+                  <td>
+                    {r.caloTipo === "perc"
+                      ? `${r.calo}%`
+                      : r.calo}
+                  </td>
+
+                  <td>{r.netto}</td>
+
+                  <td>
+                    <button onClick={() => handleEdit(c.cer, c.fir, r.materiale)}>✏️</button>
+                    <button onClick={() => handleDelete(c.cer, c.fir, r.materiale)}>🗑️</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p style={{ fontWeight: "bold", marginTop: "6px" }}>
+            Totale CER: {c.totaleCer} kg
+          </p>
+        </div>
+      ))}
     </div>
   );
 };
+
 export default Scarichi;

@@ -89,6 +89,8 @@ const [filteredScarichi, setFilteredScarichi] = useState([]);
 const [filtroFIR, setFiltroFIR] = useState(""); // filtro dropdown FIR
 const [firDisponibili, setFirDisponibili] = useState([]); // lista FIR disponibili per il filtro
 const [firSearch, setFirSearch] = useState(""); // testo digitato per FIR
+const [filtriVisibili, setFiltriVisibili] = useState(true);
+
 const [dataSalvataggio, setDataSalvataggio] = useState(new Date());
 const [minDataSalvataggio, setMinDataSalvataggio] = useState(null);
 const [dal, setDal] = useState(null);   // oggetto Date
@@ -197,6 +199,7 @@ const validaEPreparaProspetto = async (movimentiIds) => {
   for (const d of daEliminare) {    await deleteDoc(doc(db, d.collection, d.id));  }
   return true;
 };
+
 const handleSalvaDocumento = async () => {
   try {
     if (!modalData) {
@@ -308,44 +311,65 @@ const handleStampaDocumento = async () => {
 
   let totale = 0;
 
-  const buildGruppi = (useVendita) => {
-    const gruppi = {};
+ const buildGruppi = (useVendita) => {
+  const gruppi = {};
 
-    movimenti.forEach((m) => {
-      const dataMov =
-        m.dataScarico || m.data || m.dataCreazione || null;
+  movimenti.forEach((m) => {
+    const dataMov =
+      m.dataScarico || m.data || m.dataCreazione || null;
 
-      (m.cer || []).forEach((c) => {
-        const firKey = c.fir || "SENZA FIR";
+    (m.cer || []).forEach((c) => {
+      const firKey = c.fir || "SENZA FIR";
 
-        if (!gruppi[firKey]) {
-          gruppi[firKey] = {
-            data: dataMov,
-            righe: [],
-          };
-        }
+      if (!gruppi[firKey]) {
+        gruppi[firKey] = {
+          data: dataMov,
+          righe: [],
+        };
+      }
 
-        if (!gruppi[firKey].data && dataMov) {
-          gruppi[firKey].data = dataMov;
-        }
+      if (!gruppi[firKey].data && dataMov) {
+        gruppi[firKey].data = dataMov;
+      }
 
-        (c.righe || []).forEach((r) => {
-          gruppi[firKey].righe.push({
-            cer: c.cer,
-            materiale: r.materiale,
-            kg: Number(r.netto || 0),
-            prezzo: Number(
-              r.prezzo ??
-              (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
-              0
-            ),
-          });
+      (c.righe || []).forEach((r) => {
+        const peso = Number(r.peso || r.netto || 0);
+        const calo = Number(r.calo || 0);
+
+        const caloKgRaw =
+          r.caloTipo === "perc"
+            ? (peso * calo) / 100
+            : calo;
+
+        const caloKg =
+          (caloKgRaw % 1) <= 0.5
+            ? Math.floor(caloKgRaw)
+            : Math.ceil(caloKgRaw);
+
+        const netto = peso - caloKg;
+
+        const prezzo = Number(
+          r.prezzo ??
+          (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
+          0
+        );
+
+        gruppi[firKey].righe.push({
+          cer: c.cer,
+          materiale: r.materiale,
+          pesoLordo: peso,
+          caloKg,
+          caloPerc: r.caloTipo === "perc" ? calo : null,
+          netto,
+          prezzo,
         });
       });
     });
+  });
 
-    return gruppi;
-  };
+  return gruppi;
+};
+
 
   const gruppi = buildGruppi(isFattura);
 
@@ -369,27 +393,36 @@ const handleStampaDocumento = async () => {
   Object.keys(gruppi).forEach((fir) => {
     const gruppo = gruppi[fir];
 
-    gruppo.righe.forEach((r) => {
-      const tot = r.kg * r.prezzo;
-      totale += tot;
+  gruppo.righe.forEach((r) => {
+  const tot = r.netto * r.prezzo;
+  totale += tot;
 
-      body.push([
-        fir,
-        r.cer || "-",
-        r.materiale || "-",
-        r.kg.toFixed(2),
-        r.prezzo.toFixed(2),
-        tot.toFixed(2),
-      ]);
-    });
+  const caloLabel =
+    r.caloPerc != null
+      ? `${r.caloPerc}% (${r.caloKg} Kg)`
+      : `${r.caloKg} Kg`;
+
+  body.push([
+    fir,
+    r.cer || "-",
+    r.materiale || "-",
+    r.pesoLordo.toFixed(2),
+    caloLabel,
+    r.netto.toFixed(2),
+    r.prezzo.toFixed(2),
+    tot.toFixed(2),
+  ]);
+});
+
   });
 
-  autoTable(pdf, {
-    startY: startY,
-    head: [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]],
-    body,
-    styles: { fontSize: 9 },
-  });
+ autoTable(pdf, {
+  startY: startY,
+  head: [["FIR", "CER", "Materiale", "Peso Lordo (Kg)", "Calo", "Netto (Kg)", "Prezzo €/Kg", "Totale €"]],
+  body,
+  styles: { fontSize: 9 },
+});
+
 
   pdf.text(
     `Totale: € ${totale.toFixed(2)}`,
@@ -707,7 +740,89 @@ const tuttiCer = movimentiDelGiorno.flatMap(s =>
   const pesoCarichi = tuttiCer
     .filter(c => c.tipo === "carico")
     .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
-  const costiTotali = tuttiCer
+ 
+    // =========================
+//   SCARICHI
+// =========================
+
+// Peso lordo scarichi
+const pesoLordoScarichi = tuttiCer
+  .filter(c => c.tipo === "scarico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.peso || 0), 0),
+  0);
+
+// Calo scarichi (Kg o % con arrotondamento)
+const caloScarichi = tuttiCer
+  .filter(c => c.tipo === "scarico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => {
+      const peso = safe(r.peso || 0);
+      const calo = safe(r.calo || 0);
+
+      const caloKg = r.caloTipo === "perc"
+        ? (peso * calo) / 100
+        : calo;
+
+      const caloKgRounded =
+        (caloKg % 1) <= 0.50
+          ? Math.floor(caloKg)
+          : Math.ceil(caloKg);
+
+      return s + caloKgRounded;
+    }, 0),
+  0);
+
+// Peso netto scarichi
+const pesoNettoScarichi = tuttiCer
+  .filter(c => c.tipo === "scarico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.netto || 0), 0),
+  0);
+
+
+// =========================
+//   CARICHI
+// =========================
+
+// Peso lordo carichi
+const pesoLordoCarichi = tuttiCer
+  .filter(c => c.tipo === "carico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.peso || 0), 0),
+  0);
+
+// Calo carichi (Kg o % con arrotondamento)
+const caloCarichi = tuttiCer
+  .filter(c => c.tipo === "carico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => {
+      const peso = safe(r.peso || 0);
+      const calo = safe(r.calo || 0);
+
+      const caloKg = r.caloTipo === "perc"
+        ? (peso * calo) / 100
+        : calo;
+
+      const caloKgRounded =
+        (caloKg % 1) <= 0.50
+          ? Math.floor(caloKg)
+          : Math.ceil(caloKg);
+
+      return s + caloKgRounded;
+    }, 0),
+  0);
+
+// Peso netto carichi
+const pesoNettoCarichi = tuttiCer
+  .filter(c => c.tipo === "carico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.netto || 0), 0),
+  0);
+
+
+ 
+    const costiTotali = tuttiCer
     .filter(c => c.tipo === "scarico")
     .reduce((tot, c) =>
       tot + c.righe.reduce((s, r) =>
@@ -748,8 +863,8 @@ if (hasConsuntivati && filtroAttivo) {
 } else {
   backgroundColor = "#FFECB3";
 }
-  return {    giornoIT,    nrMovimentiScarico,    nrMovimentiCarico,    nrFIR,    pesoScarichi,    pesoCarichi,    costiTotali,    ricaviTotali,    utenti: utentiDelGiorno,
-    backgroundColor,    textColor,    tooltip: hasConsuntivati  ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`     : ""  };});
+ return {    giornoIT,    nrMovimentiScarico,    nrMovimentiCarico,    nrFIR,    pesoLordoScarichi,    caloScarichi,    pesoNettoScarichi,    pesoLordoCarichi,    caloCarichi,    pesoNettoCarichi,    costiTotali,    ricaviTotali,    utenti: utentiDelGiorno,    backgroundColor,    textColor,    tooltip: hasConsuntivati      ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`      : ""};
+  });
 const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   if (sortConfig.key === "data") {
     const [ggA, mmA, yyyyA] = a.giornoIT.split("/").map(Number);
@@ -769,7 +884,42 @@ const righeOrdinate = [...righePerGiorno].sort((a, b) => {
     return sortConfig.direction === "asc" ? a.nrFIR - b.nrFIR : b.nrFIR - a.nrFIR;
   } else if (sortConfig.key === "nrFornitori") {
     return sortConfig.direction === "asc" ? a.nrFornitori - b.nrFornitori : b.nrFornitori - a.nrFornitori;
-  }
+  } else if (sortConfig.key === "pesoLordoScarichi") {
+  return sortConfig.direction === "asc"
+    ? a.pesoLordoScarichi - b.pesoLordoScarichi
+    : b.pesoLordoScarichi - a.pesoLordoScarichi;
+}
+
+else if (sortConfig.key === "caloScarichi") {
+  return sortConfig.direction === "asc"
+    ? a.caloScarichi - b.caloScarichi
+    : b.caloScarichi - a.caloScarichi;
+}
+
+else if (sortConfig.key === "pesoNettoScarichi") {
+  return sortConfig.direction === "asc"
+    ? a.pesoNettoScarichi - b.pesoNettoScarichi
+    : b.pesoNettoScarichi - a.pesoNettoScarichi;
+}
+
+else if (sortConfig.key === "pesoLordoCarichi") {
+  return sortConfig.direction === "asc"
+    ? a.pesoLordoCarichi - b.pesoLordoCarichi
+    : b.pesoLordoCarichi - a.pesoLordoCarichi;
+}
+
+else if (sortConfig.key === "caloCarichi") {
+  return sortConfig.direction === "asc"
+    ? a.caloCarichi - b.caloCarichi
+    : b.caloCarichi - a.caloCarichi;
+}
+
+else if (sortConfig.key === "pesoNettoCarichi") {
+  return sortConfig.direction === "asc"
+    ? a.pesoNettoCarichi - b.pesoNettoCarichi
+    : b.pesoNettoCarichi - a.pesoNettoCarichi;
+}
+
   return 0;
 });
 const firPerGiorno = {};
@@ -913,6 +1063,8 @@ const confermaSalvataggioProspetto = async () => {
   setModalProspetto(false);
  await salvaProspettoUnificato(modalData, modalTipo === "prospetto" ? "prospetto" : "fattura");
 };
+
+
 const stampaSoloProspetto = async () => {
   setModalProspetto(false);
 
@@ -935,12 +1087,29 @@ const stampaSoloProspetto = async () => {
 
       (m.cer || []).forEach(c => {
         (c.righe || []).forEach(r => {
+          const peso = Number(r.peso || 0);
+          const calo = Number(r.calo || 0);
+
+          const caloKgRaw =
+            r.caloTipo === "perc"
+              ? (peso * calo) / 100
+              : calo;
+
+          const caloKg =
+            (caloKgRaw % 1) <= 0.5
+              ? Math.floor(caloKgRaw)
+              : Math.ceil(caloKgRaw);
+
+          const netto = peso - caloKg;
+
           righe.push({
             fir: c.fir || "",
+            cer: c.cer || c.codiceCER || "-",
             materiale: r.materiale || "",
-            peso: Number(r.peso || 0),
-            calo: Number(r.calo || 0),
-            netto: Number(r.netto || 0),
+            pesoLordo: peso,
+            caloKg,
+            caloPerc: r.caloTipo === "perc" ? calo : null,
+            netto,
             prezzoKg: Number(r.prezzoAcquisto || 0),
             fornitore: m.fornitore || ""
           });
@@ -954,7 +1123,6 @@ const stampaSoloProspetto = async () => {
       ? filtroFornitore
       : righe[0]?.fornitore || "";
 
-  // 🔥 PDF
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
 
@@ -964,14 +1132,22 @@ const stampaSoloProspetto = async () => {
   pdf.text("Prospetto Fattura", 14, startY - 10);
 
   autoTable(pdf, {
-    startY: startY,
-    head: [["FIR", "Materiale", "Peso", "Prezzo", "Totale"]],
+    startY,
+    head: [["FIR", "CER", "Materiale", "Peso Lordo", "Calo", "Netto", "Prezzo €/Kg", "Totale €"]],
     body: righe.map(r => {
       const tot = r.netto * r.prezzoKg;
 
+      const caloLabel =
+        r.caloPerc != null
+          ? `${r.caloPerc}% (${r.caloKg} Kg)`
+          : `${r.caloKg} Kg`;
+
       return [
         r.fir || "-",
+        r.cer || "-",
         r.materiale || "-",
+        r.pesoLordo.toFixed(2),
+        caloLabel,
         r.netto.toFixed(2),
         r.prezzoKg.toFixed(2),
         tot.toFixed(2)
@@ -980,7 +1156,6 @@ const stampaSoloProspetto = async () => {
     styles: { fontSize: 9 }
   });
 
-  // 🔥 nome file pulito + data
   const nomePulito = (fornitoreFinale || "sconosciuto")
     .replace(/[^a-zA-Z0-9]/g, "_")
     .toLowerCase();
@@ -994,6 +1169,9 @@ const stampaSoloProspetto = async () => {
     `prospetto_${nomePulito}_${today}.pdf`
   );
 };
+
+
+
 const resetFiltri = () => {
   setFiltroFornitore("tutti");  setFiltroListino("tutti");
   setFiltroUtente("tutti");  setFiltroFIR("");
@@ -1077,6 +1255,40 @@ const toOptions = (arr) =>
     <span>Già Fatturati</span>
   </div>
 </div>
+<button
+  onClick={() => setFiltriVisibili(v => !v)}
+  className="filter-item"
+  style={{ marginBottom: "10px" }}
+>
+  {filtriVisibili ? "Raggruppa Filtri" : "Mostra Filtri"}
+</button>
+{!filtriVisibili && (
+  <div
+    onClick={() => setFiltriVisibili(true)}
+    style={{
+      padding: "10px",
+      background: "#eee",
+      border: "1px solid #ccc",
+      borderRadius: "8px",
+      cursor: "pointer",
+      marginBottom: "10px"
+    }}
+  >
+    <strong>Filtri attivi:</strong>
+    {[
+      filtroFIR && filtroFIR.trim() !== "" ? `FIR: ${filtroFIR}` : null,
+      filtroCER !== "tutti" ? `CER: ${filtroCER}` : null,
+      filtroFornitore !== "tutti" ? `Fornitore: ${filtroFornitore}` : null,
+      filtroListino !== "tutti" ? `Listino: ${filtroListino}` : null,
+      filtroUtente !== "tutti" ? `Utente: ${filtroUtente}` : null,
+      tipoMovimento !== "tutti" ? `Tipo: ${tipoMovimento}` : null,
+      !tutti ? `Dal: ${dal.toLocaleDateString()} • Al: ${al.toLocaleDateString()}` : null
+    ]
+      .filter(Boolean)
+      .join(" • ") || "Nessuno"}
+  </div>
+)}
+{filtriVisibili && (
 <div className="filtri">
 
   <button onClick={resetFiltri} className="filter-item">🔄 Reset filtri</button>
@@ -1222,6 +1434,8 @@ const toOptions = (arr) =>
   </label>
 
 </div>
+)}
+
 <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
   <span>Movimenti:</span>
   <span style={{
@@ -1250,12 +1464,30 @@ const toOptions = (arr) =>
       <th onClick={() => requestSort("nrFIR")} style={{ cursor: "pointer" }}>
         Nr FIR {sortConfig.key === "nrFIR" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
-      <th onClick={() => requestSort("pesoScarichi")} style={{ cursor: "pointer" }}>
-        Peso Scarichi {sortConfig.key === "pesoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
-      </th>
-      <th onClick={() => requestSort("pesoCarichi")} style={{ cursor: "pointer" }}>
-        Peso Carichi {sortConfig.key === "pesoCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
-      </th>
+     <th onClick={() => requestSort("pesoLordoScarichi")} style={{ cursor: "pointer" }}>
+  Peso Lordo Scarichi {sortConfig.key === "pesoLordoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+<th onClick={() => requestSort("caloScarichi")} style={{ cursor: "pointer" }}>
+  Calo Scarichi (Kg) {sortConfig.key === "caloScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+<th onClick={() => requestSort("pesoNettoScarichi")} style={{ cursor: "pointer" }}>
+  Peso Netto Scarichi {sortConfig.key === "pesoNettoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+<th onClick={() => requestSort("pesoLordoCarichi")} style={{ cursor: "pointer" }}>
+  Peso Lordo Carichi {sortConfig.key === "pesoLordoCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+<th onClick={() => requestSort("caloCarichi")} style={{ cursor: "pointer" }}>
+  Calo Carichi (Kg) {sortConfig.key === "caloCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+<th onClick={() => requestSort("pesoNettoCarichi")} style={{ cursor: "pointer" }}>
+  Peso Netto Carichi {sortConfig.key === "pesoNettoCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
       <th onClick={() => requestSort("costi")} style={{ cursor: "pointer" }}>
         Costi € {sortConfig.key === "costi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
@@ -1281,8 +1513,14 @@ const toOptions = (arr) =>
         <td>{r.giornoIT}</td>
         <td>{r.nrMovimentiScarico} / {r.nrMovimentiCarico}</td>
         <td>{r.nrFIR}</td>
-        <td>{r.pesoScarichi.toFixed(2)}</td>
-        <td>{r.pesoCarichi.toFixed(2)}</td>
+        <td>{r.pesoLordoScarichi?.toFixed(2) || 0}</td>
+<td>{r.caloScarichi?.toFixed(2) || 0}</td>
+<td>{r.pesoNettoScarichi?.toFixed(2) || 0}</td>
+
+<td>{r.pesoLordoCarichi?.toFixed(2) || 0}</td>
+<td>{r.caloCarichi?.toFixed(2) || 0}</td>
+<td>{r.pesoNettoCarichi?.toFixed(2) || 0}</td>
+
         <td>{r.costiTotali.toFixed(2)}</td>
         <td>{r.ricaviTotali.toFixed(2)}</td>
         {filtroUtente === "tutti" && <td>{r.utenti || r.utentiDelGiorno || "-"}</td>}
@@ -1303,9 +1541,9 @@ const toOptions = (arr) =>
         <thead>
           <tr>
             <th>FIR</th>            <th>CER</th>
-            <th>Materiale</th>            <th>Kg</th>
-            <th>Calo</th>            <th>Netto</th>
-            <th>€/Kg</th>            <th>Totale</th>
+            <th>Materiale</th>            <th>Peso Lordo (Kg)</th>
+            <th>Calo</th>            <th>Netto (Kg)</th>
+            <th>prezzo €/Kg</th>            <th>Totale €</th>
           </tr>
         </thead>
         <tbody>
@@ -1361,7 +1599,14 @@ const toOptions = (arr) =>
       <p><b>Cliente:</b> {modalData.cliente}</p>
       <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
         <thead>
-          <tr>            <th>Materiale</th>            <th>Kg</th>            <th>Prezzo</th>            <th>Totale</th>          </tr>
+          <tr>           <th>Materiale</th>
+<th>Peso Lordo (Kg)</th>
+<th>Calo</th>
+<th>Netto (Kg)</th>
+<th>Prezzo €/Kg</th>
+<th>Totale €</th>
+
+          </tr>
         </thead>
         <tbody>
 {(() => {
@@ -1408,21 +1653,50 @@ const toOptions = (arr) =>
           FIR: {b.fir} | CER: {b.cer}
         </td>
       </tr>
-      {b.righe.map((r, j) => {
-       const prezzo =
-  b.tipo === "scarico"
-    ? (r.prezzoAcquisto ?? 0)
-    : (r.prezzoVendita ?? 0);
-        const tot = money(r.netto * prezzo);
-        return (
-          <tr key={j}>
-            <td>{r.materiale}</td>
-            <td>{r.netto}</td>
-            <td>{prezzo}</td>
-            <td>{tot}</td>
-          </tr>
-        );
-      })}
+    {b.righe.map((r, j) => {
+  const peso = Number(r.peso || r.netto || 0);
+  const calo = Number(r.calo || 0);
+
+  // 🔥 Calcolo calo Kg (percentuale o Kg)
+  const caloKgRaw =
+    r.caloTipo === "perc"
+      ? (peso * calo) / 100
+      : calo;
+
+  // 🔥 Arrotondamento come da regola metalli
+  const caloKg =
+    (caloKgRaw % 1) <= 0.50
+      ? Math.floor(caloKgRaw)
+      : Math.ceil(caloKgRaw);
+
+  // 🔥 Netto corretto
+  const netto = peso - caloKg;
+
+  // 🔥 Prezzo corretto (acquisto o vendita)
+  const prezzo =
+    b.tipo === "scarico"
+      ? Number(r.prezzoAcquisto ?? 0)
+      : Number(r.prezzoVendita ?? 0);
+
+  const tot = money(netto * prezzo);
+
+  const caloLabel =
+    r.caloTipo === "perc"
+      ? `${calo}% (${caloKg} Kg)`
+      : `${caloKg} Kg`;
+
+  return (
+    <tr key={j}>
+      <td>{r.materiale}</td>
+      <td>{peso.toFixed(2)}</td>
+      <td>{caloLabel}</td>
+      <td>{netto.toFixed(2)}</td>
+      <td>{prezzo.toFixed(2)}</td>
+      <td>{tot.toFixed(2)}</td>
+    </tr>
+  );
+})}
+
     </React.Fragment>
   ))}
         </tbody>

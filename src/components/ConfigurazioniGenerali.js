@@ -7,8 +7,12 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { it } from "date-fns/locale";
 import { signOut } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
+import Select from "react-select";
 const ConfigurazioniGenerali = ({ logout }) => {
   const navigate = useNavigate();
+const [listinoCaricoDefault, setListinoCaricoDefault] = useState("");
+const [listinoScaricoDefault, setListinoScaricoDefault] = useState("");
 
   const [logoBase64, setLogoBase64] = useState("");
   const [ragioneSociale, setRagioneSociale] = useState("");
@@ -19,6 +23,7 @@ const ConfigurazioniGenerali = ({ logout }) => {
   const [loading, setLoading] = useState(false);
   const [messaggio, setMessaggio] = useState("");
   const [mailRecupero, setMailRecupero] = useState("");
+const [listini, setListini] = useState([]);
 
   // 🔥 FIX: ora è una Date vera
   const [giornoAvviamento, setGiornoAvviamento] = useState(null);
@@ -54,6 +59,10 @@ const ConfigurazioniGenerali = ({ logout }) => {
           setGiornoAvviamento(
             data.giornoAvviamento ? new Date(data.giornoAvviamento) : null
           );
+
+          setListinoCaricoDefault(data.ListinoCARICODefault || "");
+setListinoScaricoDefault(data.ListinoSCARICODefault || "");
+
         }
       } catch (err) {
         console.error(err);
@@ -62,6 +71,25 @@ const ConfigurazioniGenerali = ({ logout }) => {
 
     fetchConfig();
   }, []);
+
+useEffect(() => {
+  const fetchListini = async () => {
+    try {
+      const snap = await getDocs(collection(db, "listini"));
+      const arr = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setListini(arr);
+    } catch (err) {
+      console.error("Errore caricamento listini:", err);
+    }
+  };
+
+  fetchListini();
+}, []);
+
+
 
   // -------- LOGO --------
   const handleFileChange = (e) => {
@@ -95,6 +123,9 @@ const ConfigurazioniGenerali = ({ logout }) => {
           : null,
 
         updatedAt: new Date(),
+        ListinoCARICODefault: listinoCaricoDefault,
+ListinoSCARICODefault: listinoScaricoDefault,
+
       });
 
       setMessaggio("Configurazione salvata con successo ✅");
@@ -219,7 +250,55 @@ const ConfigurazioniGenerali = ({ logout }) => {
           onChange={(e) => setMailRecupero(e.target.value)}
           style={{ width: "300px" }}
         />
+        
       </div>
+<div style={{ marginBottom: 20 }}>
+  <label>Listino Carico Default:</label>
+<Select
+  options={listini
+    .filter(l => l.tipoListino === "CARICO")
+    .map(l => ({
+      value: l.id,
+      label: l.nome
+    }))
+  }
+  value={
+    listini
+      .filter(l => l.tipoListino === "CARICO")
+      .map(l => ({ value: l.id, label: l.nome }))
+      .find(o => o.value === listinoCaricoDefault) || null
+  }
+  onChange={(selected) => setListinoCaricoDefault(selected?.value || "")}
+  placeholder="Seleziona listino carico..."
+  isSearchable
+  isClearable
+/>
+
+</div>
+
+<div style={{ marginBottom: 20 }}>
+  <label>Listino Scarico Default:</label>
+<Select
+  options={listini
+    .filter(l => l.tipoListino === "SCARICO")
+    .map(l => ({
+      value: l.id,
+      label: l.nome
+    }))
+  }
+  value={
+    listini
+      .filter(l => l.tipoListino === "SCARICO")
+      .map(l => ({ value: l.id, label: l.nome }))
+      .find(o => o.value === listinoScaricoDefault) || null
+  }
+  onChange={(selected) => setListinoScaricoDefault(selected?.value || "")}
+  placeholder="Seleziona listino scarico..."
+  isSearchable
+  isClearable
+/>
+
+</div>
 
       {/* 🔥 GIORNO AVVIAMENTO FIXATO */}
       <div style={{ marginBottom: 20 }}>
