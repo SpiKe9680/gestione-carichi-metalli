@@ -1,0 +1,16 @@
+{
+  "0901": { "codice": "0901", "descrizione": "Rifiuti dell'industria fotografica'" },
+  "090101": { "codice": "090101", "descrizione": "Soluzioni di sviluppo e soluzioni attivanti a base acquosa" },
+  "090102": { "codice": "090102", "descrizione": "Soluzioni di sviluppo per lastre offset a base acquosa" },
+  "090103": { "codice": "090103", "descrizione": "Soluzioni di sviluppo a base di solventi" },
+  "090104": { "codice": "090104", "descrizione": "Soluzioni di fissaggio" },
+  "090105": { "codice": "090105", "descrizione": "Soluzioni di lavaggio e soluzioni di arresto-fissaggio" },
+  "090106": { "codice": "090106", "descrizione": "Rifiuti contenenti argento prodotti dal trattamento in loco di rifiuti fotografici" },
+  "090107": { "codice": "090107", "descrizione": "Carta e pellicole per fotografia, contenenti argento o composti dell'argento" },
+  "090108": { "codice": "090108", "descrizione": "Carta e pellicole per fotografia, non contenenti argento o composti dell'argento" },
+  "090110": { "codice": "090110", "descrizione": "Macchine fotografiche monouso senza batterie" },
+  "090111": { "codice": "090111", "descrizione": "Macchine fotografiche monouso contenenti batterie incluse nelle voci 16 06 01, 16 06 02 o 16 06 03" },
+  "090112": { "codice": "090112", "descrizione": "Macchine fotografiche monouso diverse da quelle di cui alla voce 09 01 11" },
+  "090113": { "codice": "090113", "descrizione": "Rifiuti liquidi acquosi prodotti dal recupero in loco dell'argento, diversi da quelli di cui alla voce 09 01 06" },
+  "090199": { "codice": "090199", "descrizione": "Rifiuti non specificati altrimenti" }
+}

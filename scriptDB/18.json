@@ -1,0 +1,74 @@
+{
+  "1801": {
+    "codice": "1801",
+    "descrizione": "Rifiuti dei reparti di maternità e rifiuti legati a diagnosi, trattamento e prevenzione delle malattie negli esseri umani"
+  },
+  "180101": {
+    "codice": "180101",
+    "descrizione": "Oggetti da taglio (eccetto 18 01 03)"
+  },
+  "180102": {
+    "codice": "180102",
+    "descrizione": "Parti anatomiche ed organi incluse le sacche per il plasma e le riserve di sangue (tranne 18 01 03)"
+  },
+  "180103": {
+    "codice": "180103",
+    "descrizione": "Rifiuti che devono essere raccolti e smaltiti applicando precauzioni particolari per evitare infezioni"
+  },
+  "180104": {
+    "codice": "180104",
+    "descrizione": "Rifiuti che non devono essere raccolti e smaltiti applicando precauzioni particolari per evitare infezioni (es. bende, ingessature, lenzuola, indumenti monouso, assorbenti igienici)"
+  },
+  "180106": {
+    "codice": "180106",
+    "descrizione": "Sostanze chimiche pericolose o contenenti sostanze pericolose"
+  },
+  "180107": {
+    "codice": "180107",
+    "descrizione": "Sostanze chimiche diverse da quelle di cui alla voce 18 01 06"
+  },
+  "180108": {
+    "codice": "180108",
+    "descrizione": "Medicinali citotossici e citostatici"
+  },
+  "180109": {
+    "codice": "180109",
+    "descrizione": "Medicinali diversi da quelli di cui alla voce 18 01 08"
+  },
+  "180110": {
+    "codice": "180110",
+    "descrizione": "Rifiuti di amalgama prodotti da interventi odontoiatrici"
+  },
+  "1802": {
+    "codice": "1802",
+    "descrizione": "Rifiuti legati alle attività di ricerca, diagnosi, trattamento e prevenzione delle malattie degli animali"
+  },
+  "180201": {
+    "codice": "180201",
+    "descrizione": "Oggetti da taglio (eccetto 18 02 02)"
+  },
+  "180202": {
+    "codice": "180202",
+    "descrizione": "Rifiuti che devono essere raccolti e smaltiti applicando precauzioni particolari per evitare infezioni"
+  },
+  "180203": {
+    "codice": "180203",
+    "descrizione": "Rifiuti che non devono essere raccolti e smaltiti applicando precauzioni particolari per evitare infezioni"
+  },
+  "180205": {
+    "codice": "180205",
+    "descrizione": "Sostanze chimiche pericolose o contenenti sostanze pericolose"
+  },
+  "180206": {
+    "codice": "180206",
+    "descrizione": "Sostanze chimiche diverse da quelle di cui alla voce 18 02 05"
+  },
+  "180207": {
+    "codice": "180207",
+    "descrizione": "Medicinali citotossici e citostatici"
+  },
+  "180208": {
+    "codice": "180208",
+    "descrizione": "Medicinali diversi da quelli di cui alla voce 18 02 07"
+  }
+}

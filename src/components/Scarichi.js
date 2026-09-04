@@ -11,7 +11,11 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
-  arrayUnion
+  arrayUnion,
+  query,
+  where,
+  orderBy,
+  limit
 } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -178,6 +182,48 @@ const returnToDettaglio = location.state?.returnToDettaglio || false;
       setFirCheckLoading(false);
     }
   };
+
+const suggerisciFir = async (fornitore) => {
+  try {
+    const collectionName =
+      tipoMovimento === "carico"
+        ? "carichi"
+        : "scarichi";
+
+    const q = query(
+      collection(db, collectionName),
+      where("fornitore", "==", fornitore),
+      orderBy("data", "desc"),
+      limit(1)
+    );
+
+    const snap = await getDocs(q);
+
+    if (snap.empty) return;
+
+    const data = snap.docs[0].data();
+
+    const blocchi =
+      tipoMovimento === "carico"
+        ? data.carico || []
+        : data.scarico || [];
+
+    const ultimoFir = blocchi?.[0]?.fir || "";
+
+    if (!ultimoFir) return;
+
+    const pos = ultimoFir.search(/[1-9]/);
+
+if (pos === -1) return;
+
+const suggerimento = ultimoFir.substring(0, pos + 1);
+
+setFirCer(suggerimento);
+
+  } catch (err) {
+    console.error("Errore suggerimento FIR:", err);
+  }
+};
 
   const getClientIP = async () => {
     try {
@@ -1620,28 +1666,38 @@ if (inModifica && returnToDettaglio) {
             {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
           </label>
 
-          <Select
-            options={fornitoriOptions}
-            value={fornitoriOptions.find(o => o.value === selectedFornitore) || null}
-            onChange={(selected) => {
-              const nome = selected?.value || "";
-              setSelectedFornitore(nome);
+        <Select
+  options={fornitoriOptions}
+  value={
+    fornitoriOptions.find(
+      o => o.value === selectedFornitore
+    ) || null
+  }
+  onChange={async (selected) => {
+    const nome = selected?.value || "";
 
-              const forn = fornitori.find(f => f.nome === nome);
-              if (!forn) return;
+    setSelectedFornitore(nome);
 
-              const primoCompatibile = listini.find(
-                l => (l.tipoListino || "").trim() === tipoMovimento
-              );
+    const forn = fornitori.find(
+      f => f.nome === nome
+    );
 
-              if (primoCompatibile) {
-                setSelectedListino(primoCompatibile.nome);
-              }
-            }}
-            placeholder="Cerca fornitore..."
-            isSearchable
-            isClearable
-          />
+    if (!forn) return;
+
+    const primoCompatibile = listini.find(
+      l => (l.tipoListino || "").trim() === tipoMovimento
+    );
+
+    if (primoCompatibile) {
+      setSelectedListino(primoCompatibile.nome);
+    }
+
+    await suggerisciFir(nome);
+  }}
+  placeholder="Cerca fornitore..."
+  isSearchable
+  isClearable
+/>
 
           {/* NUOVO FORNITORE */}
           <button

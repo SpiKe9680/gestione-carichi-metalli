@@ -22,6 +22,7 @@ const [listinoScaricoDefault, setListinoScaricoDefault] = useState("");
   const [guadagnoMinKg, setGuadagnoMinKg] = useState(0.2);
   const [loading, setLoading] = useState(false);
   const [messaggio, setMessaggio] = useState("");
+   const [messaggioFIR, setMessaggioFIR] = useState("");
   const [mailRecupero, setMailRecupero] = useState("");
 const [listini, setListini] = useState([]);
 
@@ -136,6 +137,68 @@ ListinoSCARICODefault: listinoScaricoDefault,
       setLoading(false);
     }
   };
+
+   const handleAllineaFir = async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "scarichi"));
+
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+
+    if (Array.isArray(data.firIndex)) {
+      continue;
+    }
+
+    const firIndex = (data.scarico || [])
+      .map(x => (x.fir || "").trim().toUpperCase())
+      .filter(Boolean);
+
+    await setDoc(
+      doc(db, "scarichi", docSnap.id),
+      { firIndex },
+      { merge: true }
+    );
+
+    console.log("✅ scarico aggiornato", docSnap.id);
+  }
+
+  console.log("✅ MIGRAZIONE SCARICHI COMPLETATA");
+
+      setMessaggio("MIGRAZIONE CARICHI/SCARICHI COMPLETATA ✅");
+
+const snap2 = await getDocs(collection(db, "carichi"));
+
+  for (const docSnap2 of snap2.docs) {
+    const data = docSnap2.data();
+
+    if (Array.isArray(data.firIndex)) {
+      continue;
+    }
+
+    const firIndex = (data.carico || [])
+      .map(x => (x.fir || "").trim().toUpperCase())
+      .filter(Boolean);
+
+    await setDoc(
+      doc(db, "carichi", docSnap2.id),
+      { firIndex },
+      { merge: true }
+    );
+
+    console.log("✅ carico aggiornato", docSnap2.id);
+  }
+
+  console.log("✅ MIGRAZIONE CARICHI  COMPLETATA");
+
+    } catch (err) {
+      console.error(err);
+      setMessaggio("Errore durante la MIGRAZIONE ❌");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   return (
     <div style={{ padding: 20 }}>
@@ -325,7 +388,19 @@ ListinoSCARICODefault: listinoScaricoDefault,
       </button>
 
       {messaggio && <div style={{ marginTop: 15 }}>{messaggio}</div>}
+
+
+      <button onClick={handleAllineaFir} disabled={loading}>
+        {loading ? "Allineando..." : "Allinea FIR"}
+      </button>
+
+      {messaggio && <div style={{ marginTop: 15 }}>{messaggioFIR}</div>}
+
+
     </div>
+
+ 
+          
   );
 };
 

@@ -1,0 +1,174 @@
+{
+  "2001": {
+    "codice": "2001",
+    "descrizione": "Frazioni oggetto di raccolta differenziata (tranne 15 01)"
+  },
+  "200101": {
+    "codice": "200101",
+    "descrizione": "Carta e cartone"
+  },
+  "200102": {
+    "codice": "200102",
+    "descrizione": "Vetro"
+  },
+  "200108": {
+    "codice": "200108",
+    "descrizione": "Rifiuti biodegradabili di cucine e mense"
+  },
+  "200110": {
+    "codice": "200110",
+    "descrizione": "Abbigliamento"
+  },
+  "200111": {
+    "codice": "200111",
+    "descrizione": "Prodotti tessili"
+  },
+  "200113": {
+    "codice": "200113",
+    "descrizione": "Solventi"
+  },
+  "200114": {
+    "codice": "200114",
+    "descrizione": "Acidi"
+  },
+  "200115": {
+    "codice": "200115",
+    "descrizione": "Sostanze alcaline"
+  },
+  "200117": {
+    "codice": "200117",
+    "descrizione": "Prodotti fotochimici"
+  },
+  "200119": {
+    "codice": "200119",
+    "descrizione": "Pesticidi"
+  },
+  "200121": {
+    "codice": "200121",
+    "descrizione": "Tubi fluorescenti ed altri rifiuti contenenti mercurio"
+  },
+  "200123": {
+    "codice": "200123",
+    "descrizione": "Apparecchiature fuori uso contenenti cluorofluorocarburi"
+  },
+  "200125": {
+    "codice": "200125",
+    "descrizione": "Oli e grassi commestibili"
+  },
+  "200126": {
+    "codice": "200126",
+    "descrizione": "Oli e grassi diversi da quelli di cui alla voce 20 01 25"
+  },
+  "200127": {
+    "codice": "200127",
+    "descrizione": "Vernici, inchiostri, adesivi e resine contenenti sostanze pericolose"
+  },
+  "200128": {
+    "codice": "200128",
+    "descrizione": "Vernici, inchiostri, adesivi e resine, diversi da quelli di cui alla voce 20 01 27"
+  },
+  "200129": {
+    "codice": "200129",
+    "descrizione": "Detergenti, contenenti sostanze pericolose"
+  },
+  "200130": {
+    "codice": "200130",
+    "descrizione": "Detergenti diversi da quelli di cui alla voce 20 01 29"
+  },
+  "200131": {
+    "codice": "200131",
+    "descrizione": "Medicinali citotossici e citostatici"
+  },
+  "200132": {
+    "codice": "200132",
+    "descrizione": "Medicinali diversi da quelli di cui alla voce 20 01 31"
+  },
+  "200133": {
+    "codice": "200133",
+    "descrizione": "Batterie e accumulatori di cui alle voci 16 06 01, 16 06 02 e 16 06 03, nonché batterie e accumulatori non suddivisi contenenti tali batterie"
+  },
+  "200134": {
+    "codice": "200134",
+    "descrizione": "Batterie e accumulatori, diversi da quelli di cui alla voce 20 01 33"
+  },
+  "200135": {
+    "codice": "200135",
+    "descrizione": "Apparecchiature elettriche ed elettroniche fuori uso, diverse da quelle di cui alla voce 20 01 21 e 20 01 23, contenenti componenti pericolosi (2)"
+  },
+  "200136": {
+    "codice": "200136",
+    "descrizione": "Apparecchiature elettriche ed elettroniche fuori uso, diverse da quelle di cui alle voci 20 01 21, 20 01 23 e 20 01 35"
+  },
+  "200137": {
+    "codice": "200137",
+    "descrizione": "Legno contenente sostanze pericolose"
+  },
+  "200138": {
+    "codice": "200138",
+    "descrizione": "Legno diverso da quello di cui alla voce 20 01 37"
+  },
+  "200139": {
+    "codice": "200139",
+    "descrizione": "Plastica"
+  },
+  "200140": {
+    "codice": "200140",
+    "descrizione": "Metalli"
+  },
+  "200141": {
+    "codice": "200141",
+    "descrizione": "Rifiuti prodotti dalla pulizia di camini e ciminiere"
+  },
+  "200199": {
+    "codice": "200199",
+    "descrizione": "Altre frazioni non specificate altrimenti"
+  },
+  "2002": {
+    "codice": "2002",
+    "descrizione": "Rifiuti prodotti da giardini e parchi (inclusi i rifiuti provenienti da cimiteri)"
+  },
+  "200201": {
+    "codice": "200201",
+    "descrizione": "Rifiuti biodegradabili"
+  },
+  "200202": {
+    "codice": "200202",
+    "descrizione": "Terra e roccia"
+  },
+  "200203": {
+    "codice": "200203",
+    "descrizione": "Altri rifiuti non biodegradabili"
+  },
+  "2003": {
+    "codice": "2003",
+    "descrizione": "Altri rifiuti urbani"
+  },
+  "200301": {
+    "codice": "200301",
+    "descrizione": "Rifiuti urbani non differenziati"
+  },
+  "200302": {
+    "codice": "200302",
+    "descrizione": "Rifiuti dei mercati"
+  },
+  "200303": {
+    "codice": "200303",
+    "descrizione": "Residui della pulizia stradale"
+  },
+  "200304": {
+    "codice": "200304",
+    "descrizione": "Fanghi delle fosse settiche"
+  },
+  "200306": {
+    "codice": "200306",
+    "descrizione": "Rifiuti della pulizia delle fognature"
+  },
+  "200307": {
+    "codice": "200307",
+    "descrizione": "Rifiuti ingombranti"
+  },
+  "200399": {
+    "codice": "200399",
+    "descrizione": "Rifiuti urbani non specificati altrimenti"
+  }
+}

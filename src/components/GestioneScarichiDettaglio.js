@@ -344,42 +344,16 @@ const totalPagesScarichi = rowsPerPage && rowsPerPage !== "tutte"
   const carichi = righeFiltrate.filter(r => (r.tipo || "").toLowerCase() === "carico");
 const scarichi = righeFiltrate.filter(r => (r.tipo || "").toLowerCase() === "scarico");
 
-// ===============================
-// 🔥 CARICHI TOTALI (FIX COMPLETO)
-// ===============================
-const totCarichiNetto = carichi.reduce(
-  (tot, r) => tot + Number(r.netto ?? 0),
-  0
-);
 
-const totCarichiRicavi = carichi.reduce(
-  (tot, r) => tot + Number(r.costoTotale ?? (r.netto * r.prezzoKg) ?? 0),
-  0
-);
 
-const mediaCarichi =
-  totCarichiNetto > 0 ? totCarichiRicavi / totCarichiNetto : 0;
 
-// ===============================
-// 🔥 SCARICHI TOTALI (FIX COMPLETO)
-// ===============================
-const totScarichiNetto = scarichi.reduce(
-  (tot, r) => tot + Number(r.netto ?? 0),
-  0
-);
 
-const totScarichiCosti = scarichi.reduce(
-  (tot, r) => tot + Number(r.costoTotale ?? (r.netto * r.prezzoKg) ?? 0),
-  0
-);
 
-const mediaScarichi =
-  totScarichiNetto > 0 ? totScarichiCosti / totScarichiNetto : 0;
 
-// ===============================
-// 🔥 UTILE (FIX COMPLETO)
-// ===============================
-const utile = totCarichiRicavi - totScarichiCosti;
+
+
+
+
 
 const selezionaRiga = async (r, tipo) => {
   console.log("🟦 SELEZIONA_RIGA — SOLO DB, IGNORO COMPLETAMENTE r");
@@ -452,116 +426,37 @@ const updateEditor = (campo, valore) => {
     const nuovo = { ...prev };
     const num = (v) => Number(v) || 0;
 
-    // =========================
-    // PESI
-    // =========================
     if (campo === "peso") {
       nuovo.peso = num(valore);
-      nuovo.netto = nuovo.peso - (nuovo.calo || 0);
     }
 
     if (campo === "calo") {
       nuovo.calo = num(valore);
-      nuovo.netto = (nuovo.peso || 0) - nuovo.calo;
     }
 
-   // 🔥 Calcolo netto automatico
-if (campo === "peso" || campo === "calo") {
-  const pesoLordo = Number(nuovo.peso ?? 0);
-  const caloVal = Number(nuovo.calo ?? 0);
+    // 🔥 calcolo netto
+    const pesoLordo = Number(nuovo.peso ?? 0);
+    const caloVal = Number(nuovo.calo ?? 0);
+    let caloKg = caloVal;
 
-  let caloKg = caloVal;
+    if (nuovo.caloTipo === "perc") {
+      caloKg = pesoLordo * (caloVal / 100);
+      caloKg = caloKg <= 0.50 ? Math.floor(caloKg) : Math.ceil(caloKg);
+    }
 
-  // % → Kg
-  if (nuovo.caloTipo === "perc") {
-    caloKg = pesoLordo * (caloVal / 100);
-  }
+    nuovo.netto = pesoLordo - caloKg;
 
-  // Arrotondamento metalli
-  caloKg = caloKg <= 0.50 ? Math.floor(caloKg) : Math.ceil(caloKg);
-
-  nuovo.netto = pesoLordo - caloKg;
-}
-
-
-    // =========================
-    // PREZZO
-    // =========================
     if (campo === "prezzoKg") {
-      const prezzo = num(valore);
-      nuovo.prezzoKg = prezzo;
-      nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
+      nuovo.prezzoKg = num(valore);
     }
 
-    // =========================
-    // LISTINO
-    // =========================
-    if (campo === "listino") {
-      nuovo.listino = valore;
-
-      const materiale = nuovo.materiale;
-      const tipoPrezzo = nuovo.tipo === "carico" ? "vendita" : "acquisto";
-
-      const prezziListino = listini?.[valore];
-      const prezzoDaListino = prezziListino?.[materiale]?.[tipoPrezzo];
-
-      if (prezzoDaListino != null) {
-        const prezzo = num(prezzoDaListino);
-        nuovo.prezzoKg = prezzo;
-        nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
-      }
-    }
-
-    // =========================
-    // FIR
-    // =========================
-    if (campo === "fir") {
-      nuovo.fir = valore;
-    }
-
-    // =========================
-    // DATA
-    // =========================
-    if (campo === "data") {
-      nuovo.data = valore;
-    }
-
-    // =========================
-    // ORA
-    // =========================
-    if (campo === "ora") {
-      nuovo.ora = valore;
-    }
-
-    // =========================
-    // 🔥 FIX DEFINITIVO DATA + ORA (SEMPRE SINCRONIZZATI)
-    // =========================
-
-    const base = nuovo.data ? new Date(nuovo.data) : new Date();
-
-    // ora finale sempre coerente
-    const oraFinale = nuovo.ora || prev.ora || "00:00";
-
-    let hh = 0;
-    let mm = 0;
-
-    if (oraFinale.includes(":")) {
-      const parts = oraFinale.split(":");
-      hh = Number(parts[0]) || 0;
-      mm = Number(parts[1]) || 0;
-    }
-
-    base.setHours(hh, mm, 0, 0);
-
-    // forza nuova istanza (React safe)
-    nuovo.data = new Date(base);
-
-    // normalizza formato ora
-    nuovo.ora = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    // 🔥 totale SEMPRE corretto
+    nuovo.costoTotale = nuovo.netto * (nuovo.prezzoKg ?? 0);
 
     return nuovo;
   });
 };
+
 const campoModificato = campo => {
   if (!editor || !originalEditor) return false;
   if (campo === "data") {
@@ -575,82 +470,89 @@ const campoModificato = campo => {
   }
   return editor[campo] !== originalEditor[campo];
 };
-  const ricalcolaTotaleCer = cerObj => {
-    cerObj.totaleCer = cerObj.righe.reduce((tot,r)=>tot+(Number(r.netto)||0),0);
-  };
+
+// ===============================
+// 🔥 CALCOLO TOTALE RIGA (SEMPRE CORRETTO)
+// ===============================
+const calcTotaleRiga = (r) => {
+  const netto = Number(r.netto ?? 0);
+  const prezzo = Number(r.prezzoKg ?? 0);
+  return netto * prezzo;
+};
+
+// ===============================
+// 🔥 CARICHI TOTALI
+// ===============================
+const totCarichiNetto = carichi.reduce(
+  (tot, r) => tot + Number(r.netto ?? 0),
+  0
+);
+
+const totCarichiRicavi = carichi.reduce(
+  (tot, r) => tot + calcTotaleRiga(r),
+  0
+);
+
+const mediaCarichi =
+  totCarichiNetto > 0 ? totCarichiRicavi / totCarichiNetto : 0;
+
+// ===============================
+// 🔥 SCARICHI TOTALI
+// ===============================
+const totScarichiNetto = scarichi.reduce(
+  (tot, r) => tot + Number(r.netto ?? 0),
+  0
+);
+
+const totScarichiCosti = scarichi.reduce(
+  (tot, r) => tot + calcTotaleRiga(r),
+  0
+);
+
+const mediaScarichi =
+  totScarichiNetto > 0 ? totScarichiCosti / totScarichiNetto : 0;
+
+// ===============================
+// 🔥 UTILE
+// ===============================
+const utile = totCarichiRicavi - totScarichiCosti;
 
 
-  const handleStampaScaricoRiga = async (r) => {
-  if (!r || !r.docId) return alert("Riga non valida per la stampa");
-
+const handleStampaScaricoRiga = async (r) => {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const { PdfHeader } = await import("../utils/dateUtils");
 
-  // 🔥 PDF SEMPRE LANDSCAPE
-  const pdf = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4"
-  });
-
-  // 🔥 Applica header sul PDF landscape
+  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const { startY } = await PdfHeader(pdf);
 
-  // 🔥 VALORI SEMPRE DAL DB — NESSUN RICALCOLO
   const pesoLordo = Number(r.peso ?? 0);
-  const caloVal = Number(r.calo ?? 0);       // già pronto (kg o %)
-  const tipo = (r.caloTipo || "").toLowerCase();
+  const caloVal = Number(r.calo ?? 0);
+  const netto = Number(r.netto ?? 0);
+  const prezzoKg = Number(r.prezzoKg ?? 0);
+  const totale = netto * prezzoKg;
 
-  // 🔥 NON convertiamo % → kg
-  // Se DB dice 6% → stampiamo 6%
-  // Se DB dice 2 kg → stampiamo 2 kg
-  const caloKg = tipo === "perc" ? caloVal : caloVal;
-
-  // 🔥 Netto SEMPRE dal DB
-  const netto = Number(r.netto ?? (pesoLordo - caloKg));
-
-  const prezzoKg = Number(
-    r.prezzoKg ??
-    r.prezzoAcquisto ??
-    r.prezzoVendita ??
-    0
-  );
-
-  const totale = Number(r.costoTotale ?? (netto * prezzoKg));
-
-  let y = startY - 25;
-
-  pdf.setFontSize(16);
-  pdf.text("Stampa Singola Riga", 14, y);
-  y += 10;
-
-  // 🔥 Tabella singola riga — landscape, larga, leggibile
   autoTable(pdf, {
-    startY: y,
-    head: [
-      [
-        "Ora", "Fornitore", "CER", "FIR", "Materiale",
-        "Peso Lordo(Kg)",  "Calo","Calo Tipo",
-        "Peso Netto(Kg)", "€/Kg", "Totale(€)", "Listino"
-      ]
-    ],
-    body: [
-      [
-        r.ora,
-        r.fornitore,
-        r.cer,
-        r.fir || "",
-        r.materiale,
-        pesoLordo.toFixed(2),
-        caloVal,
-        tipo === "perc" ? `%` : `Kg`,
-        netto.toFixed(2),
-        prezzoKg.toFixed(2),
-        totale.toFixed(2),
-        r.listino || ""
-      ]
-    ],
+    startY: startY - 15,
+    head: [[
+      "Ora", "Fornitore", "CER", "FIR", "Materiale",
+      "Peso Lordo(Kg)", "Calo", "Tipo Calo",
+      "Peso Netto(Kg)", "€/Kg", "Totale(€)", "Listino"
+    ]],
+    body: [[
+      r.ora,
+      r.fornitore,
+      r.cer,
+      r.fir || "",
+      r.materiale,
+      pesoLordo.toFixed(2),
+      caloVal,
+      (r.caloTipo === "perc" ? "%" : "Kg"),
+      netto.toFixed(2),
+      prezzoKg.toFixed(2),
+      totale.toFixed(2),
+      r.listino || ""
+    ]],
     theme: "grid",
     styles: { fontSize: 10 }
   });
@@ -662,114 +564,52 @@ const campoModificato = campo => {
 
 
 
-async function salvaModifiche({ docRef, editor }) {
-  try {
-    console.log("🟡 START salvaModifiche");
+const salvaModifiche = async ({ docRef, editor }) => {
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error("Documento non trovato");
 
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) throw new Error("Documento non trovato");
+  const dati = snap.data();
+  const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
 
-    const dati = snap.data();
-    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
+  const updated = (dati[field] || []).map((cerObj, cerIndex) => {
+    const righeAgg = (cerObj.righe || []).map((r, rIndex) => {
+      const match = cerIndex === editor.cerIndex && rIndex === editor.rIndex;
+      if (!match) return r;
 
-    const normalize = (v) =>
-      (v ?? "")
-        .toString()
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, " ");
+      const peso = Number(editor.peso ?? r.peso);
+      const caloVal = Number(editor.calo ?? r.calo);
+      const tipoCalo = editor.caloTipo ?? r.caloTipo;
 
-    console.log("📦 FIELD:", field);
-    console.log("📦 EDITOR INPUT:", editor);
+      let caloKg = caloVal;
+      if (tipoCalo === "perc") {
+        caloKg = peso * (caloVal / 100);
+        caloKg = caloKg <= 0.5 ? Math.floor(caloKg) : Math.ceil(caloKg);
+      }
 
-    const scarichiAggiornati = (dati[field] || []).map((cerObj, cerIndex) => {
-
-      const righeAggiornate = (cerObj.righe || []).map((r, rIndex) => {
-
-        const match =
-          cerIndex === editor.cerIndex &&
-          rIndex === editor.rIndex;
-
-        if (!match) return r;
-
-        // 🔥 VALORI ORIGINALI
-        const peso = Number(editor.peso ?? r.peso);
-        const caloVal = Number(editor.calo ?? r.calo);
-        const tipoCalo = editor.caloTipo ?? r.caloTipo;
-
-        // 🔥 CALCOLO CALO CORRETTO
-        let caloKg = caloVal;
-
-        if (tipoCalo === "perc") {
-          caloKg = peso * (caloVal / 100);
-          caloKg = caloKg <= 0.5 ? Math.floor(caloKg) : Math.ceil(caloKg);
-        }
-
-        const netto = peso - caloKg;
-
-        const prezzoKg = Number(editor.prezzoKg ?? r.prezzoKg);
-
-        return {
-          ...r,
-
-          // 🔥 VALORI CORRETTI
-          peso,
-          calo: caloVal,       // salvo il valore ORIGINALE (kg o %)
-          caloTipo: tipoCalo,  // salvo il tipo
-          netto,
-
-          prezzoKg,
-
-          prezzoAcquisto:
-            editor.tipo === "scarico"
-              ? prezzoKg
-              : r.prezzoAcquisto,
-
-          prezzoVendita:
-            editor.tipo === "carico"
-              ? prezzoKg
-              : r.prezzoVendita,
-
-          costoTotale: netto * prezzoKg,
-
-          // 🔥 FIR NON SI PERDE PIÙ
-          fir: normalize(editor.fir ?? r.fir),
-
-          // 🔥 CER NON SI PERDE
-          cer: normalize(editor.cer ?? r.cer)
-        };
-      });
+      const netto = peso - caloKg;
+      const prezzoKg = Number(editor.prezzoKg ?? r.prezzoKg);
+      const costoTotale = netto * prezzoKg;
 
       return {
-        ...cerObj,
-        righe: righeAggiornate,
-
-        // 🔥 FIR DEL CER (se serve)
-        fir: normalize(editor.fir) || cerObj.fir
+        ...r,
+        peso,
+        calo: caloVal,
+        caloTipo: tipoCalo,
+        netto,
+        prezzoKg,
+        costoTotale
       };
     });
 
-    const payload = {
-      [field]: scarichiAggiornati,
+    return { ...cerObj, righe: righeAgg };
+  });
 
-      ...(editor.data ? { data: editor.data } : {}),
+  await updateDoc(docRef, {
+    [field]: updated,
+    lastUpdate: new Date()
+  });
+};
 
-      lastUpdate: new Date(),
-
-      listino: editor.listino ?? dati.listino
-    };
-
-    console.log("💾 PAYLOAD:", payload);
-
-    await updateDoc(docRef, payload);
-
-    console.log("✅ WRITE COMPLETATO");
-
-  } catch (err) {
-    console.error("❌ ERRORE salvaModifiche:", err);
-    throw err;
-  }
-}
 
 
 const eliminaRiga = async (riga) => {
@@ -1120,161 +960,185 @@ const modificaScarico = async (riga) => {
 
 
 const handleStampa = async () => {
-  if (righeFiltrate.length === 0)
+  console.log("🟡 handleStampa — INIZIO");
+
+  if (righeFiltrate.length === 0) {
+    console.warn("⚠️ Nessuna riga da stampare");
     return alert("Nessuna riga da stampare");
+  }
 
-  const { jsPDF } = await import("jspdf");
-  const autoTable = (await import("jspdf-autotable")).default;
-  const { PdfHeader } = await import("../utils/dateUtils");
+  console.log("📦 righeFiltrate:", righeFiltrate);
 
-  // 🔥 PDF SEMPRE LANDSCAPE
-  const pdf = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4"
-  });
+  try {
+    const { jsPDF } = await import("jspdf");
+    console.log("✅ jsPDF importato");
 
-  // 🔥 Applica header sul PDF landscape
-  const { startY } = await PdfHeader(pdf);
+    const autoTable = (await import("jspdf-autotable")).default;
+    console.log("✅ autoTable importato");
 
-  // ORDINA PER ORA (DESC)
-  const righeOrdinate = [...righeFiltrate].sort((a, b) => {
-    const parse = (o) => {
-      if (!o) return -1;
-      const [h, m] = o.split(":").map(Number);
-      return h * 60 + m;
+    const { PdfHeader } = await import("../utils/dateUtils");
+    console.log("✅ PdfHeader importato");
+
+    // 🔥 PDF SEMPRE LANDSCAPE
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4"
+    });
+    console.log("✅ PDF creato");
+
+    const { startY } = await PdfHeader(pdf);
+    console.log("📌 Header applicato, startY:", startY);
+
+    // ORDINA PER ORA (DESC)
+    const righeOrdinate = [...righeFiltrate].sort((a, b) => {
+      const parse = (o) => {
+        if (!o) return -1;
+        const [h, m] = o.split(":").map(Number);
+        return h * 60 + m;
+      };
+      return parse(b.ora) - parse(a.ora);
+    });
+    console.log("📦 righeOrdinate:", righeOrdinate);
+
+    const carichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "carico");
+    const scarichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "scarico");
+    console.log("📊 carichi:", carichi.length, "scarichi:", scarichi.length);
+
+    const calc = (r) => {
+      const pesoLordo = Number(r.peso ?? 0);
+      const caloKg = Number(r.calo ?? 0);
+      const netto = Number(r.netto ?? 0);
+      const prezzoKg = Number(r.prezzoKg ?? 0);
+      const totale = netto * prezzoKg;
+      return { pesoLordo, caloKg, netto, prezzoKg, totale };
     };
-    return parse(b.ora) - parse(a.ora);
-  });
 
-  const carichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "carico");
-  const scarichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "scarico");
+    const totCarichiNetto = carichi.reduce((t, r) => t + calc(r).netto, 0);
+    const totCarichiRicavi = carichi.reduce((t, r) => t + calc(r).totale, 0);
+    const mediaCarichi = totCarichiNetto > 0 ? totCarichiRicavi / totCarichiNetto : 0;
 
-  const calc = (r) => ({
-    pesoLordo: Number(r.peso ?? 0),
-    caloKg: Number(r.calo ?? 0),
-    netto: Number(r.netto ?? 0),
-    prezzoKg: Number(r.prezzoKg ?? 0),
-    totale: Number(r.costoTotale ?? (Number(r.netto ?? 0) * Number(r.prezzoKg ?? 0)))
-  });
+    const totScarichiNetto = scarichi.reduce((t, r) => t + calc(r).netto, 0);
+    const totScarichiCosti = scarichi.reduce((t, r) => t + calc(r).totale, 0);
+    const mediaScarichi = totScarichiNetto > 0 ? totScarichiCosti / totScarichiNetto : 0;
 
-  const totCarichiNetto = carichi.reduce((t, r) => t + calc(r).netto, 0);
-  const totCarichiRicavi = carichi.reduce((t, r) => t + calc(r).totale, 0);
-  const mediaCarichi = totCarichiNetto > 0 ? totCarichiRicavi / totCarichiNetto : 0;
+    const utileFinale = totCarichiRicavi - totScarichiCosti;
+    console.log("💰 totCarichiRicavi:", totCarichiRicavi, "totScarichiCosti:", totScarichiCosti, "utile:", utileFinale);
 
-  const totScarichiNetto = scarichi.reduce((t, r) => t + calc(r).netto, 0);
-  const totScarichiCosti = scarichi.reduce((t, r) => t + calc(r).totale, 0);
-  const mediaScarichi = totScarichiNetto > 0 ? totScarichiCosti / totScarichiNetto : 0;
+    let y = startY - 25;
 
-  const utileFinale = totCarichiRicavi - totScarichiCosti;
-
-  let y = startY - 25;
-
-  pdf.setFontSize(16);
-  pdf.text("Riepilogo Movimenti " + dataLabel, 14, y);
-  y += 10;
-
-  // ============================
-  // CARICHI
-  // ============================
-  if (carichi.length > 0) {
-    pdf.setFontSize(13);
-    pdf.text("CARICHI", 14, y);
-    y += 5;
-
-    autoTable(pdf, {
-      startY: y,
-      head: [[
-        "Ora", "Destinatario", "CER", "FIR", "Materiale",
-        "Peso Lordo (Kg)", "Calo", "Tipo Calo",
-        "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
-      ]],
-      body: carichi.map(r => {
-        const c = calc(r);
-        return [
-          r.ora,
-          r.fornitore,
-          r.cer,
-          r.fir || "",
-          r.materiale,
-          c.pesoLordo.toFixed(2),
-          c.caloKg.toFixed(2),
-          (r.caloTipo === "perc" ? "%" : "Kg"),
-          c.netto.toFixed(2),
-          c.prezzoKg.toFixed(2),
-          c.totale.toFixed(2),
-          r.listino || ""
-        ];
-      }),
-      theme: "grid",
-      styles: { fontSize: 9 }
-    });
-
-    y = pdf.lastAutoTable.finalY + 5;
-
-    pdf.text(
-      `Netto: ${totCarichiNetto.toFixed(2)} Kg | Media: ${mediaCarichi.toFixed(2)} €/Kg | Ricavi: ${totCarichiRicavi.toFixed(2)} €`,
-      14,
-      y
-    );
-
+    pdf.setFontSize(16);
+    pdf.text("Riepilogo Movimenti " + dataLabel, 14, y);
     y += 10;
+
+    // ============================
+    // CARICHI
+    // ============================
+    if (carichi.length > 0) {
+      pdf.setFontSize(13);
+      pdf.text("CARICHI", 14, y);
+      y += 5;
+
+      autoTable(pdf, {
+        startY: y,
+        head: [[
+          "Ora", "Destinatario", "CER", "FIR", "Materiale",
+          "Peso Lordo (Kg)", "Calo", "Tipo Calo",
+          "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
+        ]],
+        body: carichi.map(r => {
+          const c = calc(r);
+          return [
+            r.ora,
+            r.fornitore,
+            r.cer,
+            r.fir || "",
+            r.materiale,
+            c.pesoLordo.toFixed(2),
+            c.caloKg.toFixed(2),
+            (r.caloTipo === "perc" ? "%" : "Kg"),
+            c.netto.toFixed(2),
+            c.prezzoKg.toFixed(2),
+            c.totale.toFixed(2),
+            r.listino || ""
+          ];
+        }),
+        theme: "grid",
+        styles: { fontSize: 9 }
+      });
+
+      y = pdf.lastAutoTable.finalY + 5;
+
+      pdf.text(
+        `Netto: ${totCarichiNetto.toFixed(2)} Kg | Media: ${mediaCarichi.toFixed(2)} €/Kg | Ricavi: ${totCarichiRicavi.toFixed(2)} €`,
+        14,
+        y
+      );
+
+      y += 10;
+    }
+
+    // ============================
+    // SCARICHI
+    // ============================
+    if (scarichi.length > 0) {
+      pdf.setFontSize(13);
+      pdf.text("SCARICHI", 14, y);
+      y += 5;
+
+      autoTable(pdf, {
+        startY: y,
+        head: [[
+          "Ora", "Fornitore", "CER", "FIR", "Materiale",
+          "Peso Lordo (Kg)", "Calo", "Tipo Calo",
+          "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
+        ]],
+        body: scarichi.map(r => {
+          const c = calc(r);
+          return [
+            r.ora,
+            r.fornitore,
+            r.cer,
+            r.fir || "",
+            r.materiale,
+            c.pesoLordo.toFixed(2),
+            c.caloKg.toFixed(2),
+            (r.caloTipo === "perc" ? "%" : "Kg"),
+            c.netto.toFixed(2),
+            c.prezzoKg.toFixed(2),
+            c.totale.toFixed(2),
+            r.listino || ""
+          ];
+        }),
+        theme: "grid",
+        styles: { fontSize: 9 }
+      });
+
+      y = pdf.lastAutoTable.finalY + 5;
+
+      pdf.text(
+        `Netto: ${totScarichiNetto.toFixed(2)} Kg | Media: ${mediaScarichi.toFixed(2)} €/Kg | Costi: ${totScarichiCosti.toFixed(2)} €`,
+        14,
+        y
+      );
+
+      y += 10;
+    }
+
+    if (carichi.length && scarichi.length) {
+      pdf.setFontSize(14);
+      pdf.text(`UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`, 14, y + 10);
+    }
+
+    await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
+    console.log("✅ PDF salvato e condiviso");
+
+  } catch (err) {
+    console.error("❌ ERRORE handleStampa:", err);
+    alert("Errore durante la stampa");
   }
-
-  // ============================
-  // SCARICHI
-  // ============================
-  if (scarichi.length > 0) {
-    pdf.setFontSize(13);
-    pdf.text("SCARICHI", 14, y);
-    y += 5;
-
-    autoTable(pdf, {
-      startY: y,
-      head: [[
-        "Ora", "Fornitore", "CER", "FIR", "Materiale",
-        "Peso Lordo (Kg)", "Calo", "Tipo Calo",
-        "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
-      ]],
-      body: scarichi.map(r => {
-        const c = calc(r);
-        return [
-          r.ora,
-          r.fornitore,
-          r.cer,
-          r.fir || "",
-          r.materiale,
-          c.pesoLordo.toFixed(2),
-          c.caloKg.toFixed(2),
-          (r.caloTipo === "perc" ? "%" : "Kg"),
-          c.netto.toFixed(2),
-          c.prezzoKg.toFixed(2),
-          c.totale.toFixed(2),
-          r.listino || ""
-        ];
-      }),
-      theme: "grid",
-      styles: { fontSize: 9 }
-    });
-
-    y = pdf.lastAutoTable.finalY + 5;
-
-    pdf.text(
-      `Netto: ${totScarichiNetto.toFixed(2)} Kg | Media: ${mediaScarichi.toFixed(2)} €/Kg | Costi: ${totScarichiCosti.toFixed(2)} €`,
-      14,
-      y
-    );
-
-    y += 10;
-  }
-
-  if (carichi.length && scarichi.length) {
-    pdf.setFontSize(14);
-    pdf.text(`UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`, 14, y + 10);
-  }
-
-  await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
 };
+
 
 
 
@@ -1285,12 +1149,13 @@ const handleStampa = async () => {
 
 const nessunMovimento =
   righeCarichiAll.length === 0 && righeScarichiAll.length === 0;
-const trovaRigaIndex = (riga) =>
-  righeOrdinati.findIndex(x =>
-    x.docId === riga.docId &&
-    x.cerIndex === riga.cerIndex &&
-    x.rIndex === riga.rIndex
-  );
+
+  
+
+
+
+
+
   // ---------- RENDER ----------
   return (
     <div className="gestione-scarichi-container">

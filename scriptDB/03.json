@@ -1,0 +1,25 @@
+{
+  "0301": { "codice": "0301", "descrizione": "Rifiuti della lavorazione del legno e della produzione di pannelli e mobili" },
+  "030101": { "codice": "030101", "descrizione": "Scarti di corteccia e legno" },
+  "030102": { "codice": "030102", "descrizione": "Segatura, trucioli, residui di taglio, legno, pannelli e mobili diversi da quelli di cui alla voce 030105" },
+  "030103": { "codice": "030103", "descrizione": "Scarti di legno trattato con prodotti chimici" },
+  "030104": { "codice": "030104", "descrizione": "Scarti di legno non trattato" },
+  "030105": { "codice": "030105", "descrizione": "Segatura, trucioli, residui di taglio, legno, pannelli e mobili contenenti sostanze pericolose" },
+  "030199": { "codice": "030199", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0302": { "codice": "0302", "descrizione": "Rifiuti della produzione e della lavorazione della pasta per carta, carta e cartone" },
+  "030201": { "codice": "030201", "descrizione": "Scarti di produzione e lavorazione di pasta per carta" },
+  "030202": { "codice": "030202", "descrizione": "Scarti di produzione e lavorazione di carta e cartone" },
+  "030203": { "codice": "030203", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti" },
+  "030204": { "codice": "030204", "descrizione": "Scarti di carta e cartone destinati al riciclo" },
+  "030205": { "codice": "030205", "descrizione": "Scarti di carta e cartone non riciclabili" },
+  "030299": { "codice": "030299", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0303": { "codice": "0303", "descrizione": "Rifiuti della produzione e della lavorazione di pasta per carta, carta e cartone contenenti sostanze pericolose" },
+  "030301": { "codice": "030301", "descrizione": "Scarti di produzione e lavorazione di pasta per carta contenenti sostanze pericolose" },
+  "030302": { "codice": "030302", "descrizione": "Scarti di produzione e lavorazione di carta e cartone contenenti sostanze pericolose" },
+  "030303": { "codice": "030303", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti contenenti sostanze pericolose" },
+  "030304": { "codice": "030304", "descrizione": "Scarti di carta e cartone contenenti sostanze pericolose" },
+  "030305": { "codice": "030305", "descrizione": "Scarti di carta e cartone non riciclabili contenenti sostanze pericolose" },
+  "030399": { "codice": "030399", "descrizione": "Rifiuti non specificati altrimenti" }
+}

@@ -1,0 +1,33 @@
+{
+  "0101": { "codice": "0101", "descrizione": "Rifiuti da estrazione di minerali" },
+  "010101": { "codice": "010101", "descrizione": "Rifiuti da estrazione di minerali metalliferi" },
+  "010102": { "codice": "010102", "descrizione": "Rifiuti da estrazione di minerali non metalliferi" },
+
+  "0103": { "codice": "0103", "descrizione": "Rifiuti prodotti da trattamenti chimici e fisici di minerali metalliferi" },
+  "010304": { "codice": "010304", "descrizione": "Sterili che possono generare acido prodotti dalla lavorazione di minerale solforoso" },
+  "010305": { "codice": "010305", "descrizione": "Altri sterili contenenti sostanze pericolose" },
+  "010306": { "codice": "010306", "descrizione": "Sterili diversi da quelli di cui alle voci 010304 e 010305" },
+  "010307": { "codice": "010307", "descrizione": "Altri rifiuti contenenti sostanze pericolose prodotti da trattamenti chimici e fisici di minerali metalliferi" },
+  "010308": { "codice": "010308", "descrizione": "Polveri e residui affini, diversi da quelli di cui alla voce 010307" },
+  "010309": { "codice": "010309", "descrizione": "Fanghi rossi derivanti dalla produzione di allumina, diversi da quelli di cui alla voce 010307" },
+  "010310": { "codice": "010310", "descrizione": "Fanghi rossi derivanti dalla produzione di allumina contenenti sostanze pericolose, diversi da quelli di cui alla voce 010307" },
+  "010399": { "codice": "010399", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0104": { "codice": "0104", "descrizione": "Rifiuti prodotti da trattamenti chimici e fisici di minerali non metalliferi" },
+  "010407": { "codice": "010407", "descrizione": "Rifiuti contenenti sostanze pericolose, prodotti da trattamenti chimici e fisici di minerali non metalliferi" },
+  "010408": { "codice": "010408", "descrizione": "Scarti di ghiaia e pietrisco, diversi da quelli di cui alla voce 010407" },
+  "010409": { "codice": "010409", "descrizione": "Scarti di sabbia e argilla" },
+  "010410": { "codice": "010410", "descrizione": "Polveri e residui affini, diversi da quelli di cui alla voce 010407" },
+  "010411": { "codice": "010411", "descrizione": "Rifiuti della lavorazione di potassa e salgemma, diversi da quelli di cui alla voce 010407" },
+  "010412": { "codice": "010412", "descrizione": "Sterili e altri residui del lavaggio e della pulitura di minerali, diversi da quelli di cui alle voci 010407 e 010411" },
+  "010413": { "codice": "010413", "descrizione": "Rifiuti prodotti dal taglio e dalla segagione della pietra, diversi da quelli di cui alla voce 010407" },
+  "010499": { "codice": "010499", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0105": { "codice": "0105", "descrizione": "Fanghi di perforazione ed altri rifiuti di perforazione" },
+  "010504": { "codice": "010504", "descrizione": "Fanghi e rifiuti di perforazione di pozzi per acque dolci" },
+  "010505": { "codice": "010505", "descrizione": "Fanghi e rifiuti di perforazione contenenti oli" },
+  "010506": { "codice": "010506", "descrizione": "Fanghi di perforazione ed altri rifiuti di perforazione contenenti sostanze pericolose" },
+  "010507": { "codice": "010507", "descrizione": "Fanghi e rifiuti di perforazione contenenti barite, diversi da quelli delle voci 010505 e 010506" },
+  "010508": { "codice": "010508", "descrizione": "Fanghi e rifiuti di perforazione contenenti cloruri, diversi da quelli delle voci 010505 e 010506" },
+  "010599": { "codice": "010599", "descrizione": "Rifiuti non specificati altrimenti" }
+}

@@ -1,0 +1,30 @@
+{
+  "0500": { "codice": "0500", "descrizione": "Rifiuti della raffinazione del petrolio, purificazione del gas naturale e trattamento pirolitico del carbone" },
+
+  "0501": { "codice": "0501", "descrizione": "Rifiuti della raffinazione del petrolio" },
+  "050101": { "codice": "050101", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti contenenti sostanze pericolose" },
+  "050102": { "codice": "050102", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti diversi da quelli di cui alla voce 050101" },
+  "050103": { "codice": "050103", "descrizione": "Fanghi prodotti dal trattamento delle acque di raffreddamento contenenti sostanze pericolose" },
+  "050104": { "codice": "050104", "descrizione": "Fanghi prodotti dal trattamento delle acque di raffreddamento diversi da quelli di cui alla voce 050103" },
+  "050105": { "codice": "050105", "descrizione": "Fanghi prodotti dal trattamento delle acque di processo contenenti sostanze pericolose" },
+  "050106": { "codice": "050106", "descrizione": "Fanghi prodotti dal trattamento delle acque di processo diversi da quelli di cui alla voce 050105" },
+  "050107": { "codice": "050107", "descrizione": "Rifiuti contenenti catrame" },
+  "050108": { "codice": "050108", "descrizione": "Rifiuti contenenti sostanze pericolose" },
+  "050109": { "codice": "050109", "descrizione": "Rifiuti diversi da quelli di cui alle voci 050107 e 050108" },
+  "050199": { "codice": "050199", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0502": { "codice": "0502", "descrizione": "Rifiuti della purificazione del gas naturale" },
+  "050201": { "codice": "050201", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti contenenti sostanze pericolose" },
+  "050202": { "codice": "050202", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti diversi da quelli di cui alla voce 050201" },
+  "050203": { "codice": "050203", "descrizione": "Rifiuti contenenti sostanze pericolose" },
+  "050204": { "codice": "050204", "descrizione": "Rifiuti diversi da quelli di cui alla voce 050203" },
+  "050299": { "codice": "050299", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0503": { "codice": "0503", "descrizione": "Rifiuti del trattamento pirolitico del carbone" },
+  "050301": { "codice": "050301", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti contenenti sostanze pericolose" },
+  "050302": { "codice": "050302", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti diversi da quelli di cui alla voce 050301" },
+  "050303": { "codice": "050303", "descrizione": "Rifiuti contenenti catrame" },
+  "050304": { "codice": "050304", "descrizione": "Rifiuti contenenti sostanze pericolose" },
+  "050305": { "codice": "050305", "descrizione": "Rifiuti diversi da quelli di cui alle voci 050303 e 050304" },
+  "050399": { "codice": "050399", "descrizione": "Rifiuti non specificati altrimenti" }
+}

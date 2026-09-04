@@ -1,0 +1,102 @@
+{
+  "1201": {
+    "codice": "1201",
+    "descrizione": "Rifiuti prodotti dalla lavorazione e dal trattamento fisico e meccanico superficiale di metalli e plastica"
+  },
+  "120101": {
+    "codice": "120101",
+    "descrizione": "Limatura e trucioli di metalli ferrosi"
+  },
+  "120102": {
+    "codice": "120102",
+    "descrizione": "Polveri e particolato di metalli ferrosi"
+  },
+  "120103": {
+    "codice": "120103",
+    "descrizione": "Limatura e trucioli di metalli non ferrosi"
+  },
+  "120104": {
+    "codice": "120104",
+    "descrizione": "Polveri e particolato di metalli non ferrosi"
+  },
+  "120105": {
+    "codice": "120105",
+    "descrizione": "Limatura e trucioli di materiali plastici"
+  },
+  "120106": {
+    "codice": "120106",
+    "descrizione": "Oli minerali per macchinari, contenenti alogeni (eccetto emulsioni e soluzioni)"
+  },
+  "120107": {
+    "codice": "120107",
+    "descrizione": "Oli minerali per macchinari, non contenenti alogeni (eccetto emulsioni e soluzioni)"
+  },
+  "120108": {
+    "codice": "120108",
+    "descrizione": "Emulsioni e soluzioni per macchinari, contenenti alogeni"
+  },
+  "120109": {
+    "codice": "120109",
+    "descrizione": "Emulsioni e soluzioni per macchinari, non contenenti alogeni"
+  },
+  "120110": {
+    "codice": "120110",
+    "descrizione": "Oli sintetici per macchinari"
+  },
+  "120112": {
+    "codice": "120112",
+    "descrizione": "Cere e grassi esauriti"
+  },
+  "120113": {
+    "codice": "120113",
+    "descrizione": "Rifiuti di saldatura"
+  },
+  "120114": {
+    "codice": "120114",
+    "descrizione": "Fanghi di lavorazione, contenenti sostanze pericolose"
+  },
+  "120115": {
+    "codice": "120115",
+    "descrizione": "Fanghi di lavorazione, diversi da quelli di cui alla voce 12 01 14"
+  },
+  "120116": {
+    "codice": "120116",
+    "descrizione": "Residui di materiale di sabbiatura, contenente sostanze pericolose"
+  },
+  "120117": {
+    "codice": "120117",
+    "descrizione": "Residui di materiale di sabbiatura, diversi da quelli di cui alla voce 12 01 16"
+  },
+  "120118": {
+    "codice": "120118",
+    "descrizione": "Fanghi metallici (fanghi di rettifica, affilatura e lappatura) contenenti oli"
+  },
+  "120119": {
+    "codice": "120119",
+    "descrizione": "Oli per macchinari, facilmente biodegradabili"
+  },
+  "120120": {
+    "codice": "120120",
+    "descrizione": "Corpi d'utensile e materiali di rettifica esauriti, contenenti sostanze pericolose"
+  },
+  "120121": {
+    "codice": "120121",
+    "descrizione": "Corpi d'utensile e materiali di rettifica esauriti, diversi da quelli di cui alla voce 12 01 20"
+  },
+  "120199": {
+    "codice": "120199",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1203": {
+    "codice": "1203",
+    "descrizione": "Rifiuti prodotti da processi di sgrassatura ad acqua e a vapore (tranne 11)"
+  },
+  "120301": {
+    "codice": "120301",
+    "descrizione": "Soluzioni acquose di lavaggio"
+  },
+  "120302": {
+    "codice": "120302",
+    "descrizione": "Rifiuti prodotti da processi di sgrassatura a vapore"
+  }
+}

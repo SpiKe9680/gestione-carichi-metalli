@@ -1,0 +1,58 @@
+{
+  "1501": {
+    "codice": "1501",
+    "descrizione": "Imballaggi (compresi i rifiuti urbani di imballaggio oggetto di raccolta differenziata)"
+  },
+  "150101": {
+    "codice": "150101",
+    "descrizione": "Imballaggi di carta e cartone"
+  },
+  "150102": {
+    "codice": "150102",
+    "descrizione": "Imballaggi di plastica"
+  },
+  "150103": {
+    "codice": "150103",
+    "descrizione": "Imballaggi in legno"
+  },
+  "150104": {
+    "codice": "150104",
+    "descrizione": "Imballaggi metallici"
+  },
+  "150105": {
+    "codice": "150105",
+    "descrizione": "Imballaggi compositi"
+  },
+  "150106": {
+    "codice": "150106",
+    "descrizione": "Imballaggi in materiali misti"
+  },
+  "150107": {
+    "codice": "150107",
+    "descrizione": "Imballaggi di vetro"
+  },
+  "150109": {
+    "codice": "150109",
+    "descrizione": "Imballaggi in materia tessile"
+  },
+  "150110": {
+    "codice": "150110",
+    "descrizione": "Imballaggi contenenti residui di sostanze pericolose o contaminati da tali sostanze"
+  },
+  "150111": {
+    "codice": "150111",
+    "descrizione": "Imballaggi metallici contenenti matrici solide porose pericolose (ad esempio amianto), compresi contenitori a pressione vuoti"
+  },
+  "1502": {
+    "codice": "1502",
+    "descrizione": "Assorbenti, materiali filtranti, stracci e indumenti protettivi"
+  },
+  "150202": {
+    "codice": "150202",
+    "descrizione": "Assorbenti, materiali filtranti (inclusi filtri dell'olio non specificati altrimenti), stracci e indumenti protettivi, contaminati da sostanze pericolose"
+  },
+  "150203": {
+    "codice": "150203",
+    "descrizione": "Assorbenti, materiali filtranti, stracci e indumenti protettivi, diversi da quelli di cui alla voce 15 02 02"
+  }
+}

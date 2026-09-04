@@ -1,0 +1,166 @@
+{
+  "1301": {
+    "codice": "1301",
+    "descrizione": "Scarti di oli per circuiti idraulici"
+  },
+  "130101": {
+    "codice": "130101",
+    "descrizione": "Oli per circuiti idraulici contenenti PCB"
+  },
+  "130104": {
+    "codice": "130104",
+    "descrizione": "Emulsioni clorurate"
+  },
+  "130105": {
+    "codice": "130105",
+    "descrizione": "Emulsioni non clorurate"
+  },
+  "130109": {
+    "codice": "130109",
+    "descrizione": "Oli minerali per circuiti idraulici, clorurati"
+  },
+  "130110": {
+    "codice": "130110",
+    "descrizione": "Oli minerali per circuiti idraulici, non clorurati"
+  },
+  "130111": {
+    "codice": "130111",
+    "descrizione": "Oli sintetici per circuiti idraulici"
+  },
+  "130112": {
+    "codice": "130112",
+    "descrizione": "Oli per circuiti idraulici, facilmente biodegradabili"
+  },
+  "130113": {
+    "codice": "130113",
+    "descrizione": "Altri oli per circuiti idraulici"
+  },
+  "1302": {
+    "codice": "1302",
+    "descrizione": "Scarti di olio motore, olio per ingranaggi e oli lubrificanti"
+  },
+  "130204": {
+    "codice": "130204",
+    "descrizione": "Oli minerali per motori, ingranaggi e lubrificazione, clorurati"
+  },
+  "130205": {
+    "codice": "130205",
+    "descrizione": "Oli minerali per motori, ingranaggi e lubrificazione, non clorurati"
+  },
+  "130206": {
+    "codice": "130206",
+    "descrizione": "Oli sintetici per motori, ingranaggi e lubrificazione"
+  },
+  "130207": {
+    "codice": "130207",
+    "descrizione": "Oli per motori, ingranaggi e lubrificazione, facilmente biodegradabili"
+  },
+  "130208": {
+    "codice": "130208",
+    "descrizione": "Altri oli per motori, ingranaggi e lubrificazione"
+  },
+  "1303": {
+    "codice": "1303",
+    "descrizione": "Oli isolanti e oli termoconduttori usati"
+  },
+  "130301": {
+    "codice": "130301",
+    "descrizione": "Oli isolanti o oli termoconduttori, contenenti PCB"
+  },
+  "130306": {
+    "codice": "130306",
+    "descrizione": "Oli minerali isolanti e termoconduttori clorurati, diversi da quelli di cui alla voce 13 03 01"
+  },
+  "130307": {
+    "codice": "130307",
+    "descrizione": "Oli minerali isolanti e termoconduttori non clorurati"
+  },
+  "130308": {
+    "codice": "130308",
+    "descrizione": "Oli sintetici isolanti e oli termoconduttori"
+  },
+  "130309": {
+    "codice": "130309",
+    "descrizione": "Oli isolanti e oli termoconduttori, facilmente biodegradabili"
+  },
+  "130310": {
+    "codice": "130310",
+    "descrizione": "Altri oli isolanti e oli termoconduttori"
+  },
+  "1304": {
+    "codice": "1304",
+    "descrizione": "Oli di sentina"
+  },
+  "130401": {
+    "codice": "130401",
+    "descrizione": "Oli di sentina da navigazione interna"
+  },
+  "130402": {
+    "codice": "130402",
+    "descrizione": "Oli di sentina derivanti dalle fognature dei moli"
+  },
+  "130403": {
+    "codice": "130403",
+    "descrizione": "Oli di sentina da un altro tipo di navigazione"
+  },
+  "1305": {
+    "codice": "1305",
+    "descrizione": "Prodotti di separazione olio/acqua"
+  },
+  "130501": {
+    "codice": "130501",
+    "descrizione": "Rifiuti solidi delle camere a sabbia e di prodotti di separazione olio/acqua"
+  },
+  "130502": {
+    "codice": "130502",
+    "descrizione": "Fanghi di prodotti di separazione olio/acqua"
+  },
+  "130503": {
+    "codice": "130503",
+    "descrizione": "Fanghi da collettori"
+  },
+  "130506": {
+    "codice": "130506",
+    "descrizione": "Oli prodotti da separatori olio/acqua"
+  },
+  "130507": {
+    "codice": "130507",
+    "descrizione": "Acque oleose prodotte da separatori olio/acqua"
+  },
+  "130508": {
+    "codice": "130508",
+    "descrizione": "Miscugli di rifiuti prodotti da camere a sabbia e separatori olio/acqua"
+  },
+  "1307": {
+    "codice": "1307",
+    "descrizione": "Residui di combustibili liquidi"
+  },
+  "130701": {
+    "codice": "130701",
+    "descrizione": "Olio combustibile e carburante diesel"
+  },
+  "130702": {
+    "codice": "130702",
+    "descrizione": "Benzina"
+  },
+  "130703": {
+    "codice": "130703",
+    "descrizione": "Altri carburanti (comprese le miscele)"
+  },
+  "1308": {
+    "codice": "1308",
+    "descrizione": "Rifiuti di oli non specificati altrimenti"
+  },
+  "130801": {
+    "codice": "130801",
+    "descrizione": "Fanghi ed emulsioni da processi di dissalazione"
+  },
+  "130802": {
+    "codice": "130802",
+    "descrizione": "Altre emulsioni"
+  },
+  "130899": {
+    "codice": "130899",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  }
+}

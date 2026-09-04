@@ -1,0 +1,126 @@
+{
+  "1101": {
+    "codice": "1101",
+    "descrizione": "Rifiuti prodotti dal trattamento chimico superficiale e rivestimento di metalli (ad esempio, processi galvanici, zincatura, decapaggio, pulitura elettrolitica, fosfatazione, sgrassaggio con alcali, anodizzazione)"
+  },
+  "110105": {
+    "codice": "110105",
+    "descrizione": "Acidi di decappaggio"
+  },
+  "110106": {
+    "codice": "110106",
+    "descrizione": "Acidi non specificati altrimenti"
+  },
+  "110107": {
+    "codice": "110107",
+    "descrizione": "Basi di decappaggio"
+  },
+  "110108": {
+    "codice": "110108",
+    "descrizione": "Fanghi di fosfatazione"
+  },
+  "110109": {
+    "codice": "110109",
+    "descrizione": "Fanghi e residui di filtrazione, contenenti sostanze pericolose"
+  },
+  "110110": {
+    "codice": "110110",
+    "descrizione": "Fanghi e residui di filtrazione, diversi da quelli di cui alla voce 11 01 09"
+  },
+  "110111": {
+    "codice": "110111",
+    "descrizione": "Soluzioni acquose di lavaggio, contenenti sostanze pericolose"
+  },
+  "110112": {
+    "codice": "110112",
+    "descrizione": "Soluzioni acquose di lavaggio, diverse da quelle di cui alla voce 10 01 11"
+  },
+  "110113": {
+    "codice": "110113",
+    "descrizione": "Rifiuti di sgrassaggio contenenti sostanze pericolose"
+  },
+  "110114": {
+    "codice": "110114",
+    "descrizione": "Rifiuti di sgrassaggio diversi da quelli di cui alla voce 11 01 13"
+  },
+  "110115": {
+    "codice": "110115",
+    "descrizione": "Eluati e fanghi di sistemi a membrana o sistemi a scambio ionico, contenenti sostanze pericolose"
+  },
+  "110116": {
+    "codice": "110116",
+    "descrizione": "Resine a scambio ionico saturate o esaurite"
+  },
+  "110198": {
+    "codice": "110198",
+    "descrizione": "Altri rifiuti contenenti sostanze pericolose"
+  },
+  "110199": {
+    "codice": "110199",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1102": {
+    "codice": "1102",
+    "descrizione": "Rifiuti prodotti dalla lavorazione idrometallurgica di metalli non ferrosi"
+  },
+  "110202": {
+    "codice": "110202",
+    "descrizione": "Fanghi della lavorazione idrometallurgica dello zinco (compresi jarosite, goethite)"
+  },
+  "110203": {
+    "codice": "110203",
+    "descrizione": "Rifiuti della produzione di anodi per processi elettrolitici acquosi"
+  },
+  "110205": {
+    "codice": "110205",
+    "descrizione": "Rifiuti della lavorazione idrometallurgica del rame, contenenti sostanze pericolose"
+  },
+  "110206": {
+    "codice": "110206",
+    "descrizione": "Rifiuti della lavorazione idrometallurgica del rame, diversi da quelli della voce 11 02 05"
+  },
+  "110207": {
+    "codice": "110207",
+    "descrizione": "Altri rifiuti contenenti sostanze pericolose"
+  },
+  "110299": {
+    "codice": "110299",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1103": {
+    "codice": "1103",
+    "descrizione": "Rifiuti solidi e fanghi prodotti da processi di rinvenimento"
+  },
+  "110301": {
+    "codice": "110301",
+    "descrizione": "Rifiuti contenenti cianuro"
+  },
+  "110302": {
+    "codice": "110302",
+    "descrizione": "Altri rifiuti"
+  },
+  "1105": {
+    "codice": "1105",
+    "descrizione": "Rifiuti prodotti da processi di galvanizzazione a caldo"
+  },
+  "110501": {
+    "codice": "110501",
+    "descrizione": "Zinco solido"
+  },
+  "110502": {
+    "codice": "110502",
+    "descrizione": "Ceneri di zinco"
+  },
+  "110503": {
+    "codice": "110503",
+    "descrizione": "Rifiuti solidi prodotti dal trattamento dei fumi"
+  },
+  "110504": {
+    "codice": "110504",
+    "descrizione": "Fondente esaurito"
+  },
+  "110599": {
+    "codice": "110599",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  }
+}

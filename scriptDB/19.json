@@ -1,0 +1,450 @@
+{
+  "1901": {
+    "codice": "1901",
+    "descrizione": "Rifiuti da incenerimento o pirolisi di rifiuti"
+  },
+  "190102": {
+    "codice": "190102",
+    "descrizione": "Materiali ferrosi estratti da ceneri pesanti"
+  },
+  "190105": {
+    "codice": "190105",
+    "descrizione": "Residui di filtrazione prodotti dal trattamento dei fumi"
+  },
+  "190106": {
+    "codice": "190106",
+    "descrizione": "Rifiuti liquidi acquosi prodotti dal trattamento dei fumi e altri rifiuti liquidi acquosi"
+  },
+  "190107": {
+    "codice": "190107",
+    "descrizione": "Rifiuti solidi prodotti dal trattamento dei fumi"
+  },
+  "190110": {
+    "codice": "190110",
+    "descrizione": "Carbone attivo esaurito, prodotto dal trattamento dei fumi"
+  },
+  "190111": {
+    "codice": "190111",
+    "descrizione": "Ceneri pesanti e scorie, contenenti sostanze pericolose"
+  },
+  "190112": {
+    "codice": "190112",
+    "descrizione": "Ceneri pesanti e scorie, diverse da quelle di cui alla voce 19 01 11"
+  },
+  "190113": {
+    "codice": "190113",
+    "descrizione": "Ceneri leggere, contenenti sostanze pericolose"
+  },
+  "190114": {
+    "codice": "190114",
+    "descrizione": "Ceneri leggere, diverse da quelle di cui alla voce 19 01 13"
+  },
+  "190115": {
+    "codice": "190115",
+    "descrizione": "Polveri di caldaia, contenenti sostanze pericolose"
+  },
+  "190116": {
+    "codice": "190116",
+    "descrizione": "Polveri di caldaia, diverse da quelle di cui alla voce 19 01 15"
+  },
+  "190117": {
+    "codice": "190117",
+    "descrizione": "Rifiuti della pirolisi, contenenti sostanze pericolose"
+  },
+  "190118": {
+    "codice": "190118",
+    "descrizione": "Rifiuti della pirolisi, diversi da quelli di cui alla voce 19 01 17"
+  },
+  "190119": {
+    "codice": "190119",
+    "descrizione": "Sabbie dei reattori a letto fluidizzato"
+  },
+  "190199": {
+    "codice": "190199",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1902": {
+    "codice": "1902",
+    "descrizione": "Rifiuti prodotti da trattamenti chimico-fisici di rifiuti (comprese decromatazione, decianizzazione, neutralizzazione)"
+  },
+  "190203": {
+    "codice": "190203",
+    "descrizione": "Rifiuti premiscelati composti esclusivamente da rifiuti non pericolosi"
+  },
+  "190204": {
+    "codice": "190204",
+    "descrizione": "Rifiuti premiscelati contenenti almeno un rifiuto pericoloso"
+  },
+  "190205": {
+    "codice": "190205",
+    "descrizione": "Fanghi prodotti da trattamenti chimico-fisici, contenenti sostanze pericolose"
+  },
+  "190206": {
+    "codice": "190206",
+    "descrizione": "Fanghi prodotti da trattamenti chimico-fisici, diversi da quelli di cui alla voce 19 02 05"
+  },
+  "190207": {
+    "codice": "190207",
+    "descrizione": "Oli e concentrati prodotti da processi di separazione"
+  },
+  "190208": {
+    "codice": "190208",
+    "descrizione": "Rifiuti combustibili liquidi, contenenti sostanze pericolose"
+  },
+  "190209": {
+    "codice": "190209",
+    "descrizione": "Rifiuti combustibili solidi, contenenti sostanze pericolose"
+  },
+  "190210": {
+    "codice": "190210",
+    "descrizione": "Rifiuti combustibili, diversi da quelli di cui alle voci 19 02 08 e 19 02 09"
+  },
+  "190211": {
+    "codice": "190211",
+    "descrizione": "Altri rifiuti contenenti sostanze pericolose"
+  },
+  "190299": {
+    "codice": "190299",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1903": {
+    "codice": "1903",
+    "descrizione": "Rifiuti stabilizzati/solidificati"
+  },
+  "190304": {
+    "codice": "190304",
+    "descrizione": "Rifiuti contrassegnati come pericolosi, parzialmente stabilizzati diversi da quelli di cui al punto 19 03 08"
+  },
+  "190305": {
+    "codice": "190305",
+    "descrizione": "Rifiuti stabilizzati diversi da quelli di cui alla voce 19 03 04"
+  },
+  "190306": {
+    "codice": "190306",
+    "descrizione": "Rifiuti contrassegnati come pericolosi, solidificati"
+  },
+  "190307": {
+    "codice": "190307",
+    "descrizione": "Rifiuti solidificati diversi da quelli di cui alla voce 19 03 06"
+  },
+  "190308": {
+    "codice": "190308",
+    "descrizione": "Mercurio parzialmente stabilizzato"
+  },
+  "1904": {
+    "codice": "1904",
+    "descrizione": "Rifiuti vetrificati e rifiuti di vetrificazione"
+  },
+  "190401": {
+    "codice": "190401",
+    "descrizione": "Rifiuti vetrificati"
+  },
+  "190402": {
+    "codice": "190402",
+    "descrizione": "Ceneri leggere ed altri rifiuti dal trattamento dei fumi"
+  },
+  "190403": {
+    "codice": "190403",
+    "descrizione": "Fase solida non vetrificata"
+  },
+  "190404": {
+    "codice": "190404",
+    "descrizione": "Rifiuti liquidi acquosi prodotti dalla tempra di rifiuti vetrificati"
+  },
+  "1905": {
+    "codice": "1905",
+    "descrizione": "Rifiuti prodotti dal trattamento aerobico di rifiuti solidi"
+  },
+  "190501": {
+    "codice": "190501",
+    "descrizione": "Parte di rifiuti urbani e simili non compostata"
+  },
+  "190502": {
+    "codice": "190502",
+    "descrizione": "Parte di rifiuti animali e vegetali non compostata"
+  },
+  "190503": {
+    "codice": "190503",
+    "descrizione": "Compost fuori specifica"
+  },
+  "190599": {
+    "codice": "190599",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1906": {
+    "codice": "1906",
+    "descrizione": "Rifiuti prodotti dal trattamento anaerobico di rifiuti"
+  },
+  "190603": {
+    "codice": "190603",
+    "descrizione": "Liquidi prodotti dal trattamento anaerobico di rifiuti urbani"
+  },
+  "190604": {
+    "codice": "190604",
+    "descrizione": "Digestato prodotto dal trattamento anaerobico di rifiuti urbani"
+  },
+  "190605": {
+    "codice": "190605",
+    "descrizione": "Liquidi prodotti dal trattamento anaerobico di rifiuti di origine animale o vegetale"
+  },
+  "190606": {
+    "codice": "190606",
+    "descrizione": "Digestato prodotto dal trattamento anaerobico di rifiuti di origine animale o vegetale"
+  },
+  "190699": {
+    "codice": "190699",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1907": {
+    "codice": "1907",
+    "descrizione": "Percolato di discarica"
+  },
+  "190702": {
+    "codice": "190702",
+    "descrizione": "Percolato di discarica, contenente sostanze pericolose"
+  },
+  "190703": {
+    "codice": "190703",
+    "descrizione": "Percolato di discarica, diverso da quello di cui alla voce 19 07 02"
+  },
+  "1908": {
+    "codice": "1908",
+    "descrizione": "Rifiuti prodotti dagli impianti per il trattamento delle acque reflue, non specificati altrimenti"
+  },
+  "190801": {
+    "codice": "190801",
+    "descrizione": "Residui di vagliatura"
+  },
+  "190802": {
+    "codice": "190802",
+    "descrizione": "Rifiuti da dissabbiamento"
+  },
+  "190805": {
+    "codice": "190805",
+    "descrizione": "Fanghi prodotti dal trattamento delle acque reflue urbane"
+  },
+  "190806": {
+    "codice": "190806",
+    "descrizione": "Resine a scambio ionico saturate o esaurite"
+  },
+  "190807": {
+    "codice": "190807",
+    "descrizione": "Soluzioni e fanghi di rigenerazione degli scambiatori di ioni"
+  },
+  "190808": {
+    "codice": "190808",
+    "descrizione": "Rifiuti prodotti da sistemi a membrana, contenenti sostanze pericolose"
+  },
+  "190809": {
+    "codice": "190809",
+    "descrizione": "Miscele di oli e grassi prodotte dalla separazione olio/acqua, contenenti esclusivamente oli e grassi commestibili"
+  },
+  "190810": {
+    "codice": "190810",
+    "descrizione": "Miscele di oli e grassi prodotte dalla separazione olio/acqua, diverse da quelle di cui alla voce 19 08 09"
+  },
+  "190811": {
+    "codice": "190811",
+    "descrizione": "Fanghi prodotti dal trattamento biologico delle acque reflue industriali, contenenti sostanze pericolose"
+  },
+  "190812": {
+    "codice": "190812",
+    "descrizione": "Fanghi prodotti dal trattamento biologico delle acque reflue industriali, diversi da quelli di cui alla voce 19 08 11"
+  },
+  "190813": {
+    "codice": "190813",
+    "descrizione": "Fanghi contenenti sostanze pericolose prodotti da altri trattamenti delle acque reflue industriali"
+  },
+  "190814": {
+    "codice": "190814",
+    "descrizione": "Fanghi prodotti da altri trattamenti delle acque reflue industriali, diversi da quelli di cui alla voce 19 08 13"
+  },
+  "190899": {
+    "codice": "190899",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1909": {
+    "codice": "1909",
+    "descrizione": "Rifiuti prodotti dalla potabilizzazione dell'acqua o dalla sua preparazione per uso industriale"
+  },
+  "190901": {
+    "codice": "190901",
+    "descrizione": "Rifiuti solidi prodotti dai processi di filtrazione e vaglio primari"
+  },
+  "190902": {
+    "codice": "190902",
+    "descrizione": "Fanghi prodotti dai processi di chiarificazione dell'acqua"
+  },
+  "190903": {
+    "codice": "190903",
+    "descrizione": "Fanghi prodotti dai processi di decarbonatazione"
+  },
+  "190904": {
+    "codice": "190904",
+    "descrizione": "Carbone attivo esaurito"
+  },
+  "190905": {
+    "codice": "190905",
+    "descrizione": "Resine a scambio ionico saturate o esaurite"
+  },
+  "190906": {
+    "codice": "190906",
+    "descrizione": "Soluzioni e fanghi di rigenerazione delle resine a scambio ionico"
+  },
+  "190999": {
+    "codice": "190999",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1910": {
+    "codice": "1910",
+    "descrizione": "Rifiuti prodotti da operazioni di frantumazione di rifiuti contenenti metallo"
+  },
+  "191001": {
+    "codice": "191001",
+    "descrizione": "Rifiuti di ferro e acciaio"
+  },
+  "191002": {
+    "codice": "191002",
+    "descrizione": "Rifiuti di metalli non ferrosi"
+  },
+  "191003": {
+    "codice": "191003",
+    "descrizione": "Fluff - frazione leggera e polveri, contenenti sostanze pericolose"
+  },
+  "191004": {
+    "codice": "191004",
+    "descrizione": "Fluff - frazione leggera e polveri, diverse da quelle di cui alla voce 19 10 03"
+  },
+  "191005": {
+    "codice": "191005",
+    "descrizione": "Altre frazioni, contenenti sostanze pericolose"
+  },
+  "191006": {
+    "codice": "191006",
+    "descrizione": "Altre frazioni, diverse da quelle di cui alla voce 19 10 05"
+  },
+  "1911": {
+    "codice": "1911",
+    "descrizione": "Rifiuti prodotti dalla rigenerazione degli oli"
+  },
+  "191101": {
+    "codice": "191101",
+    "descrizione": "Filtri di argilla esauriti"
+  },
+  "191102": {
+    "codice": "191102",
+    "descrizione": "Catrami acidi"
+  },
+  "191103": {
+    "codice": "191103",
+    "descrizione": "Rifiuti liquidi acquosi"
+  },
+  "191104": {
+    "codice": "191104",
+    "descrizione": "Rifiuti prodotti dalla purificazione di carburanti mediante basi"
+  },
+  "191105": {
+    "codice": "191105",
+    "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti, contenenti sostanze pericolose"
+  },
+  "191106": {
+    "codice": "191106",
+    "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti, diversi da quelli di cui alla voce 19 11 05"
+  },
+  "191107": {
+    "codice": "191107",
+    "descrizione": "Fifiuti prodotti dalla depurazione di fumi"
+  },
+  "191199": {
+    "codice": "191199",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1912": {
+    "codice": "1912",
+    "descrizione": "Rifiuti prodotti dal trattamento meccanico di rifiuti (ad esempio selezione, triturazione, compattazione, riduzione in pellet) non specificati altrimenti"
+  },
+  "191201": {
+    "codice": "191201",
+    "descrizione": "Carta e cartone"
+  },
+  "191202": {
+    "codice": "191202",
+    "descrizione": "Metalli ferrosi"
+  },
+  "191203": {
+    "codice": "191203",
+    "descrizione": "Metalli non ferrosi"
+  },
+  "191204": {
+    "codice": "191204",
+    "descrizione": "Plastica e gomma"
+  },
+  "191205": {
+    "codice": "191205",
+    "descrizione": "Vetro"
+  },
+  "191206": {
+    "codice": "191206",
+    "descrizione": "Legno, contenente sostanze pericolose"
+  },
+  "191207": {
+    "codice": "191207",
+    "descrizione": "Legno diverso da quello di cui alla voce 19 12 06"
+  },
+  "191208": {
+    "codice": "191208",
+    "descrizione": "Prodotti tessili"
+  },
+  "191209": {
+    "codice": "191209",
+    "descrizione": "Minerali (ad esempio sabbia, rocce)"
+  },
+  "191210": {
+    "codice": "191210",
+    "descrizione": "Rifiuti combustibili (combustibile da rifiuti)"
+  },
+  "191211": {
+    "codice": "191211",
+    "descrizione": "Altri rifiuti (compresi materiali misti) prodotti dal trattamento meccanico dei rifiuti, contenenti sostanze pericolose"
+  },
+  "191212": {
+    "codice": "191212",
+    "descrizione": "Altri rifiuti (compresi materiali misti) prodotti dal trattamento meccanico dei rifiuti, diversi da quelli di cui alla voce 19 12 11"
+  },
+  "1913": {
+    "codice": "1913",
+    "descrizione": "Rifiuti prodotti dalle operazioni di bonifica di terreni e risanamento delle acque di falda"
+  },
+  "191301": {
+    "codice": "191301",
+    "descrizione": "rifiuti solidi prodotti dalle operazioni di bonifica di terreni, contenenti sostanze pericolose"
+  },
+  "191302": {
+    "codice": "191302",
+    "descrizione": "Rifiuti solidi prodotti dalle operazioni di bonifica di terreni, diversi da quelli di cui alla voce 19 13 01"
+  },
+  "191303": {
+    "codice": "191303",
+    "descrizione": "Fanghi prodotti dalle operazioni di bonifica di terreni, contenenti sostanze pericolose"
+  },
+  "191304": {
+    "codice": "191304",
+    "descrizione": "Fanghi prodotti dalle operazioni di bonifica di terreni, diversi da quelli di cui alla voce 19 13 03"
+  },
+  "191305": {
+    "codice": "191305",
+    "descrizione": "Fanghi prodotti dalle operazioni di risanamento delle acque di falda, contenenti sostanze pericolose"
+  },
+  "191306": {
+    "codice": "191306",
+    "descrizione": "Fanghi prodotti dalle operazioni di risanamento delle acque di falda, diversi da quelli di cui alla voce 19 13 05"
+  },
+  "191307": {
+    "codice": "191307",
+    "descrizione": "Rifiuti liquidi acquosi e rifiuti concentrati acquosi prodotti dalle operazioni di risanamento delle acque di falda, contenenti sostanze pericolose"
+  },
+  "191308": {
+    "codice": "191308",
+    "descrizione": "Rifiuti liquidi acquosi e rifiuti concentrati acquosi prodotti dalle operazioni di risanamento delle acque di falda, diversi da quelli di cui alla voce 19 13 07"
+  }
+}

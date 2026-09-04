@@ -1,0 +1,74 @@
+{
+  "0601": { "codice": "0601", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di acidi" },
+  "060101": { "codice": "060101", "descrizione": "Acido solforico e acido solforoso" },
+  "060102": { "codice": "060102", "descrizione": "Acido cloridrico" },
+  "060103": { "codice": "060103", "descrizione": "Acido fluoridrico" },
+  "060104": { "codice": "060104", "descrizione": "Acido fosforico e fosforoso" },
+  "060105": { "codice": "060105", "descrizione": "Acido nitrico e acido nitroso" },
+  "060106": { "codice": "060106", "descrizione": "Altri acidi" },
+  "060199": { "codice": "060199", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0602": { "codice": "0602", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di basi" },
+  "060201": { "codice": "060201", "descrizione": "Idrossido di calcio" },
+  "060203": { "codice": "060203", "descrizione": "Idrossido di ammonio" },
+  "060204": { "codice": "060204", "descrizione": "Idrossido di sodio e di potassio" },
+  "060205": { "codice": "060205", "descrizione": "Altre basi" },
+  "060299": { "codice": "060299", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0603": { "codice": "0603", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di sali, loro soluzioni e ossidi metallici" },
+  "060311": { "codice": "060311", "descrizione": "Sali e loro soluzioni, contenenti cianuri" },
+  "060313": { "codice": "060313", "descrizione": "Sali e loro soluzioni, contenenti metalli pesanti" },
+  "060314": { "codice": "060314", "descrizione": "Sali e loro soluzioni, diversi da quelli di cui alle voci 060311 e 060313" },
+  "060315": { "codice": "060315", "descrizione": "Ossidi metallici contenenti metalli pesanti" },
+  "060316": { "codice": "060316", "descrizione": "Ossidi metallici, diversi da quelli di cui alla voce 060315" },
+  "060399": { "codice": "060399", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0604": { "codice": "0604", "descrizione": "Morchie da fondi di serbatoi" },
+  "060403": { "codice": "060403", "descrizione": "Rifiuti contenenti arsenico" },
+  "060404": { "codice": "060404", "descrizione": "Rifiuti contenenti mercurio" },
+  "060405": { "codice": "060405", "descrizione": "Rifiuti contenenti altri metalli pesanti" },
+  "060499": { "codice": "060499", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0605": { "codice": "0605", "descrizione": "Fanghi da trattamento in loco degli effluenti" },
+  "060502": { "codice": "060502", "descrizione": "Fanghi prodotti dal trattamento in loco di effluenti, contenenti sostanze pericolose" },
+  "060503": { "codice": "060503", "descrizione": "Fanghi prodotti dal trattamento in loco degli effluenti, diversi da quelli di cui alla voce 060502" },
+
+  "0606": { "codice": "0606", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di prodotti chimici contenenti zolfo, dei processi chimici dello zolfo e dei processi di desolforazione" },
+  "060602": { "codice": "060602", "descrizione": "Rifiuti contenenti solfuri pericolosi" },
+  "060603": { "codice": "060603", "descrizione": "Rifiuti contenenti solfuri, diversi da quelli di cui alla voce 060602" },
+  "060699": { "codice": "060699", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0607": { "codice": "0607", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di prodotti alogeni e dei processi chimici degli alogeni" },
+  "060701": { "codice": "060701", "descrizione": "Rifiuti dei processi elettrolitici, contenenti amianto" },
+  "060702": { "codice": "060702", "descrizione": "Carbone attivato dalla produzione di cloro" },
+  "060703": { "codice": "060703", "descrizione": "Fanghi di solfati di bario, contenenti mercurio" },
+  "060704": { "codice": "060704", "descrizione": "Soluzioni ed acidi, ad esempio acido di contatto" },
+  "060799": { "codice": "060799", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0608": { "codice": "0608", "descrizione": "Rifiuti della produzione, formulazione, fornitura ed uso del silicio e dei suoi derivati" },
+  "060802": { "codice": "060802", "descrizione": "Rifiuti contenenti clorosilani pericolosi" },
+  "060899": { "codice": "060899", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0609": { "codice": "0609", "descrizione": "Rifiuti della produzione, formulazione, fornitura e uso di prodotti fosforosi e dei processi chimici del fosforo" },
+  "060902": { "codice": "060902", "descrizione": "Scorie fosforose" },
+  "060903": { "codice": "060903", "descrizione": "Rifiuti prodotti da reazioni a base di calcio contenenti o contaminati da sostanze pericolose" },
+  "060904": { "codice": "060904", "descrizione": "Rifiuti prodotti da reazioni a base di calcio, diversi da quelli di cui alla voce 060903" },
+  "060999": { "codice": "060999", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0610": { "codice": "0610", "descrizione": "Rifiuti della produzione, formulazione, fornitura ed uso di prodotti chimici contenenti azoto, dei processi chimici dell'azoto e della produzione di fertilizzanti" },
+  "061002": { "codice": "061002", "descrizione": "Rifiuti contenenti sostanze pericolose" },
+  "061099": { "codice": "061099", "descrizione": "Rifiuti non altrimenti specificati" },
+
+  "0611": { "codice": "0611", "descrizione": "Rifiuti dalla produzione di pigmenti inorganici ed opacificanti" },
+  "061101": { "codice": "061101", "descrizione": "Rifiuti prodotti da reazioni a base di calcio nella produzione di diossido di titanio" },
+  "061199": { "codice": "061199", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0613": { "codice": "0613", "descrizione": "Rifiuti di processi chimici inorganici non specificati altrimenti" },
+  "061301": { "codice": "061301", "descrizione": "Prodotti fitosanitari, agenti conservativi del legno ed altri biocidi inorganici" },
+  "061302": { "codice": "061302", "descrizione": "Carbone attivo esaurito (tranne 060702)" },
+  "061303": { "codice": "061303", "descrizione": "Nerofumo" },
+  "061304": { "codice": "061304", "descrizione": "Rifiuti derivanti dai processi di lavorazione dell'amianto" },
+  "061305": { "codice": "061305", "descrizione": "Fuliggine" },
+  "061399": { "codice": "061399", "descrizione": "Rifiuti non specificati altrimenti" }
+}
+

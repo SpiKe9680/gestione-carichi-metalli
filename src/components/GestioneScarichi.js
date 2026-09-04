@@ -689,40 +689,7 @@ const getConfigAzienda = async () => {
   if (!snap.exists()) return null;
   return snap.data();
 };
-const stampaProspettoFatturaScarichi = async (righe, fornitore = "") => {
-  const config = await getConfigAzienda();
-  const pdf = new jsPDF();
-  let y = 10;
-  if (config?.logoBase64) {
-    pdf.addImage(      `data:image/png;base64,${config.logoBase64}`,      "PNG",      10,      5,      40,      20    );
-  }
-  pdf.setFontSize(11);
-  pdf.text(config?.ragioneSociale || "", 60, 10);
-  pdf.text(config?.indirizzo || "", 60, 16);
-  pdf.text(config?.capCitta || "", 60, 22);
-  pdf.text(`P.IVA: ${config?.piva || "-"}`, 60, 28);
-  y = 42;
-  pdf.setFontSize(14);
-  pdf.text("PROSPETTO FATTURA SCARICHI", 10, y);
-  y += 8;
-  pdf.setFontSize(11);
-  pdf.text(`Cliente: ${fornitore || "-"}`, 10, y);
-  y += 10;
-  const head = [["FIR", "CER", "Materiale", "Kg", "Prezzo", "Totale"]];
-  let totale = 0;
-  const body = righe.map(r => {
-   const tot = money(r.netto * r.prezzoKg);
-totale += round2(tot);
-    return [      r.fir || "-",      r.cer || "-",      r.materiale || "-",      Number(r.netto || 0).toFixed(2),      Number(r.prezzoKg || 0).toFixed(2),      tot.toFixed(2),];
-  });
-  autoTable(pdf, {    startY: y,    head,    body,    theme: "grid",    styles: { fontSize: 9 }  });
-  const finalY = pdf.lastAutoTable.finalY || y;
-  pdf.setFontSize(12);
-  totale = round2(totale);
-  pdf.text(`TOTALE: € ${totale.toFixed(2)}`, 10, finalY + 10);
 
-  await salvaESharePdfCapacitor(pdf, `prospetto_${(fornitore || "cliente").replace(/[^a-z0-9]/gi, "_")}.pdf`);
-};
 const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
   const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
   const safe = (v) => Number(v) || 0;

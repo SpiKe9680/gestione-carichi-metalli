@@ -1,0 +1,334 @@
+{
+  "1601": {
+    "codice": "1601",
+    "descrizione": "Veicoli fuori uso appartenenti a diversi modi di trasporto (comprese le macchine mobili non stradali) e rifiuti prodotti dallo smantellamento di veicoli fuori uso e dalla manutenzione di veicoli (tranne 13, 14, 16 06 e 16 08)"
+  },
+  "160103": {
+    "codice": "160103",
+    "descrizione": "Pneumatici fuori uso"
+  },
+  "160104": {
+    "codice": "160104",
+    "descrizione": "Veicoli fuori uso"
+  },
+  "160106": {
+    "codice": "160106",
+    "descrizione": "Veicoli fuori uso, non contenenti liquidi né altre componenti pericolose"
+  },
+  "160107": {
+    "codice": "160107",
+    "descrizione": "Filtri dell'olio"
+  },
+  "160108": {
+    "codice": "160108",
+    "descrizione": "Componenti contenenti mercurio"
+  },
+  "160109": {
+    "codice": "160109",
+    "descrizione": "Componenti contenenti PCB"
+  },
+  "160110": {
+    "codice": "160110",
+    "descrizione": "Componenti esplosivi (ad esempio «air bag»)"
+  },
+  "160111": {
+    "codice": "160111",
+    "descrizione": "Pastiglie per freni, contenenti amianto"
+  },
+  "160112": {
+    "codice": "160112",
+    "descrizione": "Pastiglie per freni, diverse da quelle di cui alla voce 16 01 11"
+  },
+  "160113": {
+    "codice": "160113",
+    "descrizione": "Liquidi per freni"
+  },
+  "160114": {
+    "codice": "160114",
+    "descrizione": "Liquidi antigelo contenenti sostanze pericolose"
+  },
+  "160115": {
+    "codice": "160115",
+    "descrizione": "Liquidi antigelo diversi da quelli di cui alla voce 16 01 14"
+  },
+  "160116": {
+    "codice": "160116",
+    "descrizione": "Serbatoi per gas liquefatto"
+  },
+  "160117": {
+    "codice": "160117",
+    "descrizione": "Metalli ferrosi"
+  },
+  "160118": {
+    "codice": "160118",
+    "descrizione": "Metalli non ferrosi"
+  },
+  "160119": {
+    "codice": "160119",
+    "descrizione": "Plastica"
+  },
+  "160120": {
+    "codice": "160120",
+    "descrizione": "Vetro"
+  },
+  "160121": {
+    "codice": "160121",
+    "descrizione": "Componenti pericolosi diversi da quelli di cui alle voci da 16 01 07 a 16 01 11, 16 01 13 e 16 01 14"
+  },
+  "160122": {
+    "codice": "160122",
+    "descrizione": "Componenti non specificati altrimenti"
+  },
+  "160199": {
+    "codice": "160199",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1602": {
+    "codice": "1602",
+    "descrizione": "Rifiuti provenienti da apparecchiature elettriche ed elettroniche"
+  },
+  "160209": {
+    "codice": "160209",
+    "descrizione": "Trasformatori e condensatori contenenti PCB"
+  },
+  "160210": {
+    "codice": "160210",
+    "descrizione": "Apparecchiature fuori uso contenenti PCB o da essi contaminate, diverse da quelle di cui alla voce 16 02 09"
+  },
+  "160211": {
+    "codice": "160211",
+    "descrizione": "Apparecchiature fuori uso, contenenti clorofluorocarburi, HCFC, HFC"
+  },
+  "160212": {
+    "codice": "160212",
+    "descrizione": "Apparecchiature fuori uso, contenenti amianto in fibre libere"
+  },
+  "160213": {
+    "codice": "160213",
+    "descrizione": "Apparecchiature fuori uso, contenenti componenti pericolosi (1) diversi da quelli di cui alle voci da 16 02 09 a 16 02 12"
+  },
+  "160214": {
+    "codice": "160214",
+    "descrizione": "Apparecchiature fuori uso, diverse da quelle di cui alle voci da 16 02 09 a 16 02 13"
+  },
+  "160215": {
+    "codice": "160215",
+    "descrizione": "Componenti pericolosi rimossi da apparecchiature fuori uso"
+  },
+  "160216": {
+    "codice": "160216",
+    "descrizione": "Componenti rimossi da apparecchiature fuori uso, diversi da quelli di cui alla voce 16 02 15"
+  },
+  "1603": {
+    "codice": "1603",
+    "descrizione": "Prodotti fuori specifica e prodotti inutilizzati"
+  },
+  "160303": {
+    "codice": "160303",
+    "descrizione": "Rifiuti inorganici contenenti sostanze pericolose"
+  },
+  "160304": {
+    "codice": "160304",
+    "descrizione": "Rifiuti inorganici, diversi da quelli di cui alla voce 16 03 03"
+  },
+  "160305": {
+    "codice": "160305",
+    "descrizione": "Rifiuti organici, contenenti sostanze pericolose"
+  },
+  "160306": {
+    "codice": "160306",
+    "descrizione": "Rifiuti organici diversi da quelli di cui alla voce 16 03 05"
+  },
+  "160307": {
+    "codice": "160307",
+    "descrizione": "Mercurio metallico"
+  },
+  "1604": {
+    "codice": "1604",
+    "descrizione": "Esplosivi di scarto"
+  },
+  "160401": {
+    "codice": "160401",
+    "descrizione": "Munizioni di scarto"
+  },
+  "160402": {
+    "codice": "160402",
+    "descrizione": "Fuochi artificiali di scarto"
+  },
+  "160403": {
+    "codice": "160403",
+    "descrizione": "Altri esplosivi di scarto"
+  },
+  "1605": {
+    "codice": "1605",
+    "descrizione": "Gas in contenitori a pressione e sostanze chimiche di scarto"
+  },
+  "160504": {
+    "codice": "160504",
+    "descrizione": "Gas in contenitori a pressione (compresi gli halon), contenenti sostanze pericolose"
+  },
+  "160505": {
+    "codice": "160505",
+    "descrizione": "Gas in contenitori a pressione, diversi da quelli di cui alla voce 16 05 04"
+  },
+  "160506": {
+    "codice": "160506",
+    "descrizione": "Sostanze chimiche di laboratorio contenenti o costituite da sostanze pericolose, comprese le miscele di sostanze chimiche di laboratorio"
+  },
+  "160507": {
+    "codice": "160507",
+    "descrizione": "Sostanze chimiche inorganiche di scarto contenenti o costituite da sostanze pericolose"
+  },
+  "160508": {
+    "codice": "160508",
+    "descrizione": "Sostanze chimiche organiche di scarto contenenti o costituite da sostanze pericolose"
+  },
+  "160509": {
+    "codice": "160509",
+    "descrizione": "Sostanze chimiche di scarto diverse da quelle di cui alle voci 16 05 06, 16 05 07 e 16 05 08"
+  },
+  "1606": {
+    "codice": "1606",
+    "descrizione": "Batterie ed accumulatori"
+  },
+  "160601": {
+    "codice": "160601",
+    "descrizione": "Batterie al piombo"
+  },
+  "160602": {
+    "codice": "160602",
+    "descrizione": "Batterie al nichel-cadmio"
+  },
+  "160603": {
+    "codice": "160603",
+    "descrizione": "Batterie contenenti mercurio"
+  },
+  "160604": {
+    "codice": "160604",
+    "descrizione": "Batterie alcaline (tranne 16 06 03)"
+  },
+  "160605": {
+    "codice": "160605",
+    "descrizione": "Altre batterie ed accumulatori"
+  },
+  "160606": {
+    "codice": "160606",
+    "descrizione": "Elettroliti di batterie e accumulatori, oggetto di raccolta differenziata"
+  },
+  "1607": {
+    "codice": "1607",
+    "descrizione": "Rifiuti della pulizia di serbatoi e di fusti per trasporto e stoccaggio (tranne 05 e 13)"
+  },
+  "160708": {
+    "codice": "160708",
+    "descrizione": "Rifiuti contenenti oli"
+  },
+  "160709": {
+    "codice": "160709",
+    "descrizione": "Rifiuti contenenti altre sostanze pericolose"
+  },
+  "160799": {
+    "codice": "160799",
+    "descrizione": "Rifiuti non specificati altrimenti"
+  },
+  "1608": {
+    "codice": "1608",
+    "descrizione": "Catalizzatori esauriti"
+  },
+  "160801": {
+    "codice": "160801",
+    "descrizione": "Catalizzatori esauriti contenenti oro, argento, renio, rodio, palladio, iridio o platino (tranne 16 08 07)"
+  },
+  "160802": {
+    "codice": "160802",
+    "descrizione": "Catalizzatori esauriti contenenti metalli di transizione pericolosi o composti di metalli di transizione pericolosi"
+  },
+  "160803": {
+    "codice": "160803",
+    "descrizione": "Catalizzatori esauriti contenenti metalli di transizione o composti di metalli di transizione, non specificati altrimenti"
+  },
+  "160804": {
+    "codice": "160804",
+    "descrizione": "Catalizzatori liquidi esauriti per il cracking catalitico (tranne 16 08 07)"
+  },
+  "160805": {
+    "codice": "160805",
+    "descrizione": "Catalizzatori esauriti contenenti acido fosforico"
+  },
+  "160806": {
+    "codice": "160806",
+    "descrizione": "Liquidi esauriti usati come catalizzatori"
+  },
+  "160807": {
+    "codice": "160807",
+    "descrizione": "Catalizzatori esauriti contaminati da sostanze pericolose"
+  },
+  "1609": {
+    "codice": "1609",
+    "descrizione": "Sostanze ossidanti"
+  },
+  "160901": {
+    "codice": "160901",
+    "descrizione": "Permanganati, ad esempio permanganato di potassio"
+  },
+  "160902": {
+    "codice": "160902",
+    "descrizione": "Cromati, ad esempio cromato di potassio, dicromato di potassio o di sodio"
+  },
+  "160903": {
+    "codice": "160903",
+    "descrizione": "Perossidi, ad esempio perossido d'idrogeno"
+  },
+  "160904": {
+    "codice": "160904",
+    "descrizione": "Sostanze ossidanti non specificate altrimenti"
+  },
+  "1610": {
+    "codice": "1610",
+    "descrizione": "Rifiuti liquidi acquosi destinati ad essere trattati fuori sito"
+  },
+  "161001": {
+    "codice": "161001",
+    "descrizione": "Rifiuti liquidi acquosi, contenenti sostanze pericolose"
+  },
+  "161002": {
+    "codice": "161002",
+    "descrizione": "Rifiuti liquidi acquosi, diversi da quelle di cui alla voce 16 10 01"
+  },
+  "161003": {
+    "codice": "161003",
+    "descrizione": "Concentrati acquosi, contenenti sostanze pericolose"
+  },
+  "161004": {
+    "codice": "161004",
+    "descrizione": "Concentrati acquosi, diversi da quelli di cui alla voce 16 10 03"
+  },
+  "1611": {
+    "codice": "1611",
+    "descrizione": "Rifiuti di rivestimenti e materiali refrattari"
+  },
+  "161101": {
+    "codice": "161101",
+    "descrizione": "Rivestimenti e materiali refrattari a base di carbone provenienti da processi metallurgici, contenenti sostanze pericolose"
+  },
+  "161102": {
+    "codice": "161102",
+    "descrizione": "Rivestimenti e materiali refrattari a base di carbone provenienti dalle lavorazioni metallurgiche, diversi da quelli di cui alla voce 16 11 01"
+  },
+  "161103": {
+    "codice": "161103",
+    "descrizione": "Altri rivestimenti e materiali refrattari provenienti da processi metallurgici, contenenti sostanze pericolose"
+  },
+  "161104": {
+    "codice": "161104",
+    "descrizione": "Altri rivestimenti e materiali refrattari provenienti da processi metallurgici, diversi da quelli di cui alla voce 16 11 03"
+  },
+  "161105": {
+    "codice": "161105",
+    "descrizione": "Rivestimenti e materiali refrattari provenienti da lavorazioni non metallurgiche, contenenti sostanze pericolose"
+  },
+  "161106": {
+    "codice": "161106",
+    "descrizione": "Rivestimenti e materiali refrattari provenienti da lavorazioni non metallurgiche, diversi da quelli di cui alla voce 16 11 05"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "1406": {
+    "codice": "1406",
+    "descrizione": "Rifiuti di solventi organici, refrigeranti e propellenti di schiuma/aerosol"
+  },
+  "140601": {
+    "codice": "140601",
+    "descrizione": "Clorofluorocarburi, HCFC, HFC"
+  },
+  "140602": {
+    "codice": "140602",
+    "descrizione": "Altri solventi e miscele di solventi alogenati"
+  },
+  "140603": {
+    "codice": "140603",
+    "descrizione": "Altri solventi e miscele di solventi"
+  },
+  "140604": {
+    "codice": "140604",
+    "descrizione": "Fanghi o rifiuti solidi, contenenti solventi alogenati"
+  },
+  "140605": {
+    "codice": "140605",
+    "descrizione": "Fanghi o rifiuti solidi, contenenti altri solventi"
+  }
+}

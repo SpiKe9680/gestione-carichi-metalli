@@ -1,0 +1,26 @@
+{
+  "0400": { "codice": "0400", "descrizione": "Rifiuti dell’industria chimica organica" },
+
+  "0401": { "codice": "0401", "descrizione": "Rifiuti della produzione e della lavorazione di prodotti chimici organici di base" },
+  "040101": { "codice": "040101", "descrizione": "Solventi organici, refrigeranti e propellenti alogenati" },
+  "040102": { "codice": "040102", "descrizione": "Solventi organici, refrigeranti e propellenti non alogenati" },
+  "040103": { "codice": "040103", "descrizione": "Altri solventi organici" },
+  "040104": { "codice": "040104", "descrizione": "Rifiuti contenenti sostanze pericolose" },
+  "040199": { "codice": "040199", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0402": { "codice": "0402", "descrizione": "Rifiuti della produzione e della lavorazione di coloranti e pigmenti organici" },
+  "040201": { "codice": "040201", "descrizione": "Scarti di coloranti e pigmenti organici contenenti sostanze pericolose" },
+  "040202": { "codice": "040202", "descrizione": "Scarti di coloranti e pigmenti organici diversi da quelli di cui alla voce 040201" },
+  "040299": { "codice": "040299", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0403": { "codice": "0403", "descrizione": "Rifiuti della produzione e della lavorazione di prodotti farmaceutici" },
+  "040301": { "codice": "040301", "descrizione": "Scarti di prodotti farmaceutici contenenti sostanze pericolose" },
+  "040302": { "codice": "040302", "descrizione": "Scarti di prodotti farmaceutici diversi da quelli di cui alla voce 040301" },
+  "040399": { "codice": "040399", "descrizione": "Rifiuti non specificati altrimenti" },
+
+  "0404": { "codice": "0404", "descrizione": "Rifiuti della produzione e della lavorazione di prodotti chimici organici di base contenenti sostanze pericolose" },
+  "040401": { "codice": "040401", "descrizione": "Solventi organici, refrigeranti e propellenti alogenati contenenti sostanze pericolose" },
+  "040402": { "codice": "040402", "descrizione": "Solventi organici, refrigeranti e propellenti non alogenati contenenti sostanze pericolose" },
+  "040403": { "codice": "040403", "descrizione": "Altri solventi organici contenenti sostanze pericolose" },
+  "040499": { "codice": "040499", "descrizione": "Rifiuti non specificati altrimenti" }
+}

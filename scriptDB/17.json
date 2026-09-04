@@ -1,0 +1,186 @@
+{
+  "1701": {
+    "codice": "1701",
+    "descrizione": "Cemento, mattoni, mattonelle e ceramiche"
+  },
+  "170101": {
+    "codice": "170101",
+    "descrizione": "Cemento"
+  },
+  "170102": {
+    "codice": "170102",
+    "descrizione": "Mattoni"
+  },
+  "170103": {
+    "codice": "170103",
+    "descrizione": "Mattonelle e ceramiche"
+  },
+  "170106": {
+    "codice": "170106",
+    "descrizione": "Miscugli o frazioni separate di cemento, mattoni, mattonelle e ceramiche, contenenti sostanze pericolose"
+  },
+  "170107": {
+    "codice": "170107",
+    "descrizione": "Miscugli di cemento, mattoni, mattonelle e ceramiche, diversi da quelle di cui alla voce 17 01 06"
+  },
+  "1702": {
+    "codice": "1702",
+    "descrizione": "Legno, vetro e plastica"
+  },
+  "170201": {
+    "codice": "170201",
+    "descrizione": "Legno"
+  },
+  "170202": {
+    "codice": "170202",
+    "descrizione": "Vetro"
+  },
+  "170203": {
+    "codice": "170203",
+    "descrizione": "Plastica"
+  },
+  "170204": {
+    "codice": "170204",
+    "descrizione": "Vetro, plastica e legno contenenti sostanze pericolose o da esse contaminati"
+  },
+  "1703": {
+    "codice": "1703",
+    "descrizione": "Miscele bituminose, catrame di carbone e prodotti contenenti catrame"
+  },
+  "170301": {
+    "codice": "170301",
+    "descrizione": "Miscele bituminose contenenti catrame di carbone"
+  },
+  "170302": {
+    "codice": "170302",
+    "descrizione": "Miscele bituminose diverse da quelle di cui alla voce 17 03 01"
+  },
+  "170303": {
+    "codice": "170303",
+    "descrizione": "Catrame di carbone e prodotti contenenti catrame"
+  },
+  "1704": {
+    "codice": "1704",
+    "descrizione": "Metalli (incluse le loro leghe)"
+  },
+  "170401": {
+    "codice": "170401",
+    "descrizione": "Rame, bronzo, ottone"
+  },
+  "170402": {
+    "codice": "170402",
+    "descrizione": "Alluminio"
+  },
+  "170403": {
+    "codice": "170403",
+    "descrizione": "Piombo"
+  },
+  "170404": {
+    "codice": "170404",
+    "descrizione": "Zinco"
+  },
+  "170405": {
+    "codice": "170405",
+    "descrizione": "Ferro e acciaio"
+  },
+  "170406": {
+    "codice": "170406",
+    "descrizione": "Stagno"
+  },
+  "170407": {
+    "codice": "170407",
+    "descrizione": "Metalli misti"
+  },
+  "170409": {
+    "codice": "170409",
+    "descrizione": "Rifiuti metallici contaminati da sostanze pericolose"
+  },
+  "170410": {
+    "codice": "170410",
+    "descrizione": "Cavi, impregnati di olio, di catrame di carbone o di altre sostanze pericolose"
+  },
+  "170411": {
+    "codice": "170411",
+    "descrizione": "Cavi, diversi da quelli di cui alla voce 17 04 10"
+  },
+  "1705": {
+    "codice": "1705",
+    "descrizione": "Terra (compresa quella proveniente da siti contaminati), rocce e materiale di dragaggio"
+  },
+  "170503": {
+    "codice": "170503",
+    "descrizione": "Terra e rocce, contenenti sostanze pericolose"
+  },
+  "170504": {
+    "codice": "170504",
+    "descrizione": "Terra e rocce, diverse da quelle di cui alla voce 17 05 03"
+  },
+  "170505": {
+    "codice": "170505",
+    "descrizione": "Materiale di dragaggio, contenente sostanze pericolose"
+  },
+  "170506": {
+    "codice": "170506",
+    "descrizione": "Materiale di dragaggio, diverso da quello di cui alla voce 17 05 05"
+  },
+  "170507": {
+    "codice": "170507",
+    "descrizione": "Pietrisco per massicciate ferroviarie, contenente sostanze pericolose"
+  },
+  "170508": {
+    "codice": "170508",
+    "descrizione": "Pietrisco per massicciate ferroviarie, diverso da quello di cui alla voce 17 05 07"
+  },
+  "1706": {
+    "codice": "1706",
+    "descrizione": "Materiali isolanti e materiali da costruzione contenenti amianto"
+  },
+  "170601": {
+    "codice": "170601",
+    "descrizione": "Materiali isolanti, contenenti amianto"
+  },
+  "170603": {
+    "codice": "170603",
+    "descrizione": "Altri materiali isolanti contenenti o costituiti da sostanze pericolose"
+  },
+  "170604": {
+    "codice": "170604",
+    "descrizione": "Materiali isolanti, diversi da quelli di cui alle voci 17 06 01 e 17 06 03"
+  },
+  "170605": {
+    "codice": "170605",
+    "descrizione": "Materiali da costruzione contenenti amianto"
+  },
+  "1708": {
+    "codice": "1708",
+    "descrizione": "Materiali da costruzione a base di gesso"
+  },
+  "170801": {
+    "codice": "170801",
+    "descrizione": "Materiali da costruzione a base di gesso contaminati da sostanze pericolose"
+  },
+  "170802": {
+    "codice": "170802",
+    "descrizione": "Materiali da costruzione a base di gesso, diversi da quelli di cui alla voce 17 08 01"
+  },
+  "1709": {
+    "codice": "1709",
+    "descrizione": "Altri rifiuti dell'attività di costruzione e demolizione"
+  },
+  "170901": {
+    "codice": "170901",
+    "descrizione": "Rifiuti dell'attività di costruzione e demolizione, contenenti mercurio"
+  },
+  "170902": {
+    "codice": "170902",
+    "descrizione": "Rifiuti dell'attività di costruzione e demolizione, contenenti PCB (ad esempio sigillanti contenenti PCB, pavimentazioni a base di resina contenenti PCB, elementi stagni in vetro contenenti PCB, condensatori contenenti PCB)"
+  },
+  "170903": {
+    "codice": "170903",
+    "descrizione": "Altri rifiuti dell'attività di costruzione e demolizione (compresi rifiuti misti) contenenti sostanze pericolose"
+  },
+  "170904": {
+    "codice": "170904",
+    "descrizione": "Rifiuti misti dell'attività di costruzione e demolizione, diversi da quelli di cui alle voci 17 09 01, 17 09 02 e 17 09 03"
+  }
+}
