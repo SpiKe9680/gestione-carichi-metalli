@@ -294,156 +294,7 @@ totale = round2(totale);
     tipo === "prospetto" ? "prospetti" : "fattureCarichi";
   return addDoc(collection(db, collectionName), {    tipo,    cliente: modalData.cliente,    totale,    movimentiIds: scarichiIds,    blocchi: modalData.blocchi,    dataCreazione: new Date().toISOString(),    DataPagamento: null  });
 };
-const handleStampaDocumento = async () => {
-  const isFattura = modalTipo === "fattura";
-
-  const snap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
-  const config = snap.exists() ? snap.data() : {};
-
-  const isConsuntivato = (v) =>
-    v !== null && v !== undefined && String(v).trim() !== "";
-
-  const movimenti = filteredScarichi.filter(
-    (m) =>
-      modalData.movimentiIds.includes(m.id) &&
-      !isConsuntivato(m.movimentoFinanziarioId)
-  );
-
-  let totale = 0;
-
- const buildGruppi = (useVendita) => {
-  const gruppi = {};
-
-  movimenti.forEach((m) => {
-    const dataMov =
-      m.dataScarico || m.data || m.dataCreazione || null;
-
-    (m.cer || []).forEach((c) => {
-      const firKey = c.fir || "SENZA FIR";
-
-      if (!gruppi[firKey]) {
-        gruppi[firKey] = {
-          data: dataMov,
-          righe: [],
-        };
-      }
-
-      if (!gruppi[firKey].data && dataMov) {
-        gruppi[firKey].data = dataMov;
-      }
-
-      (c.righe || []).forEach((r) => {
-        const peso = Number(r.peso || r.netto || 0);
-        const calo = Number(r.calo || 0);
-
-        const caloKgRaw =
-          r.caloTipo === "perc"
-            ? (peso * calo) / 100
-            : calo;
-
-        const caloKg =
-          (caloKgRaw % 1) <= 0.5
-            ? Math.floor(caloKgRaw)
-            : Math.ceil(caloKgRaw);
-
-        const netto = peso - caloKg;
-
-        const prezzo = Number(
-          r.prezzo ??
-          (useVendita ? r.prezzoVendita : r.prezzoAcquisto) ??
-          0
-        );
-
-        gruppi[firKey].righe.push({
-          cer: c.cer,
-          materiale: r.materiale,
-          pesoLordo: peso,
-          caloKg,
-          caloPerc: r.caloTipo === "perc" ? calo : null,
-          netto,
-          prezzo,
-        });
-      });
-    });
-  });
-
-  return gruppi;
-};
-
-
-  const gruppi = buildGruppi(isFattura);
-
-  // 🔥 PDF
-  const autoTable = (await import("jspdf-autotable")).default;
-  const { PdfHeader } = await import("../utils/dateUtils");
-
-  const { pdf, startY } = await PdfHeader();
-
-  pdf.setFontSize(14);
-  pdf.text(isFattura ? "FATTURA" : "PROSPETTO FATTURA", 14, startY - 10);
-
-  // 🔥 dati azienda (se vuoi già pronti)
-  if (config?.ragioneSociale) {
-    pdf.setFontSize(10);
-    pdf.text(config.ragioneSociale, 14, startY - 2);
-  }
-
-  let body = [];
-
-  Object.keys(gruppi).forEach((fir) => {
-    const gruppo = gruppi[fir];
-
-  gruppo.righe.forEach((r) => {
-  const tot = r.netto * r.prezzo;
-  totale += tot;
-
-  const caloLabel =
-    r.caloPerc != null
-      ? `${r.caloPerc}% (${r.caloKg} Kg)`
-      : `${r.caloKg} Kg`;
-
-  body.push([
-    fir,
-    r.cer || "-",
-    r.materiale || "-",
-    r.pesoLordo.toFixed(2),
-    caloLabel,
-    r.netto.toFixed(2),
-    r.prezzo.toFixed(2),
-    tot.toFixed(2),
-  ]);
-});
-
-  });
-
- autoTable(pdf, {
-  startY: startY,
-  head: [["FIR", "CER", "Materiale", "Peso Lordo (Kg)", "Calo", "Netto (Kg)", "Prezzo €/Kg", "Totale €"]],
-  body,
-  styles: { fontSize: 9 },
-});
-
-
-  pdf.text(
-    `Totale: € ${totale.toFixed(2)}`,
-    14,
-    pdf.lastAutoTable.finalY + 10
-  );
-
-  // 🔥 nome file cliente + data
-  const nomeCliente = (modalData.cliente || "cliente")
-    .replace(/[^a-zA-Z0-9]/g, "_")
-    .toLowerCase();
-
-  const today = new Date()
-    .toLocaleDateString("it-IT")
-    .replace(/\//g, "-");
-
-  await salvaESharePdfCapacitor(
-    pdf,
-    `${isFattura ? "fattura" : "prospetto"}_${nomeCliente}_${today}.pdf`
-  );
-};
+ 
 useEffect(() => {
   if (location.state?.refresh) {
     fetchMovimenti(); // ricarica i dati correttamente
@@ -1173,6 +1024,10 @@ const getMovimentiValidi = () => {
 };
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
+
+const handleStampaDocumento = async () => {
+};
+
   return (
     <div className="gestione-scarichi-container">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
