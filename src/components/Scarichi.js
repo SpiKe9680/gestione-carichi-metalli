@@ -15,7 +15,7 @@ import {
   query,
   where,
   orderBy,
-  limit
+  limit,updateDoc
 } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -27,6 +27,7 @@ import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import { PdfHeader, loadConfigAzienda } from "../utils/dateUtils";
 import Select from "react-select";
+import CreatableSelect from "react-select/creatable";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -337,57 +338,107 @@ useEffect(() => {
 
 
 
-  useEffect(() => {
-    const syncQueue = async () => {
-      try {
-        const snap = await getDocs(collection(db, "scarichi_images_queue"));
+useEffect(() => {
 
-        for (const docSnap of snap.docs) {
-          const data = docSnap.data();
-          if (data.uploaded) continue;
+  const syncQueue = async () => {
 
-          try {
-            const res = await fetch(data.fileData);
-            const blob = await res.blob();
+    try {
 
-            const file = new File([blob], data.fileName, {
-              type: data.fileType
-            });
+      const snap = await getDocs(
+        collection(db, "scarichi_images_queue")
+      );
 
-            const url = await uploadSistema3Parti(file);
+      for (const docSnap of snap.docs) {
 
-            await setDoc(
-              doc(db, "scarichi", data.docTempId),
-              { fotoURL: arrayUnion(url) },
-              { merge: true }
-            );
+        const data = docSnap.data();
 
-            await setDoc(
-              doc(db, "scarichi_draft", data.utenteId),
-              { fotoURL: arrayUnion(url) },
-              { merge: true }
-            );
-
-            await setDoc(
-              doc(db, "scarichi_images_queue", docSnap.id),
-              { uploaded: true, url },
-              { merge: true }
-            );
-
-          } catch (err) {
-            console.warn("Retry upload fallito", err);
-          }
+        if (data.uploaded) {
+          continue;
         }
-      } catch (e) {
-        console.error("Queue sync error", e);
+
+        // il movimento non è stato ancora creato
+        if (
+          !data.docTempId ||
+          data.docTempId === "__TEMP__"
+        ) {
+          continue;
+        }
+
+        try {
+
+          const response = await fetch(data.fileData);
+          const blob = await response.blob();
+
+          const file = new File(
+            [blob],
+            data.fileName,
+            {
+              type: data.fileType
+            }
+          );
+
+          const url =
+            await uploadSistema3Parti(file);
+
+          const targetCollection =
+            data.targetCollection || "scarichi";
+
+          // aggiorna il movimento
+          await updateDoc(
+            doc(
+              db,
+              targetCollection,
+              data.docTempId
+            ),
+            {
+              fotoURL: arrayUnion(url)
+            }
+          );
+
+          // marca la queue come caricata
+          await updateDoc(
+            doc(
+              db,
+              "scarichi_images_queue",
+              docSnap.id
+            ),
+            {
+              uploaded: true,
+              uploadedAt: serverTimestamp(),
+              url
+            }
+          );
+
+        } catch (err) {
+
+          console.warn(
+            "Retry upload fallito",
+            err
+          );
+
+        }
+
       }
-    };
 
-    const interval = setInterval(syncQueue, 30000);
-    syncQueue();
+    } catch (err) {
 
-    return () => clearInterval(interval);
-  }, []);
+      console.error(
+        "Queue sync error",
+        err
+      );
+
+    }
+
+  };
+
+  syncQueue();
+
+  const interval =
+    setInterval(syncQueue, 30000);
+
+  return () => clearInterval(interval);
+
+}, []);
 
   useEffect(() => {
     if (isEditing) {
@@ -603,6 +654,54 @@ useEffect(() => {
     }
   };
 
+  const getImmaginiMovimento = async ({
+  docId,
+  fotoURL = []
+}) => {
+
+  let immagini = Array.isArray(fotoURL)
+    ? [...fotoURL]
+    : fotoURL
+    ? [fotoURL]
+    : [];
+
+  // se ho già gli url finali uso quelli
+  if (immagini.length > 0) {
+    return immagini;
+  }
+
+  // altrimenti provo la queue
+  if (!docId) {
+    return [];
+  }
+
+  try {
+
+    const q = query(
+      collection(db, "scarichi_images_queue"),
+      where("docTempId", "==", docId),
+      where("uploaded", "==", false)
+    );
+
+    const snap = await getDocs(q);
+
+    immagini = snap.docs
+      .map(d => d.data().fileData)
+      .filter(Boolean);
+
+    return immagini;
+
+  } catch (err) {
+
+    console.error(
+      "Errore recupero immagini",
+      err
+    );
+
+    return [];
+  }
+};
+
   const [uploadingImages, setUploadingImages] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -675,11 +774,12 @@ useEffect(() => {
                 : []
             );
 
-            const foto = Array.isArray(d.fotoURL)
-              ? d.fotoURL.filter(f => typeof f === "string" && f.length > 10)
-              : [];
+           const foto = await getImmaginiMovimento({
+  docId: d.docIdOriginale,
+  fotoURL: d.fotoURL
+});
 
-            setPreviewFoto(foto);
+setPreviewFoto(foto);
             setNote(d.note || "");
             setDocIdOriginale(d.docIdOriginale || null);
 
@@ -813,119 +913,142 @@ useEffect(() => {
   const isFornitorePrivato =
     (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 
-  // 🔥🔥🔥 HANDLE ADD — VERSIONE MINIMALE CON caloTipo
-  const handleAdd = () => {
-    if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) return;
+ const handleAdd = () => {
+  if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) {
+    return;
+  }
 
-    const cer = selectedCer || "SENZA_CER";
-    const fir = firCer || "";
+  const cer = selectedCer || "SENZA_CER";
+  const fir = firCer || "";
 
-    const listinoObj = listini.find(l => l.nome === selectedListino);
+  const listinoObj = listini.find(
+    l => l.nome === selectedListino
+  );
 
-    let prezzoVendita = 0;
-    let prezzoAcquisto = 0;
+  let prezzoVendita = 0;
+  let prezzoAcquisto = 0;
 
-    const key = Object.keys(listinoObj?.prezzi || {}).find(
-      k => k.toLowerCase().trim() === selectedMateriale.toLowerCase().trim()
+  const key = Object.keys(listinoObj?.prezzi || {}).find(
+    k =>
+      k.toLowerCase().trim() ===
+      selectedMateriale.toLowerCase().trim()
+  );
+
+  if (key) {
+    prezzoVendita = Number(
+      listinoObj.prezzi[key].vendita || 0
     );
 
-    if (key) {
-      prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
-      prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
-    }
+    prezzoAcquisto = Number(
+      listinoObj.prezzi[key].acquisto || 0
+    );
+  }
 
-    const pesoNum = Number(peso.replace(",", "."));
-    const caloNum = Number(calo?.replace(",", ".") || 0);
+  const pesoNum = Number(
+    peso.replace(",", ".")
+  );
 
-    // 🔥 VALIDAZIONI MINIME
-    if (pesoNum <= 0) {
-      alert("Il peso deve essere maggiore di zero");
-      return;
-    }
+  const caloNum = Number(
+    calo?.replace(",", ".") || 0
+  );
 
-    if (caloNum < 0) {
-      alert("Il calo non può essere negativo");
-      return;
-    }
+  if (pesoNum <= 0) {
+    alert("Il peso deve essere maggiore di zero");
+    return;
+  }
 
-    if (caloTipo === "kg" && caloNum > pesoNum) {
-      alert("Il calo non può superare il peso");
-      return;
-    }
+  if (caloNum < 0) {
+    alert("Il calo non può essere negativo");
+    return;
+  }
 
-    if (caloTipo === "perc" && caloNum > 100) {
-      alert("Il calo percentuale non può superare il 100%");
-      return;
-    }
+  if (caloTipo === "kg" && caloNum > pesoNum) {
+    alert("Il calo non può superare il peso");
+    return;
+  }
 
-    // 🔥 CALCOLO NETTO CORRETTO
-    let caloKg = caloTipo === "perc"
+  if (caloTipo === "perc" && caloNum > 100) {
+    alert("Il calo percentuale non può superare il 100%");
+    return;
+  }
+
+  let caloKg =
+    caloTipo === "perc"
       ? (pesoNum * caloNum) / 100
       : caloNum;
 
-const nettoCalc = pesoNum - caloKg;
+  const nettoCalc = pesoNum - caloKg;
 
-// 🔥 arrotondamento commerciale
-const nettoRounded =
-  (nettoCalc % 1) <= 0.50
-    ? Math.floor(nettoCalc)
-    : Math.ceil(nettoCalc);
+  const nettoRounded =
+    (nettoCalc % 1) <= 0.5
+      ? Math.floor(nettoCalc)
+      : Math.ceil(nettoCalc);
 
-const nuovoRigo = {
-  materiale: selectedMateriale,
-  peso: pesoNum,
-  calo: caloNum,
-  caloTipo,
-  netto: nettoRounded,
-  prezzoVendita,
-  prezzoAcquisto
-};
+  const nuovoRigo = {
+    materiale: selectedMateriale,
+    peso: pesoNum,
+    calo: caloNum,
+    caloTipo,
+    netto: nettoRounded,
+    prezzoVendita,
+    prezzoAcquisto
+  };
 
+  setScarico(prev => {
 
-    setScarico(prev => {
-      const updated = [...prev];
+    const updated = [...prev];
 
-      const cerIdx = updated.findIndex(c => c.cer === cer);
+    // ✅ FIX: CER + FIR identificano il blocco
+    const cerIdx = updated.findIndex(
+      c =>
+        c.cer === cer &&
+        (c.fir || "") === (fir || "")
+    );
 
-      if (cerIdx === -1) {
-        updated.push({
-          cer,
-          fir,
-          righe: [nuovoRigo],
-          totaleCer: nuovoRigo.netto
-        });
+    if (cerIdx === -1) {
 
-        return updated;
-      }
-
-      const existing = updated[cerIdx];
-      const righe = [...(existing.righe || [])];
-
-      const rigaIdx = righe.findIndex(
-        r => r.materiale === selectedMateriale
-      );
-
-      if (rigaIdx !== -1) {
-        righe[rigaIdx] = nuovoRigo;
-      } else {
-        righe.push(nuovoRigo);
-      }
-
-      updated[cerIdx] = {
-        ...existing,
+      updated.push({
+        cer,
         fir,
-        righe,
-        totaleCer: righe.reduce((s, r) => s + r.netto, 0)
-      };
+        righe: [nuovoRigo],
+        totaleCer: nuovoRigo.netto
+      });
 
       return updated;
-    });
+    }
 
-    setSelectedMateriale("");
-    setPeso("");
-    setCalo("");
-    setDirty(true);
-  };
+    const existing = updated[cerIdx];
+
+    const righe = [...(existing.righe || [])];
+
+    const rigaIdx = righe.findIndex(
+      r => r.materiale === selectedMateriale
+    );
+
+    if (rigaIdx !== -1) {
+      righe[rigaIdx] = nuovoRigo;
+    } else {
+      righe.push(nuovoRigo);
+    }
+
+    updated[cerIdx] = {
+      ...existing,
+      fir,
+      righe,
+      totaleCer: righe.reduce(
+        (s, r) => s + r.netto,
+        0
+      )
+    };
+
+    return updated;
+  });
+
+  setSelectedMateriale("");
+  setPeso("");
+  setCalo("");
+  setDirty(true);
+};
   const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
 };
@@ -988,28 +1111,55 @@ const nuovoRigo = {
     }
   };
 
-  const salvaInCodaImmagini = async ({ files, utenteId, docTempId }) => {
-    if (!files || files.length === 0) return;
+ const salvaInCodaImmagini = async ({
+  files,
+  utenteId,
+  docTempId,
+  targetCollection
+}) => {
+  if (!files || files.length === 0) {
+    return [];
+  }
 
-    const promises = files.map(async (file) => {
-      return addDoc(collection(db, "scarichi_images_queue"), {
-        fileName: file.name,
-        fileType: file.type,
-        fileData: await new Promise((res, rej) => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result);
-          reader.onerror = rej;
-          reader.readAsDataURL(file);
-        }),
-        utenteId,
-        docTempId,
-        uploaded: false,
-        createdAt: serverTimestamp()
-      });
+  const queueIds = [];
+
+  for (const file of files) {
+
+    const fileData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+
+      reader.readAsDataURL(file);
     });
 
-    await Promise.all(promises);
-  };
+    const docRef = await addDoc(
+      collection(db, "scarichi_images_queue"),
+      {
+        fileName: file.name,
+        fileType: file.type,
+        fileData,
+
+        utenteId,
+
+        // verrà sostituito col vero id dopo l'addDoc del movimento
+        docTempId,
+
+        // fondamentale per sapere se il record è in carichi o scarichi
+        targetCollection,
+
+        uploaded: false,
+
+        createdAt: serverTimestamp()
+      }
+    );
+
+    queueIds.push(docRef.id);
+  }
+
+  return queueIds;
+};
 
   const handlePrint = async (movimentoId = null, tipo) => {
     try {
@@ -1137,11 +1287,26 @@ const nuovoRigo = {
         y += 10;
       }
 
-      const fotos = Array.isArray(docData.fotoURL)
-        ? docData.fotoURL
-        : docData.fotoURL
-        ? [docData.fotoURL]
-        : [];
+  const fotos = await getImmaginiMovimento({
+  docId: movimentoId,
+  fotoURL: docData.fotoURL
+});
+
+// se non ci sono url, prova a leggere le immagini temporanee
+if (fotos.length === 0 && movimentoId) {
+
+  const q = query(
+    collection(db, "scarichi_images_queue"),
+    where("docTempId", "==", movimentoId),
+    where("uploaded", "==", false)
+  );
+
+  const snapQueue = await getDocs(q);
+
+  fotos = snapQueue.docs.map(
+    d => d.data().fileData
+  );
+}
 
       if (fotos.length > 0) {
         if (y > 200) {
@@ -1158,15 +1323,31 @@ const nuovoRigo = {
 
         for (let i = 0; i < fotos.length; i++) {
           try {
-            const response = await fetch(fotos[i]);
-            const blob = await response.blob();
+           let base64;
 
-            const base64 = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+if (typeof fotos[i] === "string" &&
+    fotos[i].startsWith("data:image")) {
+
+  // immagine temporanea salvata in queue
+  base64 = fotos[i];
+
+} else {
+
+  const response = await fetch(fotos[i]);
+  const blob = await response.blob();
+
+  base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () =>
+      resolve(reader.result);
+
+    reader.onerror = reject;
+
+    reader.readAsDataURL(blob);
+  });
+
+}
 
             pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
 
@@ -1247,15 +1428,16 @@ const nuovoRigo = {
         return;
       }
 
-      if (
-        !selectedFornitore ||
-        !selectedListino ||
-        !scarico ||
-        scarico.length === 0
-      ) {
-        alert("Completa fornitore, listino e scarico");
-        return;
-      }
+     const errori = [];
+
+if (!selectedFornitore) errori.push("Fornitore");
+if (!selectedListino) errori.push("Listino");
+if (!scarico || scarico.length === 0) errori.push("Dati movimento");
+
+if (errori.length > 0) {
+  alert(`Campi mancanti: ${errori.join(", ")}`);
+  return;
+}
 
       const isFornitorePrivato =
         (selectedFornitore || "").trim().toUpperCase() === "FORNITORE PRIVATO";
@@ -1315,23 +1497,31 @@ const nuovoRigo = {
         before = snap.exists() ? snap.data() : null;
       }
 
-      let uploadedUrls = [];
+    let uploadedUrls = [];
+let queueIds = [];
 
-      if (fotoFile && fotoFile.length > 0) {
-        try {
-          uploadedUrls = await uploadFotoFiles(fotoFile);
-        } catch (e) {
-          console.warn("Upload fallito → coda", e);
+if (fotoFile && fotoFile.length > 0) {
+  try {
 
-          await salvaInCodaImmagini({
-            files: fotoFile,
-            utenteId: utenteNome,
-            docTempId: docIdOriginaleState || "new"
-          });
+    uploadedUrls = await uploadFotoFiles(fotoFile);
 
-          uploadedUrls = [];
-        }
-      }
+  } catch (e) {
+
+    console.warn("Upload fallito → coda", e);
+
+    queueIds = await salvaInCodaImmagini({
+      files: fotoFile,
+      utenteId: utenteNome,
+      docTempId: docIdOriginaleState || "__TEMP__",
+      targetCollection:
+        tipoMovimento === "carico"
+          ? "carichi"
+          : "scarichi"
+    });
+
+    uploadedUrls = [];
+  }
+}
 
       const existingUrls = (previewFoto || []).filter(
         (u) => typeof u === "string" && !u.startsWith("blob:")
@@ -1355,6 +1545,7 @@ const nuovoRigo = {
           : new Date(),
 
         fotoURL: fotoURLs,
+        fotoPending: queueIds.length > 0,
         note: note || "",
         lastUpdate: new Date()
       };
@@ -1372,13 +1563,29 @@ const nuovoRigo = {
         );
         isUpdate = true;
       } else {
-        const newDoc = await addDoc(
-          collection(db, targetCollection),
-          payload
-        );
+const newDoc = await addDoc(
+  collection(db, targetCollection),
+  payload
+);
 
-        docIdOriginaleState = newDoc.id;
-        isUpdate = false;
+docIdOriginaleState = newDoc.id;
+isUpdate = false;
+
+if (queueIds.length > 0) {
+
+  for (const queueId of queueIds) {
+
+    await updateDoc(
+      doc(db, "scarichi_images_queue", queueId),
+      {
+        docTempId: docIdOriginaleState,
+        targetCollection
+      }
+    );
+
+  }
+
+}
       }
 
       const refDocFinale = doc(db, targetCollection, docIdOriginaleState);
@@ -1539,22 +1746,33 @@ if (inModifica && returnToDettaglio) {
               🚪Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
             </button>
           </div>
-
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button style={headerBtnStyle} onClick={() => stampaUltimoMovimento("scarico")}>
-              Stampa Ultimo Scarico
-            </button>
-          </div>
-
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button
-              style={headerBtnStyle}
-              onClick={() => stampaUltimoMovimento("carico")}
-            >
-              Stampa Ultimo Carico
-            </button>
-          </div>
-
+{docIdOriginale ? (
+  /* MODALITÀ MODIFICA: Mostra un solo pulsante per il movimento corrente */
+  <div style={{ display: "flex", gap: "8px" }}>
+    <button
+      style={headerBtnStyle}
+      onClick={() => handlePrint(docIdOriginale, tipoMovimento)}
+    >
+      {tipoMovimento === "carico" ? "Stampa Carico" : "Stampa Scarico"}
+    </button>
+  </div>
+) : (
+  /* MODALITÀ NUOVO MOVIMENTO: Comportamento standard con entrambi i pulsanti */
+  <div style={{ display: "flex", gap: "8px" }}>
+    <button
+      style={headerBtnStyle}
+      onClick={() => stampaUltimoMovimento("scarico")}
+    >
+      Stampa Ultimo Scarico
+    </button>
+    <button
+      style={headerBtnStyle}
+      onClick={() => stampaUltimoMovimento("carico")}
+    >
+      Stampa Ultimo Carico
+    </button>
+  </div>
+)}
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={handleReset} style={{ marginLeft: "15px" }}>
               {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
@@ -1666,38 +1884,64 @@ if (inModifica && returnToDettaglio) {
             {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
           </label>
 
-        <Select
-  options={fornitoriOptions}
-  value={
-    fornitoriOptions.find(
-      o => o.value === selectedFornitore
-    ) || null
-  }
-  onChange={async (selected) => {
-    const nome = selected?.value || "";
-
-    setSelectedFornitore(nome);
-
-    const forn = fornitori.find(
-      f => f.nome === nome
-    );
-
-    if (!forn) return;
-
-    const primoCompatibile = listini.find(
-      l => (l.tipoListino || "").trim() === tipoMovimento
-    );
-
-    if (primoCompatibile) {
-      setSelectedListino(primoCompatibile.nome);
+ <CreatableSelect
+    options={fornitoriOptions}
+    value={
+      fornitoriOptions.find(
+        (o) =>
+          String(o.value).trim().toLowerCase() ===
+          String(selectedFornitore || "").trim().toLowerCase()
+      ) ||
+      (selectedFornitore
+        ? { label: selectedFornitore, value: selectedFornitore }
+        : null)
     }
+    onChange={async (selected) => {
+      const nome = selected?.value || "";
+      setSelectedFornitore(nome);
 
-    await suggerisciFir(nome);
-  }}
-  placeholder="Cerca fornitore..."
-  isSearchable
-  isClearable
-/>
+      if (!nome) return;
+
+      const forn = fornitori.find(
+        (f) => String(f.nome).trim().toLowerCase() === nome.trim().toLowerCase()
+      );
+
+      if (!forn) return;
+
+      const primoCompatibile = listini.find(
+        (l) => (l.tipoListino || "").trim() === tipoMovimento
+      );
+
+      if (primoCompatibile) {
+        setSelectedListino(primoCompatibile.nome);
+      }
+
+      await suggerisciFir(nome);
+    }}
+    // QUESTA È LA FUNZIONE CHE CREA IL FORNITORE A DB QUANDO DIGITI UN NOME NUOVO
+    onCreateOption={async (inputValue) => {
+      const nuovoNome = inputValue.trim();
+      if (!nuovoNome) return;
+
+      try {
+        // 1. Salva il nuovo fornitore nella collezione Firestore
+        const docRef = await addDoc(collection(db, "fornitori"), {
+          nome: nuovoNome,
+          createdAt: Date.now()
+        });
+
+        // 2. Imposta lo stato del fornitore selezionato nel frontend
+        setSelectedFornitore(nuovoNome);
+
+        console.log("✅ Nuovo fornitore creato a DB con ID:", docRef.id);
+      } catch (error) {
+        console.error("❌ Errore durante la creazione del fornitore:", error);
+      }
+    }}
+    placeholder="Cerca o crea fornitore..."
+    isSearchable
+    isClearable
+  />
 
           {/* NUOVO FORNITORE */}
           <button

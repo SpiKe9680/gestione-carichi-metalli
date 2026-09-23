@@ -208,52 +208,51 @@ const handleSalvaDocumento = async () => {
     }
 
     const tipo = modalTipo === "prospetto" ? "prospetto" : "fattura";
+    const tipoMov = modalTipo === "prospetto" ? "scarico" : "carico";
     const collectionName =
       tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
 
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
 
-    // 🔥 USA STATO UI, NON FIRESTORE RAW
-    const movs = filteredScarichi
-      .filter(m => movimentiIds.includes(m.id));
+    // Stessi movimenti mostrati nella modal (stato completo, filtrato per tipo)
+    const movs = scarichi.filter(
+      (m) => movimentiIds.includes(m.id) && m.tipo === tipoMov
+    );
 
     if (!movs.length) {
-      console.error("❌ MOVS VUOTO - IDS:", movimentiIds);
-      alert("❌ Nessun movimento trovato (UI state vuoto)");
+      alert("❌ Nessun movimento trovato");
       return;
     }
 
-    const blocchi = movs.flatMap(m =>
-      (m.cer || []).map(c => ({
+    // Blocca il salvataggio se esiste un documento già pagato sugli stessi movimenti
+    await validaEPreparaProspetto(movimentiIds);
+
+    const blocchi = movs.flatMap((m) =>
+      (m.cer || []).map((c) => ({
         fir: c.fir || m.fir || "-",
         cer: c.cer || c.codiceCER || "-",
-        righe: (c.righe || []).map(r => ({
-          materiale: r.materiale,
-          netto: Number(r.netto || 0),
-
-          // 🔥 FIX FONDAMENTALE: usa prezzo già valorizzato da UI/applyListino
-          prezzo:
-            Number(
-              r.prezzo ??
-              r.prezzoVendita ??
-              r.prezzoAcquisto ??
-              0
-            ),
-        }))
+        righe: (c.righe || []).map((r) => {
+          const { peso, caloKg, netto, prezzo } = calcolaRiga(r, tipoMov);
+          return {
+            materiale: r.materiale,
+            peso,
+            calo: caloKg,
+            netto,
+            prezzo,
+          };
+        }),
       }))
     );
 
     if (!blocchi.length) {
-      console.error("❌ BLOCCHI VUOTI:", movs);
       alert("❌ Blocchi vuoti: dati non coerenti");
       return;
     }
 
     let totale = 0;
-
-    blocchi.forEach(b => {
-      b.righe.forEach(r => {
-        totale += Number(r.netto || 0) * Number(r.prezzo || 0);
+    blocchi.forEach((b) => {
+      b.righe.forEach((r) => {
+        totale += money(r.netto * r.prezzo);
       });
     });
 
@@ -268,17 +267,20 @@ const handleSalvaDocumento = async () => {
     };
 
     await setDoc(
-      doc(db, collectionName, movimentiIds.sort().join("-")),
+      doc(db, collectionName, [...movimentiIds].sort().join("-")),
       payload,
       { merge: true }
     );
 
     alert("✅ Documento salvato correttamente");
     setModalData(null);
-
   } catch (err) {
     console.error(err);
-    alert("❌ Errore salvataggio");
+    if (String(err.message).startsWith("SCARICO_GIA_PAGATO")) {
+      alert("❌ Esiste già un documento pagato per questi movimenti:\n\n" + err.message);
+    } else {
+      alert("❌ Errore salvataggio");
+    }
   }
 };
 const salvaProspettoUnificato = async (modalData, tipo) => {
@@ -1025,7 +1027,117 @@ const getMovimentiValidi = () => {
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
 
+const calcolaRiga = (r, tipo) => {
+  const peso = Number(r.peso || r.netto || 0);
+  const calo = Number(r.calo || 0);
+
+  const caloKgRaw = r.caloTipo === "perc" ? (peso * calo) / 100 : calo;
+  const caloKg =
+    (caloKgRaw % 1) <= 0.5 ? Math.floor(caloKgRaw) : Math.ceil(caloKgRaw);
+
+  const netto = peso - caloKg;
+  const prezzo =
+    tipo === "scarico"
+      ? Number(r.prezzoAcquisto ?? 0)
+      : Number(r.prezzoVendita ?? 0);
+
+  return { peso, calo, caloKg, netto, prezzo, tot: money(netto * prezzo) };
+};
 const handleStampaDocumento = async () => {
+  try {
+    if (!modalData?.movimentiIds?.length) {
+      alert("❌ Nessun movimento selezionato");
+      return;
+    }
+
+    const isProspetto = modalTipo === "prospetto";
+    const titolo = isProspetto ? "Prospetto Fattura" : "Fattura";
+
+    // Stessa logica di rendering della modal
+    const movs = scarichi
+      .filter(m => modalData.movimentiIds.includes(m.id))
+      .filter(m => (isProspetto ? m.tipo === "scarico" : m.tipo === "carico"));
+
+    if (!movs.length) {
+      alert("❌ Nessun movimento da stampare");
+      return;
+    }
+
+    const autoTable = (await import("jspdf-autotable")).default;
+    const { PdfHeader } = await import("../utils/dateUtils");
+
+    const body = [];
+    let totale = 0;
+
+    movs.forEach(m => {
+      (m.cer || []).forEach(c => {
+        // riga di intestazione FIR / CER
+        body.push([
+          {
+            content: `FIR: ${c.fir || m.fir || "-"} | CER: ${c.cer || c.codiceCER || "-"}`,
+            colSpan: 6,
+            styles: { fillColor: [238, 238, 238], fontStyle: "bold" },
+          },
+        ]);
+
+        (c.righe || []).forEach(r => {
+         const tipo = isProspetto ? "scarico" : "carico";
+// ...
+const { peso, calo, caloKg, netto, prezzo, tot } = calcolaRiga(r, tipo);
+totale += tot;
+
+          const caloLabel =
+            r.caloTipo === "perc" ? `${calo}% (${caloKg} Kg)` : `${caloKg} Kg`;
+
+          body.push([
+            r.materiale || "-",
+            peso.toFixed(2),
+            caloLabel,
+            netto.toFixed(2),
+            prezzo.toFixed(2),
+            tot.toFixed(2),
+          ]);
+        });
+      });
+    });
+
+    totale = round2(totale);
+
+    const { pdf, startY } = await PdfHeader();
+
+    pdf.setFontSize(14);
+    pdf.text(`${titolo} - ${modalData.cliente || ""}`, 14, startY - 10);
+
+    autoTable(pdf, {
+      startY,
+      head: [["Materiale", "Peso Lordo (Kg)", "Calo", "Netto (Kg)", "Prezzo €/Kg", "Totale €"]],
+      body,
+      theme: "grid",
+      styles: { fontSize: 9 },
+    });
+
+    let y = pdf.lastAutoTable.finalY + 10;
+    if (y > 270) {
+      pdf.addPage();
+      y = 20;
+    }
+    pdf.setFontSize(12);
+    pdf.text(`Totale: € ${totale.toFixed(2)}`, 14, y);
+
+    const nomePulito = (modalData.cliente || "sconosciuto")
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .toLowerCase();
+
+    const today = new Date().toLocaleDateString("it-IT").replace(/\//g, "-");
+
+    await salvaESharePdfCapacitor(
+      pdf,
+      `${isProspetto ? "prospetto" : "fattura"}_${nomePulito}_${today}.pdf`
+    );
+  } catch (err) {
+    console.error("Errore stampa documento:", err);
+    alert("❌ Errore durante la stampa");
+  }
 };
 
   return (
@@ -1410,7 +1522,14 @@ const handleStampaDocumento = async () => {
         ))}
     </select>
   </label>
-  <button onClick={async () => {  await applyListino({    movimentiIds: pulitiIds,    listino: listinoApplicato,    db,    collectionName: tipoMovimento === "carico" ? "carichi" : "scarichi"  });
+  <button onClick={async () => { 
+     await applyListino({
+  movimentiIds: pulitiIds,
+  listino: listinoApplicato,
+  db,
+  collectionName: modalTipo === "fattura" ? "carichi" : "scarichi",
+  tipoMovimento: modalTipo === "fattura" ? "carico" : "scarico"
+});
   await fetchMovimenti();      // 🔥 RICARICA DB
   setReloadKey(prev => prev + 1); // 🔥 FORZA RE-RENDER MODAL
 }}
@@ -1471,41 +1590,15 @@ const handleStampaDocumento = async () => {
   .map((b, i) => (
     <React.Fragment key={i}>
       <tr>
-        <td colSpan="4" style={{ background: "#eee", fontWeight: "bold" }}>
+        <td colSpan="6" style={{ background: "#eee", fontWeight: "bold" }}>
           FIR: {b.fir} | CER: {b.cer}
         </td>
       </tr>
-    {b.righe.map((r, j) => {
-  const peso = Number(r.peso || r.netto || 0);
-  const calo = Number(r.calo || 0);
 
-  // 🔥 Calcolo calo Kg (percentuale o Kg)
-  const caloKgRaw =
-    r.caloTipo === "perc"
-      ? (peso * calo) / 100
-      : calo;
-
-  // 🔥 Arrotondamento come da regola metalli
-  const caloKg =
-    (caloKgRaw % 1) <= 0.50
-      ? Math.floor(caloKgRaw)
-      : Math.ceil(caloKgRaw);
-
-  // 🔥 Netto corretto
-  const netto = peso - caloKg;
-
-  // 🔥 Prezzo corretto (acquisto o vendita)
-  const prezzo =
-    b.tipo === "scarico"
-      ? Number(r.prezzoAcquisto ?? 0)
-      : Number(r.prezzoVendita ?? 0);
-
-  const tot = money(netto * prezzo);
-
+{b.righe.map((r, j) => {
+  const { peso, calo, caloKg, netto, prezzo, tot } = calcolaRiga(r, b.tipo);
   const caloLabel =
-    r.caloTipo === "perc"
-      ? `${calo}% (${caloKg} Kg)`
-      : `${caloKg} Kg`;
+    r.caloTipo === "perc" ? `${calo}% (${caloKg} Kg)` : `${caloKg} Kg`;
 
   return (
     <tr key={j}>
@@ -1523,6 +1616,7 @@ const handleStampaDocumento = async () => {
   ))}
         </tbody>
       </table>
+
 <h3 style={{ marginTop: 20 }}>
   Totale: {(() => {
     const movs = scarichi
@@ -1534,23 +1628,19 @@ const handleStampaDocumento = async () => {
       });
 
     return round2(
-      movs
-        .flatMap(m => m.cer || [])
-        .flatMap(c => c.righe || [])
-        .reduce((tot, r) => {
-          const kg = Number(r.netto || 0);
-
-          // qui NON puoi usare movimento.tipo globale: serve il CER owner
-          const prezzo =
-            modalTipo === "prospetto"
-              ? (r.prezzoAcquisto ?? 0)
-              : (r.prezzoVendita ?? 0);
-
-          return tot + kg * prezzo;
-        }, 0)
+      movs.reduce((tot, m) =>
+        tot + (m.cer || []).reduce((t2, c) =>
+          t2 + (c.righe || []).reduce(
+            (t3, r) => t3 + calcolaRiga(r, m.tipo).tot,
+            0
+          ),
+        0),
+      0)
     ).toFixed(2);
   })()}
 </h3>
+
+
 <div style={{ marginTop: 10, marginBottom: 10 }}>
   <div style={{ fontWeight: "bold", marginBottom: 5 }}>
     Salva il movimento pagabile dal:
