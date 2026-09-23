@@ -341,150 +341,118 @@ const handlePrintPDF = async () => {
    await salvaESharePdfCapacitor(pdf, `Movimenti_${new Date(selectedDate).toLocaleDateString("it-IT")}.pdf`);
 };
 
+const aggiornaFlagMovimenti = async (tipoDoc, docId, valore) => {
+  const snap = await getDoc(doc(db, tipoDoc, docId));
+  if (!snap.exists()) return;
+
+  const d = snap.data();
+  const ids = d.movimentiIds || d.scarichiIds || [];
+  const collezione = tipoDoc === "fattureCarichi" ? "carichi" : "scarichi";
+
+  const esiti = await Promise.allSettled(
+    ids.map((rawId) => {
+      const id = String(rawId).replace(/^(scarico|carico)_/, "");
+      return updateDoc(doc(db, collezione, id), { movimentoFinanziarioId: valore });
+    })
+  );
+
+  esiti.forEach((e, i) => {
+    if (e.status === "rejected") {
+      console.error("❌ Flag non aggiornato su", collezione, ids[i], e.reason);
+    }
+  });
+};
+
 const handleConsuntiva = async (row) => {
-  const ok = window.confirm(`Confermare consuntivazione per ${row.controparte}?`);
+  const ok = window.confirm(
+    `Confermare consuntivazione per ${row.controparte}?`
+  );
   if (!ok) return;
 
   await runSafe(async () => {
-
-    const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
-      anagraficaId: row.anagraficaId || row.id,
-      data: selectedDate,
-      dataDocumento: row.dataMov,
-      importo: row.importo,
-      tipo: row.tipo
-    });
-
-    const movimentoId = movRef.id;
-
-    if (row.tipo === "fattureCarichi") {
-      await updateDoc(doc(db, "fattureCarichi", row.id), {
-        movimentoFinanziarioId: movimentoId
+    try {
+      // 1. crea MovimentoFinanziario
+      const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
+        anagraficaId: row.anagraficaId || row.id,
+        data: selectedDate,
+        dataDocumento: row.dataMov,
+        importo: row.importo,
+        tipo: row.tipo
       });
-    }
 
-    if (row.tipo === "prospettiFattura") {
-      await updateDoc(doc(db, "prospettiFattura", row.id), {
-        movimentoFinanziarioId: movimentoId
-      });
-    }
+      const movimentoId = movRef.id;
 
-    if (row.tipo === "PRIVATI") {
-      await updateDoc(doc(db, "scarichi", row.id), {
-        movimentoFinanziarioId: movimentoId
-      });
-    }
+      // 2. FATTURE → CARICHI
+      if (row.tipo === "fattureCarichi") {
+        await updateDoc(doc(db, "fattureCarichi", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+        await aggiornaFlagMovimenti("fattureCarichi", row.id, movimentoId);
+      }
 
+      // 3. PROSPETTI → SCARICHI
+      if (row.tipo === "prospettiFattura") {
+        await updateDoc(doc(db, "prospettiFattura", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+        await aggiornaFlagMovimenti("prospettiFattura", row.id, movimentoId);
+      }
+
+      // 4. PRIVATI (scarico singolo)
+      if (row.tipo === "PRIVATI") {
+        await updateDoc(doc(db, "scarichi", row.id), {
+          movimentoFinanziarioId: movimentoId
+        });
+      }
+    } catch (err) {
+      console.error("❌ Errore consuntivazione:", err);
+      alert("❌ Errore durante la consuntivazione");
+    }
   });
 };
 
 
 const handleDeleteFin = async (row) => {
-  console.log("🧨 STORNO START =======================");
-  console.log("ROW COMPLETA:", row);
-
   const ok = window.confirm(
-    `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${row.importo}`
+    `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${Number(row.importo).toFixed(2)}?`
   );
+  if (!ok) return;
 
-  if (!ok) {
-    console.log("❌ UTENTE HA ANNULLATO");
-    return;
-  }
+  await runSafe(async () => {
+    try {
+      // 1. elimina MovimentoFinanziario
+      await deleteDoc(doc(db, "MovimentoFinanziario", row.id));
 
-  try {
-    console.log("🧾 STEP 1 - DELETE MovimentoFinanziario");
-    console.log("ID da eliminare:", row.id);
-
-    const movRef = doc(db, "MovimentoFinanziario", row.id);
-    await deleteDoc(movRef);
-
-    console.log("✅ MovimentoFinanziario eliminato");
-
-    console.log("📦 TYPE:", row.tipo);
-    console.log("🔑 anagraficaId:", row.anagraficaId);
-
-    // =========================
-    // FATTURE
-    // =========================
-    if (row.tipo === "fattureCarichi") {
-      console.log("➡️ BLOCCO FATTURE");
-
-      const ref = doc(db, "fattureCarichi", row.anagraficaId);
-      console.log("FATTURA REF:", ref.path);
-
-      const snap = await getDoc(ref);
-      console.log("FATTURA EXISTS:", snap.exists());
-
-      if (snap.exists()) {
-        await updateDoc(ref, {
-          movimentoFinanziarioId: null
-        });
-        console.log("✅ FATTURA aggiornato");
-      } else {
-        console.warn("⚠️ FATTURA NON ESISTE");
+      // 2. FATTURE → CARICHI
+      if (row.tipo === "fattureCarichi") {
+        const ref = doc(db, "fattureCarichi", row.anagraficaId);
+        if ((await getDoc(ref)).exists()) {
+          await updateDoc(ref, { movimentoFinanziarioId: null });
+        }
+        await aggiornaFlagMovimenti("fattureCarichi", row.anagraficaId, null);
       }
+
+      // 3. PROSPETTI → SCARICHI
+      if (row.tipo === "prospettiFattura") {
+        const ref = doc(db, "prospettiFattura", row.anagraficaId);
+        if ((await getDoc(ref)).exists()) {
+          await updateDoc(ref, { movimentoFinanziarioId: null });
+        }
+        await aggiornaFlagMovimenti("prospettiFattura", row.anagraficaId, null);
+      }
+
+      // 4. PRIVATI (scarico singolo)
+      if (row.tipo === "PRIVATI" && row.anagraficaId) {
+        const ref = doc(db, "scarichi", row.anagraficaId);
+        if ((await getDoc(ref)).exists()) {
+          await updateDoc(ref, { movimentoFinanziarioId: null });
+        }
+      }
+    } catch (err) {
+      console.error("❌ Errore storno:", err);
+      alert("❌ Errore durante lo storno");
     }
-
-    // =========================
-    // PROSPETTI
-    // =========================
-    if (row.tipo === "prospettiFattura") {
-      console.log("➡️ BLOCCO PROSPETTI");
-
-      const ref = doc(db, "prospettiFattura", row.anagraficaId);
-      console.log("PROSPETTO REF:", ref.path);
-
-      const snap = await getDoc(ref);
-      console.log("PROSPETTO EXISTS:", snap.exists());
-
-      if (snap.exists()) {
-        await updateDoc(ref, {
-          movimentoFinanziarioId: null
-        });
-        console.log("✅ PROSPETTO aggiornato");
-      } else {
-        console.warn("⚠️ PROSPETTO NON ESISTE");
-      }
-    }
-
-    // =========================
-    // PRIVATI / SCARICHI
-    // =========================
-    if (row.tipo === "PRIVATI") {
-      console.log("➡️ BLOCCO PRIVATI / SCARICHI");
-
-      const id = row.anagraficaId;
-      console.log("SCARICO ID:", id);
-
-      if (!id) {
-        console.warn("⚠️ anagraficaId MANCANTE");
-        return;
-      }
-
-      const ref = doc(db, "scarichi", id);
-      console.log("SCARICO REF:", ref.path);
-
-      const snap = await getDoc(ref);
-      console.log("SCARICO EXISTS:", snap.exists());
-
-      if (snap.exists()) {
-        await updateDoc(ref, {
-          movimentoFinanziarioId: null
-        });
-        console.log("✅ SCARICO aggiornato");
-      } else {
-        console.error("❌ SCARICO NON ESISTE → QUI NASCE IL BUG");
-      }
-    }
-
-    console.log("🔄 REFRESH ALL");
-    await refreshAll();
-
-    console.log("🧨 STORNO END =======================");
-  } catch (err) {
-    console.error("💥 ERRORE STORNO FIN:", err);
-  }
+  });
 };
 
 const entrateUsciteTop = rows.map(r => ({
