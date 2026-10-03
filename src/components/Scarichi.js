@@ -83,6 +83,8 @@ const returnToDettaglio = location.state?.returnToDettaglio || false;
 
   const [peso, setPeso] = useState("");
   const [calo, setCalo] = useState("");
+  // 🔥 NUOVO: stato per TARA (sempre in KG)
+  const [tara, setTara] = useState("");
 
   // 🔥 NUOVO STATO caloTipo
   const [caloTipo, setCaloTipo] = useState("kg");
@@ -184,43 +186,58 @@ const returnToDettaglio = location.state?.returnToDettaglio || false;
     }
   };
 
-const suggerisciFir = async (fornitore) => {
-  try {
-    const collectionName =
-      tipoMovimento === "carico"
-        ? "carichi"
-        : "scarichi";
+const firRequestRef = React.useRef(0);
 
-    const q = query(
-      collection(db, collectionName),
-      where("fornitore", "==", fornitore),
-      orderBy("data", "desc"),
-      limit(1)
+const toMillis = (v) => {
+  if (!v) return 0;
+  if (typeof v.toDate === "function") return v.toDate().getTime();
+  if (v instanceof Date) return v.getTime();
+  const t = new Date(v).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
+const suggerisciFir = async (fornitore) => {
+  const reqId = ++firRequestRef.current;
+
+  try {
+    const isCarico = tipoMovimento === "carico";
+
+    const snap = await getDocs(
+      query(
+        collection(db, isCarico ? "carichi" : "scarichi"),
+        where("fornitore", "==", fornitore)
+      )
     );
 
-    const snap = await getDocs(q);
-
+    // risposta obsoleta (l'utente ha cambiato fornitore nel frattempo)
+    if (reqId !== firRequestRef.current) return;
     if (snap.empty) return;
 
-    const data = snap.docs[0].data();
+    const ordinati = snap.docs
+      .map((d) => d.data())
+      .map((d) => ({ d, ts: toMillis(d.data) || toMillis(d.lastUpdate) }))
+      .sort((a, b) => b.ts - a.ts);
 
-    const blocchi =
-      tipoMovimento === "carico"
-        ? data.carico || []
-        : data.scarico || [];
+    let ultimoFir = "";
 
-    const ultimoFir = blocchi?.[0]?.fir || "";
+    for (const { d } of ordinati) {
+      const blocchi = (isCarico ? d.carico : d.scarico) || [];
+      const trovato = blocchi
+        .map((b) => (b.fir || "").trim())
+        .find((f) => f);
+
+      if (trovato) {
+        ultimoFir = trovato;
+        break;
+      }
+    }
 
     if (!ultimoFir) return;
 
     const pos = ultimoFir.search(/[1-9]/);
+    if (pos === -1) return;
 
-if (pos === -1) return;
-
-const suggerimento = ultimoFir.substring(0, pos + 1);
-
-setFirCer(suggerimento);
-
+    setFirCer(ultimoFir.substring(0, pos + 1));
   } catch (err) {
     console.error("Errore suggerimento FIR:", err);
   }
@@ -952,6 +969,11 @@ setPreviewFoto(foto);
     calo?.replace(",", ".") || 0
   );
 
+  // 🔥 NUOVO: Parsing TARA
+  const taraNum = Number(
+    tara?.replace(",", ".") || 0
+  );
+
   if (pesoNum <= 0) {
     alert("Il peso deve essere maggiore di zero");
     return;
@@ -959,6 +981,11 @@ setPreviewFoto(foto);
 
   if (caloNum < 0) {
     alert("Il calo non può essere negativo");
+    return;
+  }
+
+  if (taraNum < 0) {
+    alert("La tara non può essere negativa");
     return;
   }
 
@@ -972,12 +999,19 @@ setPreviewFoto(foto);
     return;
   }
 
+  // 🔥 NUOVO: Validazione tara vs peso
+  if (taraNum > pesoNum) {
+    alert("La tara non può superare il peso");
+    return;
+  }
+
   let caloKg =
     caloTipo === "perc"
       ? (pesoNum * caloNum) / 100
       : caloNum;
 
-  const nettoCalc = pesoNum - caloKg;
+  // 🔥 MODIFICATO: Netto = Peso - Calo - Tara
+  const nettoCalc = pesoNum - caloKg - taraNum;
 
   const nettoRounded =
     (nettoCalc % 1) <= 0.5
@@ -989,6 +1023,7 @@ setPreviewFoto(foto);
     peso: pesoNum,
     calo: caloNum,
     caloTipo,
+    tara: taraNum,  // 🔥 NUOVO: Aggiunto TARA
     netto: nettoRounded,
     prezzoVendita,
     prezzoAcquisto
@@ -1047,6 +1082,7 @@ setPreviewFoto(foto);
   setSelectedMateriale("");
   setPeso("");
   setCalo("");
+  setTara("");  // 🔥 NUOVO: Reset TARA
   setDirty(true);
 };
   const stampaUltimoMovimento = (tipo) => {
@@ -1064,6 +1100,7 @@ setPreviewFoto(foto);
     setSelectedMateriale(materiale);
     setPeso(riga.peso.toString().replace(".", ","));
     setCalo(riga.calo.toString().replace(".", ","));
+    setTara(riga.tara?.toString().replace(".", ",") || "");  // 🔥 NUOVO: Carica TARA
     setCaloTipo(riga.caloTipo || "kg");   // 🔥 NUOVO
   };
 
@@ -1090,13 +1127,14 @@ setPreviewFoto(foto);
     setSelectedMateriale("");
     setPeso("");
     setCalo("");
+    setTara("");  // 🔥 NUOVO: Reset TARA
     setCaloTipo("kg");   // 🔥 NUOVO
     setScarico([]);
     setFotoFile([]);
     setPreviewFoto([]);
     setFirCer("");
     setDocIdOriginale(null);
-
+    setNote("");  // 🔥 NUOVO: Reset NOTE/COMMENTI
     const now = new Date();
     setDataScaricoStr(formattaDataItaliana(now));
     setOraStr(formattaOra24(now));
@@ -1636,7 +1674,7 @@ if (queueIds.length > 0) {
       setCaloTipo("kg");
       setSelectedFornitore("");
       setSelectedListino("");
-
+      setNote("");
       setDirty(false);
 
       console.log("✅ SALVATAGGIO COMPLETATO : inModifica && returnToDettaglio",inModifica , returnToDettaglio);
@@ -1799,7 +1837,7 @@ if (inModifica && returnToDettaglio) {
                     setOraStr(formattaOra24(now));
                   }
                 } else {
-                  setOraStr("00:00");
+                  setOraStr("08:00");
                 }
               }}
               dateFormat="dd MMM yyyy"
@@ -2196,6 +2234,15 @@ if (inModifica && returnToDettaglio) {
             <option value="perc">%</option>
           </select>
 
+          {/* 🔥 NUOVO: INPUT TARA */}
+          <label>Tara (kg):</label>
+          <input
+            type="text"
+            value={tara}
+            onChange={(e) => setTara(e.target.value.replace(/[^0-9.,]/g, ""))}
+            placeholder="Inserisci tara in kg"
+          />
+
           <button
             onClick={handleAdd}
             disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
@@ -2218,6 +2265,7 @@ if (inModifica && returnToDettaglio) {
                 <th>Materiale</th>
                 <th>Peso</th>
                 <th>Calo</th>
+                <th>Tara (kg)</th>  {/* 🔥 NUOVO: Colonna TARA */}
                 <th>Netto</th>
                 <th>Azioni</th>
               </tr>
@@ -2235,6 +2283,9 @@ if (inModifica && returnToDettaglio) {
                       ? `${r.calo}%`
                       : r.calo}
                   </td>
+
+                  {/* 🔥 NUOVO: VISUALIZZAZIONE TARA */}
+                  <td>{r.tara || 0}</td>
 
                   <td>{r.netto}</td>
 

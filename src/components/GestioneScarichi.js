@@ -232,11 +232,12 @@ const handleSalvaDocumento = async () => {
         fir: c.fir || m.fir || "-",
         cer: c.cer || c.codiceCER || "-",
         righe: (c.righe || []).map((r) => {
-          const { peso, caloKg, netto, prezzo } = calcolaRiga(r, tipoMov);
+          const { peso, caloKg, tara, netto, prezzo } = calcolaRiga(r, tipoMov);
           return {
             materiale: r.materiale,
             peso,
             calo: caloKg,
+            tara,  // 🔥 NUOVO: Aggiunto TARA
             netto,
             prezzo,
           };
@@ -593,6 +594,13 @@ const caloScarichi = tuttiCer
     }, 0),
   0);
 
+// 🔥 NUOVO: Tara scarichi (sempre in KG)
+const taraScarichi = tuttiCer
+  .filter(c => c.tipo === "scarico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.tara || 0), 0),
+  0);
+
 // Peso netto scarichi
 const pesoNettoScarichi = tuttiCer
   .filter(c => c.tipo === "scarico")
@@ -631,6 +639,13 @@ const caloCarichi = tuttiCer
 
       return s + caloKgRounded;
     }, 0),
+  0);
+
+// 🔥 NUOVO: Tara carichi (sempre in KG)
+const taraCarichi = tuttiCer
+  .filter(c => c.tipo === "carico")
+  .reduce((tot, c) =>
+    tot + c.righe.reduce((s, r) => s + safe(r.tara || 0), 0),
   0);
 
 // Peso netto carichi
@@ -683,7 +698,28 @@ if (hasConsuntivati && filtroAttivo) {
 } else {
   backgroundColor = "#FFECB3";
 }
- return {    giornoIT,    nrMovimentiScarico,    nrMovimentiCarico,    nrFIR,    pesoLordoScarichi,    caloScarichi,    pesoNettoScarichi,    pesoLordoCarichi,    caloCarichi,    pesoNettoCarichi,    costiTotali,    ricaviTotali,    utenti: utentiDelGiorno,    backgroundColor,    textColor,    tooltip: hasConsuntivati      ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`      : ""};
+ return {    
+    giornoIT,    
+    nrMovimentiScarico,    
+    nrMovimentiCarico,    
+    nrFIR,    
+    pesoLordoScarichi,    
+    caloScarichi,    
+    taraScarichi,  // 🔥 NUOVO
+    pesoNettoScarichi,    
+    pesoLordoCarichi,    
+    caloCarichi,    
+    taraCarichi,  // 🔥 NUOVO
+    pesoNettoCarichi,    
+    costiTotali,    
+    ricaviTotali,    
+    utenti: utentiDelGiorno,    
+    backgroundColor,    
+    textColor,    
+    tooltip: hasConsuntivati      
+      ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`      
+      : ""
+  };
   });
 const righeOrdinate = [...righePerGiorno].sort((a, b) => {
   if (sortConfig.key === "data") {
@@ -716,6 +752,13 @@ else if (sortConfig.key === "caloScarichi") {
     : b.caloScarichi - a.caloScarichi;
 }
 
+// 🔥 NUOVO: Sort per taraScarichi
+else if (sortConfig.key === "taraScarichi") {
+  return sortConfig.direction === "asc"
+    ? a.taraScarichi - b.taraScarichi
+    : b.taraScarichi - a.taraScarichi;
+}
+
 else if (sortConfig.key === "pesoNettoScarichi") {
   return sortConfig.direction === "asc"
     ? a.pesoNettoScarichi - b.pesoNettoScarichi
@@ -732,6 +775,13 @@ else if (sortConfig.key === "caloCarichi") {
   return sortConfig.direction === "asc"
     ? a.caloCarichi - b.caloCarichi
     : b.caloCarichi - a.caloCarichi;
+}
+
+// 🔥 NUOVO: Sort per taraCarichi
+else if (sortConfig.key === "taraCarichi") {
+  return sortConfig.direction === "asc"
+    ? a.taraCarichi - b.taraCarichi
+    : b.taraCarichi - a.taraCarichi;
 }
 
 else if (sortConfig.key === "pesoNettoCarichi") {
@@ -1030,18 +1080,21 @@ const toOptions = (arr) =>
 const calcolaRiga = (r, tipo) => {
   const peso = Number(r.peso || r.netto || 0);
   const calo = Number(r.calo || 0);
+  // 🔥 NUOVO: Aggiunge TARA
+  const tara = Number(r.tara || 0);
 
   const caloKgRaw = r.caloTipo === "perc" ? (peso * calo) / 100 : calo;
   const caloKg =
     (caloKgRaw % 1) <= 0.5 ? Math.floor(caloKgRaw) : Math.ceil(caloKgRaw);
 
-  const netto = peso - caloKg;
+  // 🔥 MODIFICATO: Netto = Peso - Calo - Tara
+  const netto = peso - caloKg - tara;
   const prezzo =
     tipo === "scarico"
       ? Number(r.prezzoAcquisto ?? 0)
       : Number(r.prezzoVendita ?? 0);
 
-  return { peso, calo, caloKg, netto, prezzo, tot: money(netto * prezzo) };
+  return { peso, calo, caloKg, tara, netto, prezzo, tot: money(netto * prezzo) };
 };
 const handleStampaDocumento = async () => {
   try {
@@ -1406,6 +1459,11 @@ totale += tot;
   Calo Scarichi (Kg) {sortConfig.key === "caloScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
+{/* 🔥 NUOVO: Colonna Tara Scarichi */}
+<th onClick={() => requestSort("taraScarichi")} style={{ cursor: "pointer" }}>
+  Tara Scarichi (Kg) {sortConfig.key === "taraScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
 <th onClick={() => requestSort("pesoNettoScarichi")} style={{ cursor: "pointer" }}>
   Peso Netto Scarichi {sortConfig.key === "pesoNettoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
@@ -1416,6 +1474,11 @@ totale += tot;
 
 <th onClick={() => requestSort("caloCarichi")} style={{ cursor: "pointer" }}>
   Calo Carichi (Kg) {sortConfig.key === "caloCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
+</th>
+
+{/* 🔥 NUOVO: Colonna Tara Carichi */}
+<th onClick={() => requestSort("taraCarichi")} style={{ cursor: "pointer" }}>
+  Tara Carichi (Kg) {sortConfig.key === "taraCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
 <th onClick={() => requestSort("pesoNettoCarichi")} style={{ cursor: "pointer" }}>
@@ -1449,10 +1512,14 @@ totale += tot;
         <td>{r.nrFIR}</td>
         <td>{r.pesoLordoScarichi?.toFixed(2) || 0}</td>
 <td>{r.caloScarichi?.toFixed(2) || 0}</td>
+{/* 🔥 NUOVO: Dati Tara Scarichi */}
+<td>{r.taraScarichi?.toFixed(2) || 0}</td>
 <td>{r.pesoNettoScarichi?.toFixed(2) || 0}</td>
 
 <td>{r.pesoLordoCarichi?.toFixed(2) || 0}</td>
 <td>{r.caloCarichi?.toFixed(2) || 0}</td>
+{/* 🔥 NUOVO: Dati Tara Carichi */}
+<td>{r.taraCarichi?.toFixed(2) || 0}</td>
 <td>{r.pesoNettoCarichi?.toFixed(2) || 0}</td>
 
         <td>{r.costiTotali.toFixed(2)}</td>
@@ -1476,7 +1543,8 @@ totale += tot;
           <tr>
             <th>FIR</th>            <th>CER</th>
             <th>Materiale</th>            <th>Peso Lordo (Kg)</th>
-            <th>Calo</th>            <th>Netto (Kg)</th>
+            <th>Calo</th>            <th>Tara (Kg)</th>            {/* 🔥 NUOVO */}
+            <th>Netto (Kg)</th>
             <th>prezzo €/Kg</th>            <th>Totale €</th>
           </tr>
         </thead>
@@ -1489,6 +1557,7 @@ totale += tot;
     <tr key={i}>      <td>{r.fir}</td>
       <td>{r.cer}</td>      <td>{r.materiale}</td>
       <td>{round2(r.peso)}</td>      <td>{round2(r.calo)}</td>
+      <td>{round2(r.tara || 0)}</td>      {/* 🔥 NUOVO */}
       <td>{netto}</td>      <td>{prezzo}</td>
       <td>{tot.toFixed(2)}</td>    </tr>  );})}
         </tbody>
@@ -1543,6 +1612,7 @@ totale += tot;
           <tr>           <th>Materiale</th>
 <th>Peso Lordo (Kg)</th>
 <th>Calo</th>
+<th>Tara (Kg)</th>            {/* 🔥 NUOVO */}
 <th>Netto (Kg)</th>
 <th>Prezzo €/Kg</th>
 <th>Totale €</th>
@@ -1590,13 +1660,13 @@ totale += tot;
   .map((b, i) => (
     <React.Fragment key={i}>
       <tr>
-        <td colSpan="6" style={{ background: "#eee", fontWeight: "bold" }}>
+        <td colSpan="8" style={{ background: "#eee", fontWeight: "bold" }}>      {/* 🔥 MODIFICATO: da 6 a 8 colonne */}
           FIR: {b.fir} | CER: {b.cer}
         </td>
       </tr>
 
 {b.righe.map((r, j) => {
-  const { peso, calo, caloKg, netto, prezzo, tot } = calcolaRiga(r, b.tipo);
+  const { peso, calo, caloKg, tara, netto, prezzo, tot } = calcolaRiga(r, b.tipo);
   const caloLabel =
     r.caloTipo === "perc" ? `${calo}% (${caloKg} Kg)` : `${caloKg} Kg`;
 
@@ -1605,6 +1675,7 @@ totale += tot;
       <td>{r.materiale}</td>
       <td>{peso.toFixed(2)}</td>
       <td>{caloLabel}</td>
+      <td>{tara.toFixed(2)}</td>      {/* 🔥 NUOVO */}
       <td>{netto.toFixed(2)}</td>
       <td>{prezzo.toFixed(2)}</td>
       <td>{tot.toFixed(2)}</td>
