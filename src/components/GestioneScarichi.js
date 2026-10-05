@@ -1951,13 +1951,13 @@ totale += tot;
   {modalTipo === "prospetto"
     ? (
         modalData.documentoEsistente
-          ? "📑 Prospetto Fattura Pagata"
-          : "📑 Prospetto Fattura"
+          ? "📑 Prospetto Fattura  (Pagata)"
+          : "📑 Prospetto Fattura(Da Pagare)"
       )
     : (
         modalData.documentoEsistente
-          ? "📄 Fattura Pagata"
-          : "📄 Fattura"
+          ? "📄 Fattura (Pagata)"
+          : "📄 Fattura (Da Pagare)"
       )}
 </h2>
 {!modalData.documentoEsistente && (
