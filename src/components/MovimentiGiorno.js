@@ -24,6 +24,7 @@ const [mapFatture, setMapFatture] = useState({});
 const [mapProspetti, setMapProspetti] = useState({});
 const [mapScarichi, setMapScarichi] = useState({});
 const [globalLoading, setGlobalLoading] = useState(false);
+const [dettaglioMovimento, setDettaglioMovimento] = useState(null);
   const [carichiScarichi, setCarichiScarichi] = useState([]);
 const toDate = (v) => {
   if (!v) return null;
@@ -412,6 +413,139 @@ const handleConsuntiva = async (row) => {
 };
 
 
+const handleDettaglioMovimento = async (row) => {
+  try {
+    let documento = null;
+    let movimenti = [];
+
+    // ID del documento originale:
+    // nei CONSUNTIVATI arriva da anagraficaId
+    // nei DA CONSUNTIVARE arriva da id
+    const documentoId =
+      row.anagraficaId || row.id;
+
+    // =========================
+    // FATTURA CARICO
+    // =========================
+    if (row.tipo === "fattureCarichi") {
+      const snap = await getDoc(
+        doc(db, "fattureCarichi", documentoId)
+      );
+
+      if (!snap.exists()) {
+        alert("❌ Fattura non trovata");
+        return;
+      }
+
+      documento = {
+        tipoDocumento: "FATTURA",
+        ...snap.data()
+      };
+
+      const data = snap.data();
+
+      // Usiamo i dati storici salvati nella fattura
+      // per mantenere i prezzi effettivamente utilizzati.
+      if (Array.isArray(data.blocchi)) {
+        movimenti.push({
+          id: documentoId,
+          tipo: "CARICO",
+          data: data.dataCreazione,
+          storico: true,
+          carico: data.blocchi
+        });
+      }
+    }
+
+    // =========================
+    // PROSPETTO SCARICO
+    // =========================
+    if (row.tipo === "prospettiFattura") {
+      const snap = await getDoc(
+        doc(db, "prospettiFattura", documentoId)
+      );
+
+      if (!snap.exists()) {
+        alert("❌ Prospetto non trovato");
+        return;
+      }
+
+      documento = {
+        tipoDocumento: "PROSPETTO",
+        ...snap.data()
+      };
+
+      const data = snap.data();
+
+      // Usiamo i dati storici salvati nel prospetto
+      // per mantenere i prezzi effettivamente utilizzati.
+      if (Array.isArray(data.blocchi)) {
+        movimenti.push({
+          id: documentoId,
+          tipo: "SCARICO",
+          data: data.dataCreazione,
+          storico: true,
+          scarico: data.blocchi
+        });
+      }
+    }
+
+    // =========================
+    // FORNITORE PRIVATO
+    // =========================
+    if (row.tipo === "PRIVATI") {
+      const snap = await getDoc(
+        doc(db, "scarichi", documentoId)
+      );
+
+      if (!snap.exists()) {
+        alert("❌ Scarico non trovato");
+        return;
+      }
+
+      documento = {
+        tipoDocumento: "SCARICO PRIVATO",
+        ...snap.data()
+      };
+
+      movimenti.push({
+        id: documentoId,
+        tipo: "SCARICO",
+        ...snap.data()
+      });
+    }
+
+    if (!documento) {
+      alert("⚠️ Documento originale non trovato");
+      return;
+    }
+
+    if (movimenti.length === 0) {
+      alert(
+        "⚠️ Documento trovato, ma non contiene i dati storici del movimento."
+      );
+      return;
+    }
+
+    setDettaglioMovimento({
+      row,
+      documento,
+      movimenti
+    });
+
+  } catch (err) {
+    console.error(
+      "❌ ERRORE DETTAGLIO MOVIMENTO:",
+      err
+    );
+
+    alert(
+      "❌ Errore durante il caricamento del dettaglio"
+    );
+  }
+};
+
+
 const handleDeleteFin = async (row) => {
   const ok = window.confirm(
     `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${Number(row.importo).toFixed(2)}?`
@@ -605,7 +739,12 @@ const getOccorrenze = (item) => {
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
           <h4>🟢 Consuntivati</h4>
  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA MOVIMENTO</th>      <th>IMPORTO</th>    </tr>  </thead>
+  <thead>    <tr>
+  <th>CONTROPARTE</th>
+  <th>DATA MOVIMENTO</th>
+  <th>IMPORTO</th>
+  <th>DETTAGLI🔍</th>
+</tr> </thead>
   <tbody>
     {rows.map((r, i) => {      const isEntrata =        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
       return (
@@ -628,6 +767,17 @@ const getOccorrenze = (item) => {
     maximumFractionDigits: 2
   })} €
 </td>
+<td>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      handleDettaglioMovimento(r);
+    }}
+    title="Visualizza documento originale"
+  >
+    🔍
+  </button>
+</td>
         </tr>
       );
     })}  </tbody></table>
@@ -635,7 +785,12 @@ const getOccorrenze = (item) => {
         <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
 <h4>🔴 Da Consuntivare</h4>
 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>      <th>CONTROPARTE</th>      <th>DATA</th>      <th>IMPORTO</th>    </tr>  </thead>
+  <thead>    <tr>
+  <th>CONTROPARTE</th>
+  <th>DATA</th>
+  <th>IMPORTO</th>
+  <th>DETTAGLI🔍</th>
+</tr> </thead>
   <tbody>
     {daConsuntivare.map((r, i) => {
       const isEntrata =
@@ -662,6 +817,16 @@ const getOccorrenze = (item) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} €
+</td><td>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      handleDettaglioMovimento(r);
+    }}
+    title="Visualizza documento originale"
+  >
+    🔍
+  </button>
 </td>
         </tr>
       );
@@ -768,7 +933,177 @@ const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
       <p>Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
 <p>Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
 <p>Guadagno: {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
+      </div>{dettaglioMovimento && (
+  <div style={{
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10000
+  }}>
+    <div style={{
+      background: "#fff",
+      padding: 20,
+      width: "700px",
+      maxWidth: "90vw",
+      maxHeight: "85vh",
+      overflowY: "auto",
+      borderRadius: 8
+    }}>
+
+      <h3>
+        🔍 Dettaglio movimento
+      </h3>
+
+      <p>
+        <b>Controparte:</b>{" "}
+        {dettaglioMovimento.documento.cliente ||
+         dettaglioMovimento.documento.fornitore ||
+         dettaglioMovimento.row.controparte}
+      </p>
+
+    <p>
+  <b>Tipo documento:</b>{" "}
+  {dettaglioMovimento.row.tipo === "fattureCarichi"
+    ? dettaglioMovimento.row.anagraficaId
+      ? "FATTURA PAGATA"
+      : "FATTURA"
+    : dettaglioMovimento.row.tipo === "prospettiFattura"
+      ? dettaglioMovimento.row.anagraficaId
+        ? "PROSPETTO PAGATO"
+        : "PROSPETTO"
+      : dettaglioMovimento.documento.tipoDocumento}
+</p>
+      {dettaglioMovimento.movimenti.map((m, i) => {
+
+        const data = toDate(m.data);
+
+        const blocchi =
+          m.scarico ||
+          m.carico ||
+          [];
+
+        return (
+          <div
+            key={m.id || i}
+            style={{
+              border: "1px solid #ccc",
+              padding: 12,
+              marginTop: 15,
+              borderRadius: 5
+            }}
+          >
+
+            <h4>
+              {m.tipo} - {data?.toLocaleDateString("it-IT") || "-"}
+            </h4>
+
+            {blocchi.map((b, bi) => (
+
+              <div key={bi} style={{ marginBottom: 15 }}>
+
+                <p>
+                  <b>FIR / DDT:</b>{" "}
+                  {b.fir || m.fir || "-"}
+                </p>
+
+                <p>
+                  <b>CER:</b>{" "}
+                  {b.cer || b.codiceCER || "-"}
+                </p>
+
+                {(b.righe || []).map((r, ri) => {
+
+                  const netto = Number(r.netto) || 0;
+
+                  const prezzo =
+                    m.tipo === "SCARICO"
+                      ? Number(r.prezzoAcquisto) || Number(r.prezzo) || 0
+                      : Number(r.prezzoVendita) || Number(r.prezzo) || 0;
+
+                  const totale = netto * prezzo;
+
+                  return (
+                    <div
+                      key={ri}
+                      style={{
+                        borderTop: "1px solid #eee",
+                        padding: "8px 0"
+                      }}
+                    >
+                      <div>
+                        <b>Materiale:</b>{" "}
+                        {r.materiale || "-"}
+                      </div>
+
+                      <div>
+                        <b>Peso netto:</b>{" "}
+                        {netto.toLocaleString("it-IT")} kg
+                      </div>
+
+                      <div>
+                        <b>Prezzo:</b>{" "}
+                        {prezzo.toLocaleString("it-IT", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })} €/kg
+                      </div>
+
+                      <div>
+                        <b>Totale:</b>{" "}
+                        {totale.toLocaleString("it-IT", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })} €
+                      </div>
+                    </div>
+                  );
+                })}
+
+              </div>
+            ))}
+
+          </div>
+        );
+      })}
+<p
+  style={{
+    marginTop: "20px",
+    paddingTop: "10px",
+    borderTop: "2px solid #333",
+    fontSize: "18px",
+    fontWeight: "bold",
+    textAlign: "right"
+  }}
+>
+  Totale documento:{" "}
+  {Number(dettaglioMovimento.documento.totale || 0).toLocaleString(
+    "it-IT",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }
+  )} €
+</p>
+      <div style={{
+        marginTop: 20,
+        textAlign: "right"
+      }}>
+        <button
+          onClick={() => setDettaglioMovimento(null)}
+        >
+          Chiudi
+        </button>
       </div>
+
+    </div>
+  </div>
+)}
       {showModal && contItem && (
   <div style={{
     position: "fixed",

@@ -13,11 +13,8 @@ import {
   deleteDoc,
   arrayUnion,
   query,
-  where,
-  orderBy,
-  limit,updateDoc
+  where,updateDoc
 } from "firebase/firestore";
-import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { scriviLog } from "../utils/log";
 import "./Scarichi.css";
@@ -32,6 +29,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+import { assicuratiFornitore } from "../services/fornitoriService";
 
 import { useLocation } from "react-router-dom";
 
@@ -1265,12 +1263,24 @@ setPreviewFoto(foto);
       );
 
       pdf.text(
-        `Data: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`,
+        `Listino: ${docData.listino || "-"}`,
         10,
         84
       );
 
-      pdf.text(`Listino: ${docData.listino || "-"}`, 10, 92);
+      // Spazio tra i dati del movimento e i dati della registrazione
+      pdf.text(
+        `Data: ${formattaDataItaliana(dataObj)} ${formattaOra24(dataObj)}`,
+        10,
+        96
+      );
+
+      pdf.text(
+        `Operatore: ${docData.utente || "-"}`,
+        10,
+        104
+      );
+      
 
       if (docData.note && docData.note.trim() !== "") {
         const noteLines = pdf.splitTextToSize(docData.note, 180);
@@ -1293,7 +1303,11 @@ setPreviewFoto(foto);
 
       const righe = docData.carico || docData.scarico || [];
 
+   
       for (const c of righe) {
+ pdf.line(10, y, 200, y);
+  y += 6;
+
         pdf.setFontSize(13);
         pdf.text(`CER ${c.cer}${c.fir ? " - FIR: " + c.fir : ""}`, 10, y);
         y += 6;
@@ -1325,26 +1339,26 @@ setPreviewFoto(foto);
         y += 10;
       }
 
-  const fotos = await getImmaginiMovimento({
-  docId: movimentoId,
-  fotoURL: docData.fotoURL
-});
+      let fotos = await getImmaginiMovimento({
+        docId: movimentoId,
+        fotoURL: docData.fotoURL
+      });
 
-// se non ci sono url, prova a leggere le immagini temporanee
-if (fotos.length === 0 && movimentoId) {
+      // se non ci sono url, prova a leggere le immagini temporanee
+      if (fotos.length === 0 && movimentoId) {
 
-  const q = query(
-    collection(db, "scarichi_images_queue"),
-    where("docTempId", "==", movimentoId),
-    where("uploaded", "==", false)
-  );
+        const q = query(
+          collection(db, "scarichi_images_queue"),
+          where("docTempId", "==", movimentoId),
+          where("uploaded", "==", false)
+        );
 
-  const snapQueue = await getDocs(q);
+        const snapQueue = await getDocs(q);
 
-  fotos = snapQueue.docs.map(
-    d => d.data().fileData
-  );
-}
+        fotos = snapQueue.docs.map(
+          d => d.data().fileData
+        );
+      }
 
       if (fotos.length > 0) {
         if (y > 200) {
@@ -1361,31 +1375,31 @@ if (fotos.length === 0 && movimentoId) {
 
         for (let i = 0; i < fotos.length; i++) {
           try {
-           let base64;
+            let base64;
 
-if (typeof fotos[i] === "string" &&
-    fotos[i].startsWith("data:image")) {
+            if (typeof fotos[i] === "string" &&
+                fotos[i].startsWith("data:image")) {
 
-  // immagine temporanea salvata in queue
-  base64 = fotos[i];
+              // immagine temporanea salvata in queue
+              base64 = fotos[i];
 
-} else {
+            } else {
 
-  const response = await fetch(fotos[i]);
-  const blob = await response.blob();
+              const response = await fetch(fotos[i]);
+              const blob = await response.blob();
 
-  base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
+              base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
 
-    reader.onloadend = () =>
-      resolve(reader.result);
+                reader.onloadend = () =>
+                  resolve(reader.result);
 
-    reader.onerror = reject;
+                reader.onerror = reject;
 
-    reader.readAsDataURL(blob);
-  });
+                reader.readAsDataURL(blob);
+              });
 
-}
+            }
 
             pdf.addImage(base64, "JPEG", x, imgY, 60, 60);
 
@@ -1510,6 +1524,25 @@ if (errori.length > 0) {
         return;
       }
 
+      const fornitoreAssicurato = await assicuratiFornitore(db, {
+        nome: selectedFornitore,
+        fornitoriEsistenti: fornitori,
+      });
+
+      const nomeFornitore = fornitoreAssicurato.nome;
+
+      if (fornitoreAssicurato.created) {
+        setFornitori((prev) => [
+          ...prev,
+          {
+            id: fornitoreAssicurato.id,
+            nome: nomeFornitore,
+            indirizzo: "",
+            piva_cf: "",
+          },
+        ]);
+      }
+
       const draftRef = doc(db, "scarichi_draft", utenteNome);
       const draftSnap = await getDoc(draftRef);
 
@@ -1568,7 +1601,7 @@ if (fotoFile && fotoFile.length > 0) {
       const fotoURLs = Array.from(new Set([...existingUrls, ...uploadedUrls]));
 
       const payload = {
-        fornitore: selectedFornitore || "",
+        fornitore: nomeFornitore || "",
         listino: selectedListino || "",
         tipo: tipoMovimento || "scarico",
 
@@ -1937,6 +1970,7 @@ if (inModifica && returnToDettaglio) {
     onChange={async (selected) => {
       const nome = selected?.value || "";
       setSelectedFornitore(nome);
+      setDirty(true);
 
       if (!nome) return;
 
@@ -1956,46 +1990,17 @@ if (inModifica && returnToDettaglio) {
 
       await suggerisciFir(nome);
     }}
-    // QUESTA È LA FUNZIONE CHE CREA IL FORNITORE A DB QUANDO DIGITI UN NOME NUOVO
-    onCreateOption={async (inputValue) => {
+    onCreateOption={(inputValue) => {
       const nuovoNome = inputValue.trim();
       if (!nuovoNome) return;
-
-      try {
-        // 1. Salva il nuovo fornitore nella collezione Firestore
-        const docRef = await addDoc(collection(db, "fornitori"), {
-          nome: nuovoNome,
-          createdAt: Date.now()
-        });
-
-        // 2. Imposta lo stato del fornitore selezionato nel frontend
-        setSelectedFornitore(nuovoNome);
-
-        console.log("✅ Nuovo fornitore creato a DB con ID:", docRef.id);
-      } catch (error) {
-        console.error("❌ Errore durante la creazione del fornitore:", error);
-      }
+      setSelectedFornitore(nuovoNome);
+      setDirty(true);
     }}
-    placeholder="Cerca o crea fornitore..."
+    placeholder="Inserisci nome controparte"
     isSearchable
     isClearable
   />
 
-          {/* NUOVO FORNITORE */}
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.setItem("scaricoReturnPage", "/scarichi");
-              localStorage.setItem("scarico_temp_data", dataScaricoStr || "");
-              localStorage.setItem("scarico_temp_ora", oraStr || "");
-              localStorage.setItem("scarico_temp_usaOra", usaOra ? "1" : "0");
-              localStorage.setItem("fornitore_prefill_nome", "");
-              navigate("/fornitori?openNew=true");
-            }}
-            style={{ marginLeft: "10px" }}
-          >
-            + {tipoMovimento === "carico" ? "Nuovo Destinatario" : "Nuovo Fornitore"}
-          </button>
         </div>
 
       {/* LISTINO — visibile SOLO per admin/manager */}

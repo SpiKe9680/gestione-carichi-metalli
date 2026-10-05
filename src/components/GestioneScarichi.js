@@ -8,6 +8,7 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
+import { scriviLog } from "../utils/log";
 import autoTable from "jspdf-autotable";
 import Select from "react-select";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
@@ -15,73 +16,136 @@ export const applyListino = async ({
   movimentiIds = [],
   listino,
   db,
-  collectionName = "scarichi",
-  tipoMovimento
+  scarichi = [],
+  setScarichi
 }) => {
-  if (!movimentiIds.length) return;
-  if (!listino) return;
+  if (!movimentiIds.length) return scarichi;
+  if (!listino || listino === "tutti") return scarichi;
+
   try {
     const listiniSnap = await getDocs(collection(db, "listini"));
+
     let listinoSelezionato = null;
+
     listiniSnap.docs.forEach((d) => {
       const data = d.data();
       const nome = (data.nome || "").toString().trim().toLowerCase();
+
       if (nome === listino.toString().trim().toLowerCase()) {
         listinoSelezionato = data;
       }
     });
+
     if (!listinoSelezionato) {
       console.error("❌ LISTINO NON TROVATO:", listino);
-      return;
+      return scarichi;
     }
+
     const prezzi = listinoSelezionato.prezzi || {};
     const smartMap = {};
+
     Object.entries(prezzi).forEach(([key, val]) => {
       const k = (key ?? "")
         .toString()
         .toUpperCase()
         .trim()
         .replace(/[^A-Z0-9]/g, "");
+
       smartMap[k] = val;
       smartMap[k.replace(/\./g, "")] = val;
     });
+
     const norm = (v) =>
       (v ?? "")
         .toString()
         .toUpperCase()
         .trim()
         .replace(/[^A-Z0-9]/g, "");
-    for (const id of movimentiIds) {
-      const ref = doc(db, collectionName, id);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        console.error("❌ DOC NON ESISTE:", id);
-        continue;
+
+    const aggiornati = scarichi.map((movimento) => {
+      if (!movimentiIds.includes(movimento.id)) {
+        return movimento;
       }
-      const data = snap.data();
-      const tipo = data.tipo || tipoMovimento || "scarico";
+
+      const tipo = movimento.tipo || "scarico";
       const field = tipo === "carico" ? "carico" : "scarico";
-      const blocco = Array.isArray(data[field]) ? data[field] : [];
-      let modifiche = 0;
-      let nonTrovati = 0;
-      const aggiornato = blocco.map((cer) => ({
+
+      if (!Array.isArray(movimento.cer)) {
+        return movimento;
+      }
+
+      const cerAggiornati = movimento.cer.map((cer) => ({
         ...cer,
+
         righe: (cer.righe || []).map((r) => {
           const raw = r.materiale;
           const key = norm(raw);
-          const prezzoObj =            smartMap[key] ||            smartMap[raw] ||            null;          if (!prezzoObj) {
-            nonTrovati++;
+
+          const prezzoObj =
+            smartMap[key] ||
+            smartMap[raw] ||
+            null;
+
+          if (!prezzoObj) {
             return r;
           }
-          modifiche++;
-          const acquisto =            prezzoObj.acquisto ?? prezzoObj.prezzoAcquisto ?? 0;
-          const vendita =            prezzoObj.vendita ?? prezzoObj.prezzoVendita ?? 0;
-          const prezzoFinale =            tipo === "scarico" ? acquisto : vendita;
-          return {            ...r,            prezzoAcquisto:              tipo === "scarico"                ? Number(acquisto)                : Number(r.prezzoAcquisto ?? 0),            prezzoVendita:              tipo === "carico"                ? Number(vendita)                : Number(r.prezzoVendita ?? 0),            prezzo: Number(prezzoFinale ?? 0),            listino,          };        }),      }));
-      if (modifiche === 0) {
-        console.warn(          "⚠️ applyListino: nessuna modifica applicata (check matching dati)"        );      }
-      await updateDoc(ref, {        [field]: aggiornato,        listino,        lastUpdate: Date.now()      });    }
-  } catch (e) {    console.error("💥 ERRORE APPLYLISTINO:", e);  }};
+
+          const acquisto =
+            prezzoObj.acquisto ??
+            prezzoObj.prezzoAcquisto ??
+            0;
+
+          const vendita =
+            prezzoObj.vendita ??
+            prezzoObj.prezzoVendita ??
+            0;
+
+          const prezzoFinale =
+            tipo === "scarico"
+              ? acquisto
+              : vendita;
+
+          return {
+            ...r,
+
+            prezzoAcquisto:
+              tipo === "scarico"
+                ? Number(acquisto)
+                : Number(r.prezzoAcquisto ?? 0),
+
+            prezzoVendita:
+              tipo === "carico"
+                ? Number(vendita)
+                : Number(r.prezzoVendita ?? 0),
+
+            prezzo: Number(prezzoFinale ?? 0),
+
+            listino
+          };
+        })
+      }));
+
+      return {
+        ...movimento,
+
+        cer: cerAggiornati,
+
+        listino
+      };
+    });
+
+    // 🔥 MODIFICA SOLO LA COPIA IN MEMORIA
+    if (typeof setScarichi === "function") {
+      setScarichi(aggiornati);
+    }
+
+    return aggiornati;
+
+  } catch (e) {
+    console.error("💥 ERRORE APPLYLISTINO:", e);
+    return scarichi;
+  }
+};
 registerLocale("it", it);
 const GestioneScarichi = () => {
 const [scarichi, setScarichi] = useState([]);
@@ -134,6 +198,18 @@ useEffect(() => {
   setDal(primo);
   setAl(today);
 }, []);
+
+const getUtenteReact = () => {
+  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+
+  return (
+    u?.username ||
+    u?.email ||
+    auth.currentUser?.displayName ||
+    auth.currentUser?.email ||
+    "sconosciuto"
+  );
+};
 const pulitiIds = React.useMemo(() => {
   return (modalData?.movimentiIds || []).map(id =>
     id.replace(/^scarico_/, "").replace(/^carico_/, "")
@@ -200,6 +276,7 @@ const validaEPreparaProspetto = async (movimentiIds) => {
   return true;
 };
 
+
 const handleSalvaDocumento = async () => {
   try {
     if (!modalData) {
@@ -214,7 +291,6 @@ const handleSalvaDocumento = async () => {
 
     const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
 
-    // Stessi movimenti mostrati nella modal (stato completo, filtrato per tipo)
     const movs = scarichi.filter(
       (m) => movimentiIds.includes(m.id) && m.tipo === tipoMov
     );
@@ -224,20 +300,158 @@ const handleSalvaDocumento = async () => {
       return;
     }
 
-    // Blocca il salvataggio se esiste un documento già pagato sugli stessi movimenti
     await validaEPreparaProspetto(movimentiIds);
+
+    if (listinoApplicato !== "tutti") {
+      const listiniSnap = await getDocs(collection(db, "listini"));
+
+      let listinoSelezionato = null;
+
+      listiniSnap.docs.forEach((d) => {
+        const data = d.data();
+        const nome = (data.nome || "").toString().trim().toLowerCase();
+
+        if (nome === listinoApplicato.toString().trim().toLowerCase()) {
+          listinoSelezionato = data;
+        }
+      });
+
+      if (!listinoSelezionato) {
+        throw new Error("LISTINO NON TROVATO: " + listinoApplicato);
+      }
+
+      const prezzi = listinoSelezionato.prezzi || {};
+      const smartMap = {};
+
+      Object.entries(prezzi).forEach(([key, val]) => {
+        const k = (key ?? "")
+          .toString()
+          .toUpperCase()
+          .trim()
+          .replace(/[^A-Z0-9]/g, "");
+
+        smartMap[k] = val;
+        smartMap[k.replace(/\./g, "")] = val;
+      });
+
+      const norm = (v) =>
+        (v ?? "")
+          .toString()
+          .toUpperCase()
+          .trim()
+          .replace(/[^A-Z0-9]/g, "");
+
+      for (const m of movs) {
+        const collectionMovimento =
+          m.tipo === "carico" ? "carichi" : "scarichi";
+
+        const field =
+          m.tipo === "carico" ? "carico" : "scarico";
+
+        const ref = doc(db, collectionMovimento, m.id);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) {
+          console.error("❌ DOC NON ESISTE:", m.id);
+          continue;
+        }
+
+        // SNAPSHOT COMPLETO DEL DOCUMENTO ORIGINALE
+        const data = snap.data();
+        const before = data;
+
+        const bloccoOriginale = Array.isArray(data[field])
+          ? data[field]
+          : [];
+
+        const aggiornato = bloccoOriginale.map((cer) => ({
+          ...cer,
+          righe: (cer.righe || []).map((r) => {
+            const key = norm(r.materiale);
+
+            const prezzoObj =
+              smartMap[key] ||
+              smartMap[r.materiale] ||
+              null;
+
+            if (!prezzoObj) {
+              return r;
+            }
+
+            const acquisto =
+              prezzoObj.acquisto ??
+              prezzoObj.prezzoAcquisto ??
+              0;
+
+            const vendita =
+              prezzoObj.vendita ??
+              prezzoObj.prezzoVendita ??
+              0;
+
+            const prezzoFinale =
+              m.tipo === "scarico"
+                ? acquisto
+                : vendita;
+
+            return {
+              ...r,
+              prezzoAcquisto:
+                m.tipo === "scarico"
+                  ? Number(acquisto)
+                  : Number(r.prezzoAcquisto ?? 0),
+              prezzoVendita:
+                m.tipo === "carico"
+                  ? Number(vendita)
+                  : Number(r.prezzoVendita ?? 0),
+              prezzo: Number(prezzoFinale),
+              listino: listinoApplicato
+            };
+          })
+        }));
+
+        // DOCUMENTO COMPLETO DOPO LA MODIFICA
+        const after = {
+          ...data,
+          [field]: aggiornato,
+          listino: listinoApplicato,
+          lastUpdate: Date.now()
+        };
+
+        await updateDoc(ref, {
+          [field]: aggiornato,
+          listino: listinoApplicato,
+          lastUpdate: after.lastUpdate
+        });
+
+        // LOG CON DOCUMENTO COMPLETO PRIMA E DOPO
+        await scriviLog({
+          pagina: "GestioneScarichi",
+          evento: "APPLICA_LISTINO_SALVATAGGIO",
+          riferimento: {
+            collezione: collectionMovimento,
+            documentoId: m.id
+          },
+          before,
+          after,
+          utente: getUtenteReact(),
+          ripristinabile: true
+        });
+      }
+    }
 
     const blocchi = movs.flatMap((m) =>
       (m.cer || []).map((c) => ({
         fir: c.fir || m.fir || "-",
         cer: c.cer || c.codiceCER || "-",
         righe: (c.righe || []).map((r) => {
-          const { peso, caloKg, tara, netto, prezzo } = calcolaRiga(r, tipoMov);
+          const { peso, caloKg, tara, netto, prezzo } =
+            calcolaRiga(r, tipoMov);
+
           return {
             materiale: r.materiale,
             peso,
             calo: caloKg,
-            tara,  // 🔥 NUOVO: Aggiunto TARA
+            tara,
             netto,
             prezzo,
           };
@@ -251,6 +465,7 @@ const handleSalvaDocumento = async () => {
     }
 
     let totale = 0;
+
     blocchi.forEach((b) => {
       b.righe.forEach((r) => {
         totale += money(r.netto * r.prezzo);
@@ -267,23 +482,61 @@ const handleSalvaDocumento = async () => {
       movimentoFinanziarioId: null,
     };
 
+    const documentoRef = doc(
+      db,
+      collectionName,
+      [...movimentiIds].sort().join("-")
+    );
+
+    const documentoSnap = await getDoc(documentoRef);
+    const beforeDocumento = documentoSnap.exists()
+      ? documentoSnap.data()
+      : null;
+
     await setDoc(
-      doc(db, collectionName, [...movimentiIds].sort().join("-")),
+      documentoRef,
       payload,
       { merge: true }
     );
 
+    await scriviLog({
+      pagina: "GestioneScarichi",
+      evento:
+        tipo === "prospetto"
+          ? "SALVATAGGIO_PROSPETTO_FATTURA"
+          : "SALVATAGGIO_FATTURA",
+      riferimento: {
+        collezione: collectionName,
+        documentoId: documentoRef.id
+      },
+      before: beforeDocumento,
+      after: {
+        ...(beforeDocumento || {}),
+        ...payload
+      },
+      utente: getUtenteReact(),
+      ripristinabile: true
+    });
+
     alert("✅ Documento salvato correttamente");
     setModalData(null);
+
   } catch (err) {
     console.error(err);
+
     if (String(err.message).startsWith("SCARICO_GIA_PAGATO")) {
-      alert("❌ Esiste già un documento pagato per questi movimenti:\n\n" + err.message);
+      alert(
+        "❌ Esiste già un documento pagato per questi movimenti:\n\n" +
+        err.message
+      );
     } else {
       alert("❌ Errore salvataggio");
     }
   }
 };
+
+
+
 const salvaProspettoUnificato = async (modalData, tipo) => {
   const scarichiIds = modalData.movimentiIds || [];
   if (!scarichiIds.length) {    throw new Error("Nessun movimento selezionato");  }
@@ -506,24 +759,39 @@ const estimateResults = () => {
   return dati.length;
 };
 const isDocumentoDisabled = () => {
-  return (
-    filtroFornitore === "tutti" ||
-    tipoMovimento === "tutti"
-  );
+  if (filtroFornitore === "tutti") {
+    return true;
+  }
+
+  if (tipoMovimento !== "tutti") {
+    return false;
+  }
+
+  const movimenti = getMovimentiValidi();
+
+  const hasScarico = movimenti.some(m => m.tipo === "scarico");
+  const hasCarico = movimenti.some(m => m.tipo === "carico");
+
+  return !hasScarico && !hasCarico;
 };
 const getDocumentoLabel = () => {
   if (filtroFornitore === "tutti") {
     return "⚠️ Seleziona controparte";
   }
-  if (tipoMovimento === "tutti") {
-    return "⚠️ Seleziona tipo";
-  }
+
   const movimenti = getMovimentiValidi();
+
   const hasScarico = movimenti.some(m => m.tipo === "scarico");
   const hasCarico = movimenti.some(m => m.tipo === "carico");
+
   if (!hasScarico && hasCarico) return "📄 Emetti Fattura";
   if (hasScarico && !hasCarico) return "📑 Prospetto Fattura";
   if (hasScarico && hasCarico) return "⚠️ Separa Carichi/Scarichi";
+
+  if (tipoMovimento === "tutti") {
+    return "⚠️ Seleziona tipo";
+  }
+
   return "📄 Documento";
 };
 const getTrafficLight = (count) => {
@@ -826,26 +1094,131 @@ goBack={() => {
  refreshScarichi={async () => {
   await fetchMovimenti();
 }}/>  );}
-const handleApriDocumento = () => {
+const handleApriDocumento = async () => {
   if (isDocumentoDisabled()) return;
-  const movimenti = getMovimentiValidi();
-  if (!movimenti.length) {
-    alert("⚠️ Nessun movimento valido");
-    return;
+
+  try {
+    let movimenti = getMovimentiValidi();
+
+    // 🔥 Se non ci sono movimenti "liberi" perché sono già consuntivati,
+    // recuperiamo comunque quelli filtrati per poter visualizzare il documento.
+    if (!movimenti.length) {
+      movimenti = filteredScarichi.filter((m) => {
+        if (tipoMovimento !== "tutti" && m.tipo !== tipoMovimento) {
+          return false;
+        }
+
+        if (
+          filtroFornitore !== "tutti" &&
+          m.fornitore !== filtroFornitore
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+    }
+
+    if (!movimenti.length) {
+      alert("⚠️ Nessun movimento valido");
+      return;
+    }
+
+    const hasScarico = movimenti.some(
+      (m) => m.tipo === "scarico"
+    );
+
+    const hasCarico = movimenti.some(
+      (m) => m.tipo === "carico"
+    );
+
+    if (hasScarico && hasCarico) {
+      alert("⚠️ Non puoi mischiare carichi e scarichi");
+      return;
+    }
+
+    const tipo = hasScarico ? "prospetto" : "fattura";
+
+    // 🔥 Verifica se i movimenti sono già consuntivati
+    const tuttiConsuntivati = movimenti.every((m) => {
+      return (
+        m.movimentoFinanziarioId !== null &&
+        m.movimentoFinanziarioId !== undefined &&
+        String(m.movimentoFinanziarioId).trim() !== ""
+      );
+    });
+
+    // 🔥 Se sono già consuntivati, cerchiamo il documento originale
+    if (tuttiConsuntivati) {
+      const collectionDocumento =
+        tipo === "prospetto"
+          ? "prospettiFattura"
+          : "fattureCarichi";
+
+      const movimentiIds = movimenti.map((m) => m.id);
+
+      const snap = await getDocs(
+        collection(db, collectionDocumento)
+      );
+
+      const documentoTrovato = snap.docs.find((d) => {
+        const data = d.data();
+        const ids = data.movimentiIds || [];
+
+        if (!Array.isArray(ids)) return false;
+
+        return (
+          ids.length === movimentiIds.length &&
+          ids.every((id) => movimentiIds.includes(id))
+        );
+      });
+
+      if (!documentoTrovato) {
+        alert(
+          "⚠️ Documento originale non trovato per questi movimenti"
+        );
+        return;
+      }
+
+      const documento = documentoTrovato.data();
+
+      setModalTipo(tipo);
+
+      setModalData({
+        cliente: documento.cliente || filtroFornitore,
+        movimentiIds,
+        blocchi: documento.blocchi || [],
+        documentoEsistente: true,
+        documentoId: documentoTrovato.id,
+        movimentoFinanziarioId:
+          documento.movimentoFinanziarioId || null,
+        DataPagamento:
+          documento.DataPagamento || null
+      });
+
+      return;
+    }
+
+    // 🔥 Comportamento normale per movimenti ancora da consuntivare
+    setModalTipo(tipo);
+
+    setModalData({
+      cliente: filtroFornitore,
+      movimentiIds: movimenti.map((m) => m.id),
+      blocchi: movimenti.flatMap((m) => m.cer || []),
+      documentoEsistente: false
+    });
+
+  } catch (err) {
+    console.error(
+      "❌ ERRORE APERTURA DOCUMENTO:",
+      err
+    );
+
+    alert(
+      "❌ Errore durante il caricamento del documento"
+    );
   }
-  const hasScarico = movimenti.some(m => m.tipo === "scarico");
-  const hasCarico = movimenti.some(m => m.tipo === "carico");
-  if (hasScarico && hasCarico) {
-    alert("⚠️ Non puoi mischiare carichi e scarichi");
-    return;
-  }
-  const tipo = hasScarico ? "prospetto" : "fattura";
-  setModalTipo(tipo);
-  setModalData({
-    cliente: filtroFornitore,
-    movimentiIds: movimenti.map(m => m.id),
-    blocchi: movimenti.flatMap(m => m.cer || [])
-  });
 };
 const handleStampa = async () => {
   const movimenti = filteredScarichi;
@@ -1574,38 +1947,130 @@ totale += tot;
   <div key={reloadKey} style={{
       position: "fixed",      top: 0,      left: 0,      width: "100vw",      height: "100vh",      background: "rgba(0,0,0,0.6)",      display: "flex",      justifyContent: "center",      alignItems: "center",      zIndex: 99999    }}  >
     <div      onClick={(e) => e.stopPropagation()}      style={{        background: "white",        padding: 20,        borderRadius: 10,        width: "80%",        maxHeight: "80vh",        overflowY: "auto",        boxShadow: "0 10px 30px rgba(0,0,0,0.3)"      }}    >
-      <h2>        {modalTipo === "prospetto"          ? "📑 Prospetto Fattura"          : "📄 Fattura"}
-      </h2>
-      <div style={{  marginBottom: "15px",  display: "flex",  gap: "10px",  alignItems: "center",  border: "1px solid #ddd",  padding: "10px",  borderRadius: "6px",  background: "#f9f9f9"}}>
-  <label>    📊 Applica listino:    <select      value={listinoApplicato}      onChange={(e) => setListinoApplicato(e.target.value)}    >      <option value="tutti">Nessuno</option>
-      {Object.keys(listini)
-        .filter(nome => {
-          if (modalTipo === "prospetto") {            return listini[nome]?.tipoListino === "SCARICO";          }
-          if (modalTipo === "fattura") {            return listini[nome]?.tipoListino === "CARICO";          }
-          return true;
-        })
-        .map(nome => (
-          <option key={nome} value={nome}>
-            {nome}
-          </option>
-        ))}
-    </select>
-  </label>
-  <button onClick={async () => { 
-     await applyListino({
-  movimentiIds: pulitiIds,
-  listino: listinoApplicato,
-  db,
-  collectionName: modalTipo === "fattura" ? "carichi" : "scarichi",
-  tipoMovimento: modalTipo === "fattura" ? "carico" : "scarico"
-});
-  await fetchMovimenti();      // 🔥 RICARICA DB
-  setReloadKey(prev => prev + 1); // 🔥 FORZA RE-RENDER MODAL
-}}
-  disabled={listinoApplicato === "tutti"} >
-    ⚡ Applica
-  </button>
-</div>
+      <h2>
+  {modalTipo === "prospetto"
+    ? (
+        modalData.documentoEsistente
+          ? "📑 Prospetto Fattura Pagata"
+          : "📑 Prospetto Fattura"
+      )
+    : (
+        modalData.documentoEsistente
+          ? "📄 Fattura Pagata"
+          : "📄 Fattura"
+      )}
+</h2>
+{!modalData.documentoEsistente && (
+  <div style={{
+    marginBottom: "15px",
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    border: "1px solid #ddd",
+    padding: "10px",
+    borderRadius: "6px",
+    background: "#f9f9f9"
+  }}>
+    <label>
+      📊 Applica listino:
+      <select
+        value={listinoApplicato}
+        onChange={async (e) => {
+          const nuovoListino = e.target.value;
+
+          setListinoApplicato(nuovoListino);
+
+          if (nuovoListino === "tutti") {
+            try {
+              const movimentiOriginali = await Promise.all(
+                pulitiIds.map(async (id) => {
+                  const movimento = scarichi.find(m => m.id === id);
+
+                  if (!movimento) {
+                    return null;
+                  }
+
+                  const collectionMovimento =
+                    movimento.tipo === "carico"
+                      ? "carichi"
+                      : "scarichi";
+
+                  const field =
+                    movimento.tipo === "carico"
+                      ? "carico"
+                      : "scarico";
+
+                  const snap = await getDoc(
+                    doc(db, collectionMovimento, id)
+                  );
+
+                  if (!snap.exists()) {
+                    return movimento;
+                  }
+
+                  const data = snap.data();
+
+                  return {
+                    ...movimento,
+                    cer: Array.isArray(data[field])
+                      ? data[field]
+                      : []
+                  };
+                })
+              );
+
+              setScarichi(prev =>
+                prev.map(m => {
+                  const originale = movimentiOriginali.find(
+                    x => x && x.id === m.id
+                  );
+
+                  return originale || m;
+                })
+              );
+
+            } catch (err) {
+              console.error(
+                "❌ ERRORE RIPRISTINO PREZZI ORIGINALI:",
+                err
+              );
+            }
+
+            return;
+          }
+
+          await applyListino({
+            movimentiIds: pulitiIds,
+            listino: nuovoListino,
+            db,
+            scarichi,
+            setScarichi
+          });
+        }}
+      >
+        <option value="tutti">Nessuno</option>
+
+        {Object.keys(listini)
+          .filter(nome => {
+            if (modalTipo === "prospetto") {
+              return listini[nome]?.tipoListino === "SCARICO";
+            }
+
+            if (modalTipo === "fattura") {
+              return listini[nome]?.tipoListino === "CARICO";
+            }
+
+            return true;
+          })
+          .map(nome => (
+            <option key={nome} value={nome}>
+              {nome}
+            </option>
+          ))}
+      </select>
+    </label>
+  </div>
+)}
       <p><b>Cliente:</b> {modalData.cliente}</p>
       <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
         <thead>
@@ -1712,16 +2177,31 @@ totale += tot;
 </h3>
 
 
-<div style={{ marginTop: 10, marginBottom: 10 }}>
-  <div style={{ fontWeight: "bold", marginBottom: 5 }}>
-    Salva il movimento pagabile dal:
+{!modalData.documentoEsistente && (
+  <div style={{ marginTop: 10, marginBottom: 10 }}>
+    <div style={{ fontWeight: "bold", marginBottom: 5 }}>
+      Salva il movimento pagabile dal:
+    </div>
+    <DatePicker
+      selected={dataSalvataggio}
+      onChange={(date) => setDataSalvataggio(date)}
+      minDate={minDataSalvataggio}
+      maxDate={new Date()}
+      dateFormat="dd/MM/yyyy"
+    />
   </div>
-  <DatePicker
-    selected={dataSalvataggio}    onChange={(date) => setDataSalvataggio(date)}
-    minDate={minDataSalvataggio}    maxDate={new Date()}    dateFormat="dd/MM/yyyy"  />
-</div>
+)}
       <div style={{ marginTop: 20 }}>
-        <button onClick={handleSalvaDocumento}>          💾 Salva        </button>
+       <button
+  onClick={handleSalvaDocumento}
+  disabled={modalData.documentoEsistente}
+  style={{
+    opacity: modalData.documentoEsistente ? 0.5 : 1,
+    cursor: modalData.documentoEsistente ? "not-allowed" : "pointer"
+  }}
+>
+  💾 Salva
+</button>
         <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
         <button          onClick={() => setModalData(null)}          style={{ marginLeft: 10 }}        >          ❌ Chiudi        </button>
       </div>
