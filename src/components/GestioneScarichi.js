@@ -1952,7 +1952,7 @@ totale += tot;
     ? (
         modalData.documentoEsistente
           ? "📑 Prospetto Fattura  (Pagata)"
-          : "📑 Prospetto Fattura(Da Pagare)"
+          : "📑 Prospetto Fattura (Da Pagare)"
       )
     : (
         modalData.documentoEsistente
