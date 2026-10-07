@@ -1,13 +1,23 @@
 // src/components/ConfigurazioniGenerali.js
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc
+} from "firebase/firestore";
+
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { it } from "date-fns/locale";
 import { signOut } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
+
 import Select from "react-select";
 const ConfigurazioniGenerali = ({ logout }) => {
   const navigate = useNavigate();
@@ -25,6 +35,31 @@ const [listinoScaricoDefault, setListinoScaricoDefault] = useState("");
    const [messaggioFIR, setMessaggioFIR] = useState("");
   const [mailRecupero, setMailRecupero] = useState("");
 const [listini, setListini] = useState([]);
+const [codiceFiscale, setCodiceFiscale] = useState("");
+const [codiceDestinatario, setCodiceDestinatario] = useState("");
+const [pec, setPec] = useState("");
+const [emailAziendale, setEmailAziendale] = useState("");
+const [regimeFiscale, setRegimeFiscale] = useState("RF18");
+const [naturaIvaDefault, setNaturaIvaDefault] = useState("N6.1");
+const [riferimentoNormativo, setRiferimentoNormativo] = useState(
+  "N6.1 - ART. 74 C.7 E 8 DPR 633/72"
+);
+const [condizioniPagamentoDefault, setCondizioniPagamentoDefault] =
+  useState("TP02");
+const [modalitaPagamentoDefault, setModalitaPagamentoDefault] =
+  useState("MP05");
+
+const [banche, setBanche] = useState([]);
+const [bancaNome, setBancaNome] = useState("");
+const [bancaIban, setBancaIban] = useState("");
+const [bancaAbi, setBancaAbi] = useState("");
+const [bancaCab, setBancaCab] = useState("");
+const [bancaBic, setBancaBic] = useState("");
+const [bancaIntestatario, setBancaIntestatario] = useState("");
+const [bancaPredefinita, setBancaPredefinita] = useState(true);
+const [bancaAttiva, setBancaAttiva] = useState(true);
+const [bancaModificaId, setBancaModificaId] = useState(null);
+const [loadingBanca, setLoadingBanca] = useState(false);
 
   // 🔥 FIX: ora è una Date vera
   const [giornoAvviamento, setGiornoAvviamento] = useState(null);
@@ -50,11 +85,54 @@ const [listini, setListini] = useState([]);
           setIndirizzo(data.indirizzo || "");
           setCapCitta(data.capCitta || "");
           setPiva(data.piva || "");
-          setLogoBase64(data.logoBase64 || "");
-          setGuadagnoMinKg(
-            data.guadagnoMinKg !== undefined ? data.guadagnoMinKg : 0.2
-          );
-          setMailRecupero(data.mailRecupero || "");
+setCodiceFiscale(
+  data.codiceFiscale || data.piva || ""
+);
+setCodiceDestinatario(
+  data.codiceDestinatario ||
+  data["Cod.destinatario"] ||
+  ""
+);
+setPec(data.pec || "");
+setEmailAziendale(
+  data.emailAziendale ||
+  data.mailRecupero ||
+  ""
+);
+setLogoBase64(data.logoBase64 || "");
+
+setGuadagnoMinKg(
+  data.guadagnoMinKg !== undefined
+    ? data.guadagnoMinKg
+    : 0.2
+);
+
+setMailRecupero(
+  data.mailRecupero || ""
+);
+
+setRegimeFiscale(
+  data.regimeFiscale || "RF18"
+);
+
+setNaturaIvaDefault(
+  data.naturaIvaDefault || "N6.1"
+);
+
+setRiferimentoNormativo(
+  data.riferimentoNormativo ||
+  "N6.1 - ART. 74 C.7 E 8 DPR 633/72"
+);
+
+setCondizioniPagamentoDefault(
+  data.condizioniPagamentoDefault ||
+  "TP02"
+);
+
+setModalitaPagamentoDefault(
+  data.modalitaPagamentoDefault ||
+  "MP05"
+);
 
           // 🔥 FIX: parsing ISO -> Date
           setGiornoAvviamento(
@@ -90,7 +168,40 @@ useEffect(() => {
   fetchListini();
 }, []);
 
+useEffect(() => {
+  const fetchBanche = async () => {
+    try {
+      const snap = await getDocs(
+        collection(db, "banche")
+      );
 
+      const arr = snap.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .sort((a, b) => {
+          if (a.predefinita && !b.predefinita) return -1;
+          if (!a.predefinita && b.predefinita) return 1;
+
+          return (a.nome || "").localeCompare(
+            b.nome || "",
+            "it"
+          );
+        });
+
+      setBanche(arr);
+
+    } catch (err) {
+      console.error(
+        "Errore caricamento banche:",
+        err
+      );
+    }
+  };
+
+  fetchBanche();
+}, []);
 
   // -------- LOGO --------
   const handleFileChange = (e) => {
@@ -105,38 +216,66 @@ useEffect(() => {
     reader.readAsDataURL(file);
   };
 
-  // -------- SAVE --------
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      await setDoc(doc(db, "configurazioni", "datiAzienda"), {
+ const handleSave = async () => {
+  setLoading(true);
+
+  try {
+    await setDoc(
+      doc(db, "configurazioni", "datiAzienda"),
+      {
         logoBase64,
         ragioneSociale,
         indirizzo,
         capCitta,
+
         piva,
-        guadagnoMinKg,
+        codiceFiscale,
+        codiceDestinatario,
+
+        pec,
+        emailAziendale,
         mailRecupero,
 
-        // 🔥 FIX: salva ISO standard
+        regimeFiscale,
+        naturaIvaDefault,
+        riferimentoNormativo,
+        condizioniPagamentoDefault,
+        modalitaPagamentoDefault,
+
+        guadagnoMinKg,
+
         giornoAvviamento: giornoAvviamento
           ? giornoAvviamento.toISOString()
           : null,
 
         updatedAt: new Date(),
-        ListinoCARICODefault: listinoCaricoDefault,
-ListinoSCARICODefault: listinoScaricoDefault,
 
-      });
+        ListinoCARICODefault:
+          listinoCaricoDefault,
 
-      setMessaggio("Configurazione salvata con successo ✅");
-    } catch (err) {
-      console.error(err);
-      setMessaggio("Errore durante il salvataggio ❌");
-    } finally {
-      setLoading(false);
-    }
-  };
+        ListinoSCARICODefault:
+          listinoScaricoDefault,
+      },
+      {
+        merge: true
+      }
+    );
+
+    setMessaggio(
+      "Configurazione salvata con successo ✅"
+    );
+
+  } catch (err) {
+    console.error(err);
+
+    setMessaggio(
+      "Errore durante il salvataggio ❌"
+    );
+
+  } finally {
+    setLoading(false);
+  }
+};
 
    const handleAllineaFir = async () => {
     setLoading(true);
@@ -198,7 +337,189 @@ const snap2 = await getDocs(collection(db, "carichi"));
       setLoading(false);
     }
   };
+const resetBanca = () => {
+  setBancaNome("");
+  setBancaIban("");
+  setBancaAbi("");
+  setBancaCab("");
+  setBancaBic("");
+  setBancaIntestatario(ragioneSociale || "");
+  setBancaPredefinita(banche.length === 0);
+  setBancaAttiva(true);
+  setBancaModificaId(null);
+};
 
+const salvaBanca = async () => {
+  if (!bancaNome.trim()) {
+    alert("❌ Inserire il nome della banca");
+    return;
+  }
+
+  if (!bancaIban.trim()) {
+    alert("❌ Inserire l'IBAN");
+    return;
+  }
+
+  setLoadingBanca(true);
+
+  try {
+    const dati = {
+      nome: bancaNome.trim(),
+      iban: bancaIban
+        .replace(/\s+/g, "")
+        .toUpperCase(),
+      abi: bancaAbi.trim(),
+      cab: bancaCab.trim(),
+      bic: bancaBic.trim().toUpperCase(),
+      intestatario:
+        bancaIntestatario.trim() ||
+        ragioneSociale.trim(),
+      predefinita: bancaPredefinita,
+      attiva: bancaAttiva,
+      updatedAt: new Date()
+    };
+
+    /*
+     * Se questa banca diventa predefinita,
+     * togliamo il flag dalle altre.
+     */
+    if (bancaPredefinita) {
+      const snap = await getDocs(
+        collection(db, "banche")
+      );
+
+      for (const d of snap.docs) {
+        if (
+          !bancaModificaId ||
+          d.id !== bancaModificaId
+        ) {
+          await updateDoc(
+            doc(db, "banche", d.id),
+            {
+              predefinita: false
+            }
+          );
+        }
+      }
+    }
+
+    if (bancaModificaId) {
+      await updateDoc(
+        doc(
+          db,
+          "banche",
+          bancaModificaId
+        ),
+        dati
+      );
+    } else {
+      await addDoc(
+        collection(db, "banche"),
+        dati
+      );
+    }
+
+    const snapAggiornato = await getDocs(
+      collection(db, "banche")
+    );
+
+    setBanche(
+      snapAggiornato.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .sort((a, b) => {
+          if (
+            a.predefinita &&
+            !b.predefinita
+          ) {
+            return -1;
+          }
+
+          if (
+            !a.predefinita &&
+            b.predefinita
+          ) {
+            return 1;
+          }
+
+          return (a.nome || "").localeCompare(
+            b.nome || "",
+            "it"
+          );
+        })
+    );
+
+    resetBanca();
+
+  } catch (err) {
+    console.error(
+      "Errore salvataggio banca:",
+      err
+    );
+
+    alert(
+      "❌ Errore durante il salvataggio della banca"
+    );
+
+  } finally {
+    setLoadingBanca(false);
+  }
+};
+
+const modificaBanca = (banca) => {
+  setBancaNome(banca.nome || "");
+  setBancaIban(banca.iban || "");
+  setBancaAbi(banca.abi || "");
+  setBancaCab(banca.cab || "");
+  setBancaBic(banca.bic || "");
+  setBancaIntestatario(
+    banca.intestatario ||
+    ragioneSociale ||
+    ""
+  );
+  setBancaPredefinita(
+    banca.predefinita === true
+  );
+  setBancaAttiva(
+    banca.attiva !== false
+  );
+  setBancaModificaId(banca.id);
+};
+
+const toggleBancaAttiva = async (banca) => {
+  try {
+    await updateDoc(
+      doc(db, "banche", banca.id),
+      {
+        attiva: banca.attiva === false,
+        updatedAt: new Date()
+      }
+    );
+
+    setBanche((prev) =>
+      prev.map((b) =>
+        b.id === banca.id
+          ? {
+              ...b,
+              attiva: banca.attiva === false
+            }
+          : b
+      )
+    );
+
+  } catch (err) {
+    console.error(
+      "Errore modifica stato banca:",
+      err
+    );
+
+    alert(
+      "❌ Errore durante la modifica della banca"
+    );
+  }
+};
 
   return (
     <div style={{ padding: 20 }}>
@@ -315,6 +636,159 @@ const snap2 = await getDocs(collection(db, "carichi"));
         />
         
       </div>
+{/* DATI FISCALI */}
+<div
+  style={{
+    marginTop: 25,
+    marginBottom: 25,
+    padding: 15,
+    border: "1px solid #ccc",
+    borderRadius: 8,
+  }}
+>
+  <h3>Dati fiscali e fatturazione</h3>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Codice Fiscale:</label>
+    <br />
+    <input
+      type="text"
+      value={codiceFiscale}
+      onChange={(e) =>
+        setCodiceFiscale(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Codice Destinatario:</label>
+    <br />
+    <input
+      type="text"
+      value={codiceDestinatario}
+      onChange={(e) =>
+        setCodiceDestinatario(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>PEC:</label>
+    <br />
+    <input
+      type="email"
+      value={pec}
+      onChange={(e) =>
+        setPec(e.target.value)
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>E-mail aziendale:</label>
+    <br />
+    <input
+      type="email"
+      value={emailAziendale}
+      onChange={(e) =>
+        setEmailAziendale(
+          e.target.value
+        )
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Regime fiscale:</label>
+    <br />
+    <input
+      type="text"
+      value={regimeFiscale}
+      onChange={(e) =>
+        setRegimeFiscale(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "120px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Natura IVA predefinita:</label>
+    <br />
+    <input
+      type="text"
+      value={naturaIvaDefault}
+      onChange={(e) =>
+        setNaturaIvaDefault(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "120px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>
+      Riferimento normativo:
+    </label>
+    <br />
+    <input
+      type="text"
+      value={riferimentoNormativo}
+      onChange={(e) =>
+        setRiferimentoNormativo(
+          e.target.value
+        )
+      }
+      style={{ width: "500px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>
+      Condizioni pagamento:
+    </label>
+    <br />
+    <input
+      type="text"
+      value={condizioniPagamentoDefault}
+      onChange={(e) =>
+        setCondizioniPagamentoDefault(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "120px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>
+      Modalità pagamento:
+    </label>
+    <br />
+    <input
+      type="text"
+      value={modalitaPagamentoDefault}
+      onChange={(e) =>
+        setModalitaPagamentoDefault(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "120px" }}
+    />
+  </div>
+</div>
+
+
 <div style={{ marginBottom: 20 }}>
   <label>Listino Carico Default:</label>
 <Select
@@ -361,6 +835,262 @@ const snap2 = await getDocs(collection(db, "carichi"));
   isClearable
 />
 
+</div>
+
+{/* BANCHE */}
+<div
+  style={{
+    marginTop: 25,
+    marginBottom: 25,
+    padding: 15,
+    border: "1px solid #ccc",
+    borderRadius: 8,
+  }}
+>
+  <h3>Gestione Banche</h3>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Nome Banca:</label>
+    <br />
+    <input
+      type="text"
+      value={bancaNome}
+      onChange={(e) =>
+        setBancaNome(e.target.value)
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>IBAN:</label>
+    <br />
+    <input
+      type="text"
+      value={bancaIban}
+      onChange={(e) =>
+        setBancaIban(
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{ width: "400px" }}
+    />
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      gap: 15,
+      marginBottom: 10,
+    }}
+  >
+    <div>
+      <label>ABI:</label>
+      <br />
+      <input
+        type="text"
+        value={bancaAbi}
+        onChange={(e) =>
+          setBancaAbi(e.target.value)
+        }
+        style={{ width: "120px" }}
+      />
+    </div>
+
+    <div>
+      <label>CAB:</label>
+      <br />
+      <input
+        type="text"
+        value={bancaCab}
+        onChange={(e) =>
+          setBancaCab(e.target.value)
+        }
+        style={{ width: "120px" }}
+      />
+    </div>
+
+    <div>
+      <label>BIC (SWIFT):</label>
+      <br />
+      <input
+        type="text"
+        value={bancaBic}
+        onChange={(e) =>
+          setBancaBic(
+            e.target.value.toUpperCase()
+          )
+        }
+        style={{ width: "150px" }}
+      />
+    </div>
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>Intestatario:</label>
+    <br />
+    <input
+      type="text"
+      value={bancaIntestatario}
+      onChange={(e) =>
+        setBancaIntestatario(
+          e.target.value
+        )
+      }
+      style={{ width: "300px" }}
+    />
+  </div>
+
+  <div style={{ marginBottom: 10 }}>
+    <label>
+      <input
+        type="checkbox"
+        checked={bancaPredefinita}
+        onChange={(e) =>
+          setBancaPredefinita(
+            e.target.checked
+          )
+        }
+      />
+      {" "}Banca predefinita
+    </label>
+  </div>
+
+  <div style={{ marginBottom: 15 }}>
+    <label>
+      <input
+        type="checkbox"
+        checked={bancaAttiva}
+        onChange={(e) =>
+          setBancaAttiva(
+            e.target.checked
+          )
+        }
+      />
+      {" "}Banca attiva
+    </label>
+  </div>
+
+  <button
+    onClick={salvaBanca}
+    disabled={loadingBanca}
+    style={{ marginRight: 10 }}
+  >
+    {loadingBanca
+      ? "Salvando..."
+      : bancaModificaId
+      ? "Aggiorna Banca"
+      : "Aggiungi Banca"}
+  </button>
+
+  {bancaModificaId && (
+    <button
+      onClick={resetBanca}
+    >
+      Annulla modifica
+    </button>
+  )}
+
+  <hr
+    style={{
+      marginTop: 20,
+      marginBottom: 20
+    }}
+  />
+
+  {banche.length === 0 ? (
+    <div>
+      Nessuna banca configurata.
+    </div>
+  ) : (
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+      }}
+    >
+      <thead>
+        <tr>
+          <th style={{ textAlign: "left" }}>
+            Banca
+          </th>
+          <th style={{ textAlign: "left" }}>
+            IBAN
+          </th>
+          <th style={{ textAlign: "left" }}>
+            ABI
+          </th>
+          <th style={{ textAlign: "left" }}>
+            CAB
+          </th>
+          <th style={{ textAlign: "left" }}>
+            Stato
+          </th>
+          <th style={{ textAlign: "left" }}>
+            Azioni
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {banche.map((banca) => (
+          <tr key={banca.id}>
+            <td>
+              {banca.nome}
+              {banca.predefinita && (
+                <strong>
+                  {" "}⭐
+                </strong>
+              )}
+            </td>
+
+            <td>
+              {banca.iban || "-"}
+            </td>
+
+            <td>
+              {banca.abi || "-"}
+            </td>
+
+            <td>
+              {banca.cab || "-"}
+            </td>
+
+            <td>
+              {banca.attiva === false
+                ? "Disattiva"
+                : "Attiva"}
+            </td>
+
+            <td>
+              <button
+                onClick={() =>
+                  modificaBanca(banca)
+                }
+                style={{
+                  marginRight: 5
+                }}
+              >
+                Modifica
+              </button>
+
+              <button
+                onClick={() =>
+                  toggleBancaAttiva(
+                    banca
+                  )
+                }
+              >
+                {banca.attiva === false
+                  ? "Attiva"
+                  : "Disattiva"}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
 </div>
 
       {/* 🔥 GIORNO AVVIAMENTO FIXATO */}

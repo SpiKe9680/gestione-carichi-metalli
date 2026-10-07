@@ -1,0 +1,43 @@
+ Il volume nell'unit… C Š Acer
+ Numero di serie del volume: 84A0-80A5
+
+ Directory di C:\GestioneCarichiMetalli\gestione-carichi-metalli\scriptDB
+
+07/10/2026  14:14    <DIR>          .
+06/10/2026  17:48    <DIR>          ..
+07/10/2026  14:08    <DIR>          CER
+07/10/2026  14:14                 0 diocane.txt
+03/09/2026  15:14               561 importCER.js
+07/10/2026  14:01             2.036 importCER_all.js
+02/09/2026  15:49             2.430 serviceAccountKey.json
+               4 File          5.027 byte
+
+ Directory di C:\GestioneCarichiMetalli\gestione-carichi-metalli\scriptDB\CER
+
+07/10/2026  14:08    <DIR>          .
+07/10/2026  14:14    <DIR>          ..
+02/09/2026  15:43             3.538 01.json
+02/09/2026  16:28             5.051 02.json
+02/09/2026  16:55             2.473 03.json
+02/09/2026  16:57             2.320 04.json
+02/09/2026  17:00             2.992 05.json
+02/09/2026  17:11             6.381 06.json
+03/09/2026  14:39            10.008 07.json
+03/09/2026  14:41             5.333 08.json
+03/09/2026  14:42             1.644 09.json
+03/09/2026  14:45            22.808 10.json
+03/09/2026  14:46             3.797 11.json
+03/09/2026  14:51             3.132 12.json
+03/09/2026  14:55             4.609 13.json
+03/09/2026  14:56               703 14.json
+03/09/2026  14:58             1.767 15.json
+03/09/2026  15:02            10.615 16.json
+03/09/2026  15:06             5.590 17.json
+03/09/2026  15:10             2.607 18.json
+03/09/2026  15:13            14.575 19.json
+03/09/2026  15:14             4.731 20.json
+              20 File        114.674 byte
+
+     Totale file elencati:
+              24 File        119.701 byte
+               5 Directory  811.658.051.584 byte disponibili

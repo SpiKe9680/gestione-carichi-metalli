@@ -9,20 +9,9 @@ import autoTable from "jspdf-autotable";
 // --- Blocchetto Data/Ora per editor ---
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
-import {  PdfHeader } from "../utils/dateUtils";
+
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 registerLocale("it", it);
-const mesiItaliani = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
-const formattaDataItaliana = (date) => {
-  if (!date) return "";
-  const gg = String(date.getDate()).padStart(2, "0");
-  const mese = mesiItaliani[date.getMonth()];
-  const yyyy = date.getFullYear();
-  return `${gg} ${mese} ${yyyy}`;
-};
-
-const formattaOra24 = (date) =>
-  `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
 const getUtenteReact = () => {
   const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
 
@@ -35,16 +24,55 @@ const getUtenteReact = () => {
   );
 };
 
+
+const registraErroreDb = async ({
+  operazione,
+  collezione = null,
+  documentoId = null,
+  errore,
+  before = null
+}) => {
+  console.error(
+    `❌ ERRORE DB - ${operazione}:`,
+    errore
+  );
+
+  try {
+    await scriviLog({
+      pagina: "gestione-scarichi-dettaglio",
+      evento: "DB_ERRORE",
+      utente: getUtenteReact(),
+      riferimento: {
+        collezione,
+        documentoId,
+        operazione
+      },
+      before,
+      after: {
+        errore: errore?.message || "Errore sconosciuto",
+        codice: errore?.code || null,
+        stack: errore?.stack || null
+      },
+      ripristinabile: false,
+      meta: {
+        tipo: "DB_ERRORE",
+        operazione
+      }
+    });
+  } catch (erroreLog) {
+    console.error(
+      "❌ ERRORE SCRITTURA LOG DB:",
+      erroreLog
+    );
+  }
+};
+
+
 const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "tutti", filtroListinoProp = "tutti", tipoMovimentoProp = "scarico" }) => {
-  console.log("📌 Props ricevute nel dettaglio:", { 
-    giornoSelezionato, 
-    filtroFornitoreProp, 
-    filtroListinoProp, 
-    tipoMovimentoProp 
-});
+
   const [tipoMovimento] = useState(tipoMovimentoProp); // default scarico
   const [righe, setRighe] = useState([]);
-  console.log("📌 Stato iniziale righe:", righe);
+
   const [listini, setListini] = useState({});
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [editor, setEditor] = useState(null);
@@ -63,9 +91,107 @@ const [currentPageScarichi, setCurrentPageScarichi] = useState(1);
 const [filtroFIR, setFiltroFIR] = useState("tutti");
 const [filtroMateriale, setFiltroMateriale] = useState("tutti");
 const valoriTipo = React.useMemo(() => ["tutti", ...Array.from(new Set(righe.map(r => r.tipo).filter(Boolean)))], [righe]);
-console.log("📌 Righe aggiornate:", righe);
+
 const [filtroTipo, setFiltroTipo] = useState("tutti");
-  const [sortConfig] = useState({ key: "ora", direction: "desc" });
+const [sortConfigCarichi, setSortConfigCarichi] = useState({
+  key: "ora",
+  direction: "desc"
+});
+
+const [sortConfigScarichi, setSortConfigScarichi] = useState({
+  key: "ora",
+  direction: "desc"
+});
+
+const cambiaSort = (
+  key,
+  sortConfig,
+  setSortConfig,
+  setPagina
+) => {
+  const direction =
+    sortConfig.key === key && sortConfig.direction === "asc"
+      ? "desc"
+      : "asc";
+
+  setSortConfig({
+    key,
+    direction
+  });
+
+  setPagina(1);
+};
+
+const iconaSort = (sortConfig, key) => {
+  if (sortConfig.key !== key) return " ↕";
+  return sortConfig.direction === "asc"
+    ? " ▲"
+    : " ▼";
+};
+
+const ordinaRighe = (righe, sortConfig) => {
+  const getValore = (r, key) => {
+    switch (key) {
+      case "totale":
+        return Number(r.netto ?? 0) * Number(r.prezzoKg ?? 0);
+
+      default:
+        return r[key];
+    }
+  };
+
+  return [...righe].sort((a, b) => {
+    let va = getValore(a, sortConfig.key);
+    let vb = getValore(b, sortConfig.key);
+
+    if (va == null) va = "";
+    if (vb == null) vb = "";
+
+    // Ordinamento numerico
+    if (
+      typeof va === "number" ||
+      typeof vb === "number"
+    ) {
+      va = Number(va) || 0;
+      vb = Number(vb) || 0;
+    }
+
+    // Ordinamento ora
+    if (sortConfig.key === "ora") {
+      const parseOra = (valore) => {
+        if (!valore) return -1;
+
+        const [hh, mm] = String(valore)
+          .split(":")
+          .map(Number);
+
+        return (hh || 0) * 60 + (mm || 0);
+      };
+
+      va = parseOra(va);
+      vb = parseOra(vb);
+    }
+
+    // Ordinamento testo
+    if (
+      typeof va === "string" &&
+      typeof vb === "string"
+    ) {
+      va = va.toLowerCase();
+      vb = vb.toLowerCase();
+    }
+
+    if (va < vb) {
+      return sortConfig.direction === "asc" ? -1 : 1;
+    }
+
+    if (va > vb) {
+      return sortConfig.direction === "asc" ? 1 : -1;
+    }
+
+    return 0;
+  });
+};
   const navigate = useNavigate();
   const editorRef = useRef(null);
   
@@ -83,16 +209,29 @@ const [filtroTipo, setFiltroTipo] = useState("tutti");
   const giornoParsed = parseData(giornoSelezionato);
   const dataLabel = giornoParsed ? giornoParsed.toLocaleDateString("it-IT") : "Data non valida";
 const getLabelFornDest = () => "Controparte";
-  const loadListini = async () => {
-    try {
-      const snap = await getDocs(collection(db, "listini"));
-      const mapListini = {};
-      snap.docs.forEach(d => {
-        mapListini[d.data().nome] = d.data().prezzi || {};
-      });
-      setListini(mapListini);
-    } catch(e) { console.error("Errore load listini:", e); }
-  };
+const loadListini = async () => {
+  try {
+    const snap = await getDocs(
+      collection(db, "listini")
+    );
+
+    const mapListini = {};
+
+    snap.docs.forEach(d => {
+      mapListini[d.data().nome] =
+        d.data().prezzi || {};
+    });
+
+    setListini(mapListini);
+
+  } catch (e) {
+    await registraErroreDb({
+      operazione: "CARICAMENTO_LISTINI",
+      collezione: "listini",
+      errore: e
+    });
+  }
+};
   useEffect(() => {
   loadListini(); // carica la lista dei listini
 }, []);
@@ -106,34 +245,83 @@ const [scarichiDelGiorno, setScarichiDelGiorno] = useState([]);
 useEffect(() => {
   const load = async () => {
     try {
-      const snapScarichi = await getDocs(collection(db, "scarichi"));
-      const snapCarichi = await getDocs(collection(db, "carichi"));
+      const snapScarichi = await getDocs(
+        collection(db, "scarichi")
+      );
+
+      const snapCarichi = await getDocs(
+        collection(db, "carichi")
+      );
 
       const tuttiDocs = [
-        ...snapScarichi.docs.map(d => ({ id: d.id, ...d.data() })),
-        ...snapCarichi.docs.map(d => ({ id: d.id, ...d.data() }))
+        ...snapScarichi.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        })),
+
+        ...snapCarichi.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
       ];
 
-      const giornoParsedLocal = parseData(giornoSelezionato);
+      const giornoParsedLocal =
+        parseData(giornoSelezionato);
+
       if (!giornoParsedLocal) return;
 
-      const start = new Date(giornoParsedLocal);
-      start.setHours(0, 0, 0, 0);
+      const start =
+        new Date(giornoParsedLocal);
 
-      const end = new Date(giornoParsedLocal);
-      end.setHours(23, 59, 59, 999);
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
 
-      const datiGiorno = tuttiDocs.filter(d => {
-        if (!d.data) return false;
-        const ts = d.data.toDate ? d.data.toDate() : new Date(d.data);
-        return ts >= start && ts <= end;
-      });
+      const end =
+        new Date(giornoParsedLocal);
 
-      setScarichiDelGiorno(datiGiorno);
+      end.setHours(
+        23,
+        59,
+        59,
+        999
+      );
+
+      const datiGiorno =
+        tuttiDocs.filter(d => {
+          if (!d.data) return false;
+
+          const ts =
+            d.data.toDate
+              ? d.data.toDate()
+              : new Date(d.data);
+
+          return (
+            ts >= start &&
+            ts <= end
+          );
+        });
+
+      setScarichiDelGiorno(
+        datiGiorno
+      );
 
     } catch (e) {
-      console.error("Errore load:", e);
-      setErrori(prev => [...prev, e.message]);
+      await registraErroreDb({
+        operazione:
+          "CARICAMENTO_MOVIMENTI_GIORNO",
+        collezione:
+          "scarichi/carichi",
+        errore: e
+      });
+
+      setErrori(prev => [
+        ...prev,
+        e.message
+      ]);
     }
   };
 
@@ -258,9 +446,9 @@ return movimenti.flatMap((cer) => {
 
 
   });
-  const sorted = [...righePronte];
-  setRighe(sorted);
-}, [scarichiDelGiorno, sortConfig]);
+const sorted = [...righePronte];
+setRighe(sorted);
+}, [scarichiDelGiorno]);
   const ordinaDropdown = (valori) => {
   // Estrai tutti tranne "tutti" e ordina
   const ordinati = valori.filter(v => v !== "tutti").sort((a,b) => a.localeCompare(b));
@@ -285,39 +473,19 @@ const righeFiltrate = righe.filter(r =>
   (filtroMateriale==="tutti" || r.materiale===filtroMateriale) &&
   (filtroTipo==="tutti" || (r.tipo || "").toLowerCase() === filtroTipo.toLowerCase())
 );
-const righeOrdinati = [...righeFiltrate].sort((a, b) => {
-  const { key, direction } = sortConfig;
+const righeCarichiAll = ordinaRighe(
+  righeFiltrate.filter(
+    r => (r.tipo || "").toLowerCase() === "carico"
+  ),
+  sortConfigCarichi
+);
 
-  let va = a[key];
-  let vb = b[key];
-
-  // null/undefined safe
-  if (va == null) va = "";
-  if (vb == null) vb = "";
-
-  // numeri
-  if (!isNaN(va) && !isNaN(vb)) {
-    va = Number(va);
-    vb = Number(vb);
-  }
-
-  // stringhe
-  if (typeof va === "string") va = va.toLowerCase();
-  if (typeof vb === "string") vb = vb.toLowerCase();
-
-  // date (ora)
-  if (key === "ora") {
-    va = new Date("1970-01-01 " + a.ora);
-    vb = new Date("1970-01-01 " + b.ora);
-  }
-
-  if (va < vb) return direction === "asc" ? -1 : 1;
-  if (va > vb) return direction === "asc" ? 1 : -1;
-  return 0;
-});
-// 🔥 PRIMA SPLIT
-const righeCarichiAll = righeOrdinati.filter(r => (r.tipo || "").toLowerCase() === "carico");
-const righeScarichiAll = righeOrdinati.filter(r => (r.tipo || "").toLowerCase() === "scarico");
+const righeScarichiAll = ordinaRighe(
+  righeFiltrate.filter(
+    r => (r.tipo || "").toLowerCase() === "scarico"
+  ),
+  sortConfigScarichi
+);
 
 // 🔥 PAGINAZIONE SEPARATA
 const paginatedCarichi = rowsPerPage && rowsPerPage !== "tutte"
@@ -354,62 +522,154 @@ const scarichi = righeFiltrate.filter(r => (r.tipo || "").toLowerCase() === "sca
 
 
 
-
 const selezionaRiga = async (r, tipo) => {
-  console.log("🟦 SELEZIONA_RIGA — SOLO DB, IGNORO COMPLETAMENTE r");
+  try {
+    const ref = doc(
+      db,
+      r.sourceCollection || "scarichi",
+      r.docId
+    );
 
-  const ref = doc(db, r.sourceCollection || "scarichi", r.docId);
-  const snap = await getDoc(ref);
+    const snap = await getDoc(ref);
 
-  if (!snap.exists()) {
-    alert("Documento non trovato");
-    return;
+    if (!snap.exists()) {
+      const errore =
+        new Error(
+          "Documento non trovato"
+        );
+
+      await registraErroreDb({
+        operazione:
+          "LETTURA_RIGA_MODIFICA",
+        collezione:
+          r.sourceCollection ||
+          "scarichi",
+        documentoId:
+          r.docId,
+        errore
+      });
+
+      alert("Documento non trovato");
+      return;
+    }
+
+    const dati = snap.data();
+
+    const field =
+      Array.isArray(dati.scarico)
+        ? "scarico"
+        : "carico";
+
+    const cerObj =
+      dati[field]?.[r.cerIndex];
+
+    if (!cerObj) {
+      throw new Error(
+        "CER non trovato nel documento"
+      );
+    }
+
+    const rigaOriginale =
+      cerObj.righe?.[r.rIndex];
+
+    if (!rigaOriginale) {
+      throw new Error(
+        "Riga non trovata nel documento"
+      );
+    }
+
+    const editorCompleto = {
+      ...rigaOriginale,
+
+      fir:
+        cerObj.fir,
+
+      prezzoKg:
+        rigaOriginale.prezzoKg ??
+        rigaOriginale.prezzoAcquisto ??
+        rigaOriginale.prezzoVendita ??
+        rigaOriginale.prezzo ??
+        0,
+
+      prezzoAcquisto:
+        rigaOriginale.prezzoAcquisto ??
+        null,
+
+      prezzoVendita:
+        rigaOriginale.prezzoVendita ??
+        null,
+
+      prezzo:
+        rigaOriginale.prezzo ??
+        null,
+
+      docId:
+        r.docId,
+
+      cerIndex:
+        r.cerIndex,
+
+      rIndex:
+        r.rIndex,
+
+      tipo,
+
+      sourceCollection:
+        r.sourceCollection,
+
+      fornitore:
+        dati.fornitore,
+
+      listino:
+        dati.listino,
+
+      data:
+        dati.data?.toDate?.() ||
+        new Date(),
+
+      ora:
+        dati.data?.toDate?.()
+          ? dati.data
+              .toDate()
+              .toLocaleTimeString(
+                "it-IT",
+                {
+                  hour: "2-digit",
+                  minute: "2-digit"
+                }
+              )
+          : r.ora
+    };
+
+    setEditor(
+      structuredClone(
+        editorCompleto
+      )
+    );
+
+    setOriginalEditor(
+      structuredClone(
+        editorCompleto
+      )
+    );
+
+  } catch (error) {
+    await registraErroreDb({
+      operazione:
+        "LETTURA_RIGA_MODIFICA",
+      collezione:
+        r?.sourceCollection ||
+        "scarichi",
+      documentoId:
+        r?.docId || null,
+      errore:
+        error
+    });
+
+    alert(
+      "Errore durante il caricamento della riga"
+    );
   }
-
-  const dati = snap.data();
-  const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
-
-  const cerObj = dati[field][r.cerIndex];
-  const rigaOriginale = cerObj.righe[r.rIndex];
-
-  console.log("📌 RIGA ORIGINALE DB:", rigaOriginale);
-
- const editorCompleto = {
-  ...rigaOriginale,
-
-  fir: cerObj.fir,
-
-  // 🔥 AGGIUNTA DEI PREZZI DAL DB
-  prezzoKg: rigaOriginale.prezzoKg 
-    ?? rigaOriginale.prezzoAcquisto 
-    ?? rigaOriginale.prezzoVendita 
-    ?? rigaOriginale.prezzo 
-    ?? 0,
-
-  prezzoAcquisto: rigaOriginale.prezzoAcquisto ?? null,
-  prezzoVendita: rigaOriginale.prezzoVendita ?? null,
-  prezzo: rigaOriginale.prezzo ?? null,
-
-  // info necessarie per la modifica
-  docId: r.docId,
-  cerIndex: r.cerIndex,
-  rIndex: r.rIndex,
-  tipo,
-  sourceCollection: r.sourceCollection,
-
-  // dati del documento
-  fornitore: dati.fornitore,
-  listino: dati.listino,
-  data: dati.data?.toDate?.() || new Date(),
-
-  ora: dati.data?.toDate?.()
-    ? dati.data.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
-    : r.ora
-};
-
-
-setEditor(structuredClone(editorCompleto));
-setOriginalEditor(structuredClone(editorCompleto));
 };
 
 
@@ -426,57 +686,80 @@ const updateEditor = (campo, valore) => {
     const nuovo = { ...prev };
     const num = (v) => Number(v) || 0;
 
-		
-						 
-						 
-						  
-	   
-							
-	 
-
     // =========================
-    // PESI
+    // PESO LORDO
     // =========================
     if (campo === "peso") {
       nuovo.peso = num(valore);
-      nuovo.netto = nuovo.peso - (nuovo.calo || 0);
     }
 
+    // =========================
+    // CALO
+    // =========================
     if (campo === "calo") {
       nuovo.calo = num(valore);
-      nuovo.netto = (nuovo.peso || 0) - nuovo.calo;
     }
 
-   // 🔥 Calcolo netto automatico
-if (campo === "peso" || campo === "calo") {
-  const pesoLordo = Number(nuovo.peso ?? 0);
-  const caloVal = Number(nuovo.calo ?? 0);
-						 
+    // =========================
+    // TIPO CALO
+    // =========================
+    if (campo === "caloTipo") {
+      nuovo.caloTipo = valore;
+    }
 
-									
-  let caloKg = caloVal;
-																	   
-	 
+    // =========================
+    // TARA
+    // =========================
+    if (campo === "tara") {
+      nuovo.tara = num(valore);
+    }
 
-  // % → Kg
-  if (nuovo.caloTipo === "perc") {
-    caloKg = pesoLordo * (caloVal / 100);
-  }
+    // =========================
+    // CALCOLO NETTO
+    // =========================
+    if (
+      campo === "peso" ||
+      campo === "calo" ||
+      campo === "caloTipo" ||
+      campo === "tara"
+    ) {
+      const pesoLordo =
+        Number(nuovo.peso ?? 0);
 
-  // Arrotondamento metalli
-  caloKg = caloKg <= 0.50 ? Math.floor(caloKg) : Math.ceil(caloKg);
+      const caloVal =
+        Number(nuovo.calo ?? 0);
 
-  nuovo.netto = pesoLordo - caloKg;
-}
+      const taraKg =
+        Number(nuovo.tara ?? 0);
 
+      let caloKg = caloVal;
+
+      if (nuovo.caloTipo === "perc") {
+        caloKg =
+          pesoLordo * (caloVal / 100);
+
+        caloKg =
+          caloKg <= 0.50
+            ? Math.floor(caloKg)
+            : Math.ceil(caloKg);
+      }
+
+      nuovo.netto =
+        pesoLordo -
+        caloKg -
+        taraKg;
+    }
 
     // =========================
     // PREZZO
     // =========================
     if (campo === "prezzoKg") {
       const prezzo = num(valore);
+
       nuovo.prezzoKg = prezzo;
-      nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
+
+      nuovo.costoTotale =
+        (nuovo.netto || 0) * prezzo;
     }
 
     // =========================
@@ -485,16 +768,30 @@ if (campo === "peso" || campo === "calo") {
     if (campo === "listino") {
       nuovo.listino = valore;
 
-      const materiale = nuovo.materiale;
-      const tipoPrezzo = nuovo.tipo === "carico" ? "vendita" : "acquisto";
+      const materiale =
+        nuovo.materiale;
 
-      const prezziListino = listini?.[valore];
-      const prezzoDaListino = prezziListino?.[materiale]?.[tipoPrezzo];
+      const tipoPrezzo =
+        nuovo.tipo === "carico"
+          ? "vendita"
+          : "acquisto";
+
+      const prezziListino =
+        listini?.[valore];
+
+      const prezzoDaListino =
+        prezziListino?.[materiale]?.[
+          tipoPrezzo
+        ];
 
       if (prezzoDaListino != null) {
-        const prezzo = num(prezzoDaListino);
+        const prezzo =
+          num(prezzoDaListino);
+
         nuovo.prezzoKg = prezzo;
-        nuovo.costoTotale = (nuovo.netto || 0) * prezzo;
+
+        nuovo.costoTotale =
+          (nuovo.netto || 0) * prezzo;
       }
     }
 
@@ -520,30 +817,44 @@ if (campo === "peso" || campo === "calo") {
     }
 
     // =========================
-    // 🔥 FIX DEFINITIVO DATA + ORA (SEMPRE SINCRONIZZATI)
+    // DATA + ORA SEMPRE SINCRONIZZATE
     // =========================
+    const base =
+      nuovo.data
+        ? new Date(nuovo.data)
+        : new Date();
 
-    const base = nuovo.data ? new Date(nuovo.data) : new Date();
-
-    // ora finale sempre coerente
-    const oraFinale = nuovo.ora || prev.ora || "00:00";
+    const oraFinale =
+      nuovo.ora ||
+      prev.ora ||
+      "00:00";
 
     let hh = 0;
     let mm = 0;
 
     if (oraFinale.includes(":")) {
-      const parts = oraFinale.split(":");
-      hh = Number(parts[0]) || 0;
-      mm = Number(parts[1]) || 0;
+      const parts =
+        oraFinale.split(":");
+
+      hh =
+        Number(parts[0]) || 0;
+
+      mm =
+        Number(parts[1]) || 0;
     }
 
-    base.setHours(hh, mm, 0, 0);
+    base.setHours(
+      hh,
+      mm,
+      0,
+      0
+    );
 
-    // forza nuova istanza (React safe)
-    nuovo.data = new Date(base);
+    nuovo.data =
+      new Date(base);
 
-    // normalizza formato ora
-    nuovo.ora = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    nuovo.ora =
+      `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 
     return nuovo;
   });
@@ -676,29 +987,38 @@ const handleStampaScaricoRiga = async (r) => {
   // 🔥 Tabella singola riga — landscape, larga, leggibile
   autoTable(pdf, {
     startY: y,
-    head: [
-      [
-        "Ora", "Fornitore", "CER", "FIR", "Materiale",
-        "Peso Lordo(Kg)",  "Calo","Calo Tipo",
-        "Peso Netto(Kg)", "€/Kg", "Totale(€)", "Listino"
-      ]
-    ],
-    body: [
-      [
-        r.ora,
-        r.fornitore,
-        r.cer,
-        r.fir || "",
-        r.materiale,
-        pesoLordo.toFixed(2),
-        caloVal,
-        tipo === "perc" ? `%` : `Kg`,
-        netto.toFixed(2),
-        prezzoKg.toFixed(2),
-        totale.toFixed(2),
-        r.listino || ""
-      ]
-    ],
+   head: [
+  [
+    "Ora", "Fornitore", "CER", "FIR", "Materiale",
+    "Peso Lordo(Kg)", "Calo", "Tara(Kg)",
+    "Peso Netto(Kg)", "€/Kg", "Totale(€)", "Listino"
+  ]
+],
+  body: [
+  [
+    r.ora,
+    r.fornitore,
+    r.cer,
+    r.fir || "",
+    r.materiale,
+    pesoLordo.toFixed(2),
+
+    Number(caloVal) === 0
+      ? "-"
+      : `${Number(caloVal).toFixed(2)} ${
+          tipo === "perc" ? "%" : "Kg"
+        }`,
+
+    Number(r.tara ?? 0) === 0
+      ? "-"
+      : `${Number(r.tara).toFixed(2)}`,
+
+    netto.toFixed(2),
+    prezzoKg.toFixed(2),
+    totale.toFixed(2),
+    r.listino || ""
+  ]
+],
     theme: "grid",
     styles: { fontSize: 10 }
   });
@@ -707,17 +1027,24 @@ const handleStampaScaricoRiga = async (r) => {
 };
 
 
-async function salvaModifiche({ docRef, editor }) {
-  try {
-    console.log("🟡 START salvaModifiche");
-								 
 
+async function salvaModifiche({ docRef, editor }) {
+  let datiPrima = null;
+
+  try {
     const snap = await getDoc(docRef);
-    if (!snap.exists()) throw new Error("Documento non trovato");
+
+    if (!snap.exists()) {
+      throw new Error("Documento non trovato");
+    }
 
     const dati = snap.data();
-    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
-   
+    datiPrima = dati;
+
+    const field =
+      Array.isArray(dati.scarico)
+        ? "scarico"
+        : "carico";
 
     const normalize = (v) =>
       (v ?? "")
@@ -726,235 +1053,455 @@ async function salvaModifiche({ docRef, editor }) {
         .toUpperCase()
         .replace(/\s+/g, " ");
 
-    console.log("📦 FIELD:", field);
-    console.log("📦 EDITOR INPUT:", editor);
+    const scarichiAggiornati =
+      (dati[field] || []).map(
+        (cerObj, cerIndex) => {
 
-    const scarichiAggiornati = (dati[field] || []).map((cerObj, cerIndex) => {
-			   
-			   
+          const righeAggiornate =
+            (cerObj.righe || []).map(
+              (r, rIndex) => {
 
-      const righeAggiornate = (cerObj.righe || []).map((r, rIndex) => {
+                const match =
+                  cerIndex === editor.cerIndex &&
+                  rIndex === editor.rIndex;
 
-																 
-															  
-        const match =
-          cerIndex === editor.cerIndex &&
-          rIndex === editor.rIndex;
+                if (!match) return r;
 
-        if (!match) return r;
+                // =========================
+                // VALORI MODIFICABILI
+                // =========================
+                const peso =
+                  Number(
+                    editor.peso ?? r.peso ?? 0
+                  );
 
-        // 🔥 VALORI ORIGINALI
-        const peso = Number(editor.peso ?? r.peso);
-        const caloVal = Number(editor.calo ?? r.calo);
-        const tipoCalo = editor.caloTipo ?? r.caloTipo;
+                const caloVal =
+                  Number(
+                    editor.calo ?? r.calo ?? 0
+                  );
 
-        // 🔥 CALCOLO CALO CORRETTO
-        let caloKg = caloVal;
-															 
+                const tara =
+                  Number(
+                    editor.tara ?? r.tara ?? 0
+                  );
 
-        if (tipoCalo === "perc") {
-          caloKg = peso * (caloVal / 100);
-          caloKg = caloKg <= 0.5 ? Math.floor(caloKg) : Math.ceil(caloKg);
+                const tipoCalo =
+                  editor.caloTipo ??
+                  r.caloTipo ??
+                  "kg";
+
+                // =========================
+                // CALCOLO CALO IN KG
+                // =========================
+                let caloKg = caloVal;
+
+                if (tipoCalo === "perc") {
+                  caloKg =
+                    peso *
+                    (caloVal / 100);
+
+                  caloKg =
+                    caloKg <= 0.5
+                      ? Math.floor(caloKg)
+                      : Math.ceil(caloKg);
+                }
+
+                // =========================
+                // CALCOLO NETTO
+                // =========================
+                const netto =
+                  peso -
+                  caloKg -
+                  tara;
+
+                // =========================
+                // PREZZO
+                // =========================
+                const prezzoKg =
+                  Number(
+                    editor.prezzoKg ??
+                    r.prezzoKg ??
+                    0
+                  );
+
+                return {
+                  ...r,
+
+                  // valori aggiornati
+                  peso,
+                  calo: caloVal,
+                  caloTipo: tipoCalo,
+                  tara,
+                  netto,
+
+                  prezzoKg,
+
+                  prezzoAcquisto:
+                    editor.tipo === "scarico"
+                      ? prezzoKg
+                      : r.prezzoAcquisto,
+
+                  prezzoVendita:
+                    editor.tipo === "carico"
+                      ? prezzoKg
+                      : r.prezzoVendita,
+
+                  costoTotale:
+                    netto * prezzoKg,
+
+                  // FIR e CER
+                  fir: normalize(
+                    editor.fir ?? r.fir
+                  ),
+
+                  cer: normalize(
+                    editor.cer ?? r.cer
+                  )
+                };
+              }
+            );
+
+          return {
+            ...cerObj,
+
+            righe:
+              righeAggiornate,
+
+            fir:
+              normalize(editor.fir) ||
+              cerObj.fir,
+
+            cer:
+              normalize(editor.cer) ||
+              cerObj.cer
+          };
         }
-
-        const netto = peso - caloKg;
-										
-							  
-							  
-							  
-	   
-
-								  
-        const prezzoKg = Number(editor.prezzoKg ?? r.prezzoKg);
-										   
-	 
-						 
-			 
-			 
-					  
-						   
-			  
-				 
-					
-									
-								
-		
-
-        return {
-          ...r,
-
-          // 🔥 VALORI CORRETTI
-          peso,
-          calo: caloVal,       // salvo il valore ORIGINALE (kg o %)
-          caloTipo: tipoCalo,  // salvo il tipo
-          netto,
-
-          prezzoKg,
-	   
-
-          prezzoAcquisto:
-            editor.tipo === "scarico"
-              ? prezzoKg
-              : r.prezzoAcquisto,
-
-          prezzoVendita:
-            editor.tipo === "carico"
-              ? prezzoKg
-              : r.prezzoVendita,
-
-          costoTotale: netto * prezzoKg,
-
-          // 🔥 FIR NON SI PERDE PIÙ
-          fir: normalize(editor.fir ?? r.fir),
-
-          // 🔥 CER NON SI PERDE
-          cer: normalize(editor.cer ?? r.cer)
-        };
-      });
-
-      return {
-        ...cerObj,
-        righe: righeAggiornate,
-
-        // 🔥 FIR DEL CER (se serve)
-        fir: normalize(editor.fir) || cerObj.fir
-      };
-    });
+      );
 
     const payload = {
-      [field]: scarichiAggiornati,
+      [field]:
+        scarichiAggiornati,
 
-      ...(editor.data ? { data: editor.data } : {}),
-																 
+      ...(editor.data
+        ? { data: editor.data }
+        : {}),
 
-				   
-			
-      lastUpdate: new Date(),
-	
+      lastUpdate:
+        serverTimestamp(),
 
-      listino: editor.listino ?? dati.listino
+      listino:
+        editor.listino ??
+        dati.listino
     };
 
-											   
-						  
-    console.log("💾 PAYLOAD:", payload);
-	 
-	 
+    // =========================
+    // SCRITTURA DB
+    // =========================
+    await updateDoc(
+      docRef,
+      payload
+    );
 
-    await updateDoc(docRef, payload);
+    // =========================
+    // LEGGIAMO LO STATO REALE
+    // DOPO LA SCRITTURA
+    // =========================
+    const snapAfter =
+      await getDoc(docRef);
 
-    console.log("✅ WRITE COMPLETATO");
-  
+    if (!snapAfter.exists()) {
+      throw new Error(
+        "Documento non trovato dopo la modifica"
+      );
+    }
+
+    const datiDopo =
+      snapAfter.data();
+
+    // =========================
+    // LOG MODIFICA
+    // =========================
+    await scriviLog({
+      pagina:
+        "gestione-scarichi-dettaglio",
+
+      evento:
+        "MODIFICA_RIGA",
+
+      riferimento: {
+        collezione:
+          editor.sourceCollection ||
+          (
+            editor.tipo === "carico"
+              ? "carichi"
+              : "scarichi"
+          ),
+
+        documentoId:
+          editor.docId,
+
+        cerIndex:
+          editor.cerIndex,
+
+        rIndex:
+          editor.rIndex
+      },
+
+      utente:
+        getUtenteReact(),
+
+      before:
+        datiPrima,
+
+      after:
+        datiDopo,
+
+      ripristinabile:
+        true,
+
+      meta: {
+        tipo: "MODIFICA",
+        operazione:
+          "MODIFICA_RIGA"
+      }
+    });
 
   } catch (err) {
-    console.error("❌ ERRORE salvaModifiche:", err);
+    await registraErroreDb({
+      operazione:
+        "MODIFICA_RIGA",
+
+      collezione:
+        editor?.sourceCollection ||
+        (
+          editor?.tipo === "carico"
+            ? "carichi"
+            : "scarichi"
+        ),
+
+      documentoId:
+        editor?.docId || null,
+
+      errore:
+        err,
+
+      before:
+        datiPrima
+    });
+
     throw err;
   }
-}												 
+}
+						 
 
 
 const eliminaRiga = async (riga) => {
+  let datiPrima = null;
+
   try {
-    const collezione = riga.sourceCollection || "scarichi";
-    const ref = doc(db, collezione, riga.docId);
+    const collezione =
+      riga.sourceCollection ||
+      "scarichi";
 
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return;
+    const ref = doc(
+      db,
+      collezione,
+      riga.docId
+    );
 
-    const dati = snap.data();
-    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
+    const snap =
+      await getDoc(ref);
 
-    const movimenti = dati[field] || [];
+    if (!snap.exists()) {
+      throw new Error(
+        "Documento non trovato"
+      );
+    }
 
-    const cerTarget = movimenti[riga.cerIndex];
-    if (!cerTarget) return;
+    const dati =
+      snap.data();
+
+    datiPrima = dati;
+
+    const field =
+      Array.isArray(dati.scarico)
+        ? "scarico"
+        : "carico";
+
+    const movimenti =
+      dati[field] || [];
+
+    const cerTarget =
+      movimenti[riga.cerIndex];
+
+    if (!cerTarget) {
+      throw new Error(
+        "CER non trovato"
+      );
+    }
 
     const confermaTesto =
       cerTarget.righe?.length === 1
         ? "⚠️ Questo è l’ULTIMO CER dello scarico. Eliminando verrà cancellato tutto lo scarico. Continuare?"
         : "Confermi eliminazione del CER selezionato?";
 
-    if (!window.confirm(confermaTesto)) return;
+    if (!window.confirm(confermaTesto)) {
+      return;
+    }
 
-    const before = structuredClone(dati);
+    const updatedMovimenti =
+      movimenti
+        .map((cerObj, cIdx) => {
+          if (
+            cIdx !== riga.cerIndex
+          ) {
+            return cerObj;
+          }
 
-    const updatedMovimenti = movimenti
-      .map((cerObj, cIdx) => {
-        if (cIdx !== riga.cerIndex) return cerObj;
+          const nuoveRighe =
+            (cerObj.righe || [])
+              .filter(
+                (_, rIdx) =>
+                  rIdx !== riga.rIndex
+              );
 
-        const nuoveRighe = (cerObj.righe || []).filter(
-          (_, rIdx) => rIdx !== riga.rIndex
+          return {
+            ...cerObj,
+            righe: nuoveRighe
+          };
+        })
+        .filter(
+          cerObj =>
+            cerObj.righe &&
+            cerObj.righe.length > 0
         );
 
-        return {
-          ...cerObj,
-          righe: nuoveRighe
-        };
-      })
-      .filter(cerObj => cerObj.righe && cerObj.righe.length > 0);
+    const utente =
+      getUtenteReact();
 
-    const utente = getUtenteReact();
-
-    // =========================
-    // CASO 1: DELETE DOCUMENTO
-    // =========================
-    if (updatedMovimenti.length === 0) {
-      if (!window.confirm("Confermi eliminazione DEFINITIVA dello scarico?")) return;
+    // =========================================================
+    // CASO 1
+    // ELIMINAZIONE MOVIMENTO COMPLETO
+    // =========================================================
+    if (
+      updatedMovimenti.length === 0
+    ) {
+      if (
+        !window.confirm(
+          "Confermi eliminazione DEFINITIVA dello scarico?"
+        )
+      ) {
+        return;
+      }
 
       await deleteDoc(ref);
 
       await scriviLog({
-        pagina: "scarichi",
-        evento: "ELIMINA_SCARICO",
+        pagina:
+          "gestione-scarichi-dettaglio",
+
+        evento:
+          field === "carico"
+            ? "ELIMINA_CARICO"
+            : "ELIMINA_SCARICO",
 
         riferimento: {
           collezione,
-          documentoId: riga.docId
+          documentoId:
+            riga.docId
         },
 
         utente,
 
-        before,
-        after: null,
+        before:
+          datiPrima,
 
-        ripristinabile: false
+        after:
+          null,
+
+        ripristinabile:
+          true,
+
+        meta: {
+          tipo: "ELIMINAZIONE",
+          operazione:
+            "ELIMINA_MOVIMENTO"
+        }
       });
 
-      alert("🗑 Scarico eliminato completamente");
+      alert(
+        "🗑 Movimento eliminato completamente"
+      );
     }
 
-    // =========================
-    // CASO 2: UPDATE PARZIALE
-    // =========================
+    // =========================================================
+    // CASO 2
+    // ELIMINAZIONE SINGOLA RIGA / CER
+    // =========================================================
     else {
-      await updateDoc(ref, {
-        [field]: updatedMovimenti,
-        lastUpdate: new Date()
-      });
+      await updateDoc(
+        ref,
+        {
+          [field]:
+            updatedMovimenti,
+
+          lastUpdate:
+            new Date()
+        }
+      );
+
+      const snapAfter =
+        await getDoc(ref);
+
+      if (!snapAfter.exists()) {
+        throw new Error(
+          "Documento non trovato dopo l'eliminazione"
+        );
+      }
+
+      const datiDopo =
+        snapAfter.data();
 
       await scriviLog({
-        pagina: "scarichi",
-        evento: "ELIMINA_CER",
+        pagina:
+          "gestione-scarichi-dettaglio",
+
+        evento:
+          "ELIMINA_CER",
 
         riferimento: {
           collezione,
-          documentoId: riga.docId,
-          cerIndex: riga.cerIndex,
-          rIndex: riga.rIndex
+          documentoId:
+            riga.docId,
+
+          cerIndex:
+            riga.cerIndex,
+
+          rIndex:
+            riga.rIndex
         },
 
         utente,
 
-        before,
-        after: {
-          ...dati,
-          [field]: updatedMovimenti
-        },
+        before:
+          datiPrima,
 
-        ripristinabile: true
+        after:
+          datiDopo,
+
+        ripristinabile:
+          true,
+
+        meta: {
+          tipo: "ELIMINAZIONE",
+          operazione:
+            "ELIMINA_RIGA"
+        }
       });
 
-      alert("🗑 CER eliminato con successo");
+      alert(
+        "🗑 Riga eliminata con successo"
+      );
     }
 
     setEditor(null);
@@ -962,43 +1509,109 @@ const eliminaRiga = async (riga) => {
     setSelectedIndex(null);
 
     await reloadDati();
-    setRefresh(p => p + 1);
+
+    setRefresh(
+      p => p + 1
+    );
 
   } catch (e) {
-    console.error("Errore eliminaRiga:", e);
-    alert("Errore durante eliminazione");
+    await registraErroreDb({
+      operazione:
+        "ELIMINAZIONE_MOVIMENTO",
+
+      collezione:
+        riga?.sourceCollection ||
+        "scarichi",
+
+      documentoId:
+        riga?.docId || null,
+
+      errore: e,
+
+      before:
+        datiPrima
+    });
+
+    alert(
+      "Errore durante eliminazione"
+    );
   }
 };
 
 const reloadDati = async () => {
   try {
-    const snapScarichi = await getDocs(collection(db, "scarichi"));
-    const snapCarichi = await getDocs(collection(db, "carichi"));
+    const snapScarichi = await getDocs(
+      collection(db, "scarichi")
+    );
+
+    const snapCarichi = await getDocs(
+      collection(db, "carichi")
+    );
 
     const tuttiDocs = [
-      ...snapScarichi.docs.map(d => ({ id: d.id, ...d.data() })),
-      ...snapCarichi.docs.map(d => ({ id: d.id, ...d.data() }))
+      ...snapScarichi.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })),
+
+      ...snapCarichi.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }))
     ];
 
-    const giornoParsedLocal = parseData(giornoSelezionato);
+    const giornoParsedLocal =
+      parseData(giornoSelezionato);
+
     if (!giornoParsedLocal) return;
 
-    const start = new Date(giornoParsedLocal);
-    start.setHours(0, 0, 0, 0);
+    const start =
+      new Date(giornoParsedLocal);
 
-    const end = new Date(giornoParsedLocal);
-    end.setHours(23, 59, 59, 999);
+    start.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
-    const datiGiorno = tuttiDocs.filter(d => {
-      if (!d.data) return false;
-      const ts = d.data.toDate ? d.data.toDate() : new Date(d.data);
-      return ts >= start && ts <= end;
-    });
+    const end =
+      new Date(giornoParsedLocal);
 
-    setScarichiDelGiorno(datiGiorno);
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    const datiGiorno =
+      tuttiDocs.filter(d => {
+        if (!d.data) return false;
+
+        const ts =
+          d.data.toDate
+            ? d.data.toDate()
+            : new Date(d.data);
+
+        return (
+          ts >= start &&
+          ts <= end
+        );
+      });
+
+    setScarichiDelGiorno(
+      datiGiorno
+    );
 
   } catch (e) {
-    console.error("reloadDati error:", e);
+    await registraErroreDb({
+      operazione:
+        "RICARICAMENTO_MOVIMENTI",
+      collezione:
+        "scarichi/carichi",
+      errore: e
+    });
   }
 };
 
@@ -1009,86 +1622,184 @@ const reloadDati = async () => {
   const vaiGestioneListini = ()=>navigate("/gestione-scarichi", { state: { refresh: true } });
 
 const salvaDraftScarico = async (riga) => {
+  let snapshot = null;
+
   try {
-    const utenteId = getUtenteReact();
-    const utenteNome = getUtenteReact();
-    if (!utenteId || !riga) return;
+    const utenteId =
+      getUtenteReact();
 
-    const draftRef = doc(db, "scarichi_draft", utenteId);
+    const utenteNome =
+      getUtenteReact();
 
-    // 🔥 PRENDO DOCUMENTO ORIGINALE COMPLETO
-    const snapshot = scarichiDelGiorno.find(d => d.id === riga.docId);
-    if (!snapshot) return;
+    if (!utenteId || !riga) {
+      return;
+    }
 
-    const field = Array.isArray(snapshot.scarico) ? "scarico" : "carico";
+    const draftRef =
+      doc(
+        db,
+        "scarichi_draft",
+        utenteId
+      );
 
-    // 🔥 CLONE COMPLETO SENZA PERDITE
-    const fullCopy = (snapshot[field] || []).map(cerObj => ({
-      ...cerObj,
-      righe: (cerObj.righe || []).map(r => ({ ...r }))
-    }));
+    snapshot =
+      scarichiDelGiorno.find(
+        d => d.id === riga.docId
+      );
 
-    // 🔥 IDENTIFICO SOLO IL PUNTO SELEZIONATO (NON TAGLIO NULLA)
+    if (!snapshot) {
+      return;
+    }
+
+    const field =
+      Array.isArray(snapshot.scarico)
+        ? "scarico"
+        : "carico";
+
+    const fullCopy =
+      (snapshot[field] || []).map(
+        cerObj => ({
+          ...cerObj,
+
+          righe:
+            (cerObj.righe || []).map(
+              r => ({ ...r })
+            )
+        })
+      );
+
     const selectedPointer = {
-      docId: riga.docId,
-      cer: riga.cer,
-      fir: riga.fir,
-      materiale: riga.materiale,
-      rIndex: riga.rIndex,
-      cerIndex: riga.cerIndex
+      docId:
+        riga.docId,
+
+      cer:
+        riga.cer,
+
+      fir:
+        riga.fir,
+
+      materiale:
+        riga.materiale,
+
+      rIndex:
+        riga.rIndex,
+
+      cerIndex:
+        riga.cerIndex
     };
 
-  await setDoc(draftRef, {
-  [field]: fullCopy,
-  fornitore: snapshot.fornitore || "",
-  listino: snapshot.listino || "",
-  tipoMovimento: riga.tipo || "scarico",
-  selected: selectedPointer,
+    await setDoc(
+      draftRef,
+      {
+        [field]:
+          fullCopy,
 
-  data: snapshot.data?.toDate?.() || new Date(),
-  dataScaricoStr: snapshot.dataScaricoStr || "",
-  oraStr: riga.ora || "",
+        fornitore:
+          snapshot.fornitore || "",
 
-  fotoURL: Array.isArray(snapshot.fotoURL) ? snapshot.fotoURL : [],
+        listino:
+          snapshot.listino || "",
 
-  // 🔥 FIX MANCANTE
-  note: snapshot.note || "",
+        tipoMovimento:
+          riga.tipo || "scarico",
 
-  inModifica: true,
-  docIdOriginale: riga.docId,
-  originalFir: riga.fir,
-  utente: utenteNome,
-  updatedAt: serverTimestamp(),
-  source: "gestione_scarichi_dettaglio"
-}, { merge: true });
+        selected:
+          selectedPointer,
+
+        data:
+          snapshot.data?.toDate?.() ||
+          new Date(),
+
+        dataScaricoStr:
+          snapshot.dataScaricoStr ||
+          "",
+
+        oraStr:
+          riga.ora || "",
+
+        fotoURL:
+          Array.isArray(snapshot.fotoURL)
+            ? snapshot.fotoURL
+            : [],
+
+        note:
+          snapshot.note || "",
+
+        inModifica:
+          true,
+
+        docIdOriginale:
+          riga.docId,
+
+        originalFir:
+          riga.fir,
+
+        utente:
+          utenteNome,
+
+        updatedAt:
+          serverTimestamp(),
+
+        source:
+          "gestione_scarichi_dettaglio"
+      },
+      {
+        merge: true
+      }
+    );
 
   } catch (e) {
-    console.error("Errore salvaDraftScarico:", e);
+    await registraErroreDb({
+      operazione:
+        "SALVATAGGIO_DRAFT",
+      collezione:
+        "scarichi_draft",
+      documentoId:
+        riga?.docId || null,
+      errore:
+        e,
+      before:
+        snapshot
+    });
   }
 };
 
 const modificaScarico = async (riga) => {
-  try {
-    console.log("🟦 MODIFICA_SCARICO — INIZIO");
-    console.log("📌 RIGA RICEVUTA DALLA PAGINA (IGNORO calo/netto):", JSON.stringify(riga, null, 2));
+  let datiPrima = null;
 
-    const collectionName = riga.sourceCollection || "scarichi";
-    const ref = doc(db, collectionName, riga.docId);
-    const snap = await getDoc(ref);
+  try {
+    const collectionName =
+      riga.sourceCollection ||
+      "scarichi";
+
+    const ref = doc(
+      db,
+      collectionName,
+      riga.docId
+    );
+
+    const snap =
+      await getDoc(ref);
 
     if (!snap.exists()) {
-      alert("Documento non trovato");
-      return;
+      throw new Error(
+        "Documento non trovato"
+      );
     }
 
-    const dati = snap.data();
-    console.log("📌 DATI ORIGINALI DB:", JSON.stringify(dati, null, 2));
+    const dati =
+      snap.data();
 
-    const field = Array.isArray(dati.scarico) ? "scarico" : "carico";
+    datiPrima = dati;
 
-    // -------------------------
+    const field =
+      Array.isArray(dati.scarico)
+        ? "scarico"
+        : "carico";
+
+    // =========================
     // FOTO
-    // -------------------------
+    // =========================
     let fotoArray = [];
 
     const sorgenti = [
@@ -1101,175 +1812,324 @@ const modificaScarico = async (riga) => {
 
     for (const src of sorgenti) {
       if (!src) continue;
-      if (Array.isArray(src)) fotoArray.push(...src);
-      else if (typeof src === "string" && src.trim()) fotoArray.push(src);
+
+      if (Array.isArray(src)) {
+        fotoArray.push(...src);
+      } else if (
+        typeof src === "string" &&
+        src.trim()
+      ) {
+        fotoArray.push(src);
+      }
     }
 
-    fotoArray = [...new Set(fotoArray)].filter(f => typeof f === "string" && f.startsWith("http"));
+    fotoArray = [
+      ...new Set(fotoArray)
+    ].filter(
+      f =>
+        typeof f === "string" &&
+        f.startsWith("http")
+    );
 
-    const fileName = riga.fileName || dati.fileName || dati.nomeFile || "";
-    const sitoWeb = riga.sitoWeb || dati.sitoWeb || dati.website || "";
+    const fileName =
+      riga.fileName ||
+      dati.fileName ||
+      dati.nomeFile ||
+      "";
 
-    console.log("🟧 INIZIO MAPPING CER/RIGHE — FIELD:", field);
+    const sitoWeb =
+      riga.sitoWeb ||
+      dati.sitoWeb ||
+      dati.website ||
+      "";
 
-    const updatedField = (dati[field] || []).map((cerObj, cIdx) => {
-      if (cIdx !== riga.cerIndex) return cerObj;
-
-      console.log(`🔶 CER INDEX MATCH: ${cIdx}`);
-
-      return {
-        ...cerObj,
-        righe: (cerObj.righe || []).map((r, rIdx) => {
-          if (rIdx !== riga.rIndex) return r;
-
-          console.log(`   🔸 RIGA INDEX MATCH: ${rIdx}`);
-          console.log("   📌 RIGA ORIGINALE DB:", JSON.stringify(r, null, 2));
-          console.log("   📌 RIGA EDITOR/UI (IGNORO calo/netto):", JSON.stringify(riga, null, 2));
-
-          // -------------------------
-          // PATCH DEFINITIVA
-          // -------------------------
-
-          // 🔥 SEMPRE usare calo/netto del DB
-          const caloDB = r.calo;
-          const nettoDB = r.netto;
-
-          // 🔥 peso e prezzo possono essere modificati dall’utente
-          const pesoFinale = riga.peso ?? r.peso;
-          const prezzoFinale = riga.prezzoKg ?? r.prezzoKg;
-          const costoTotaleFinale = riga.costoTotale ?? r.costoTotale;
-
-          console.log("   🔥 PATCH: calo/netto = SEMPRE DB");
-          console.log("      calo:", caloDB);
-          console.log("      netto:", nettoDB);
+    const updatedField =
+      (dati[field] || []).map(
+        (cerObj, cIdx) => {
+          if (
+            cIdx !== riga.cerIndex
+          ) {
+            return cerObj;
+          }
 
           return {
-            ...r,
+            ...cerObj,
 
-            // 🔥 valori modificabili
-            peso: pesoFinale,
-            prezzoKg: prezzoFinale,
-            costoTotale: costoTotaleFinale,
+            righe:
+              (cerObj.righe || [])
+                .map(
+                  (r, rIdx) => {
+                    if (
+                      rIdx !== riga.rIndex
+                    ) {
+                      return r;
+                    }
 
-            // 🔥 valori NON modificabili
-            calo: caloDB,
-            netto: nettoDB
+                    // =========================
+                    // VALORI DB
+                    // =========================
+                    const pesoFinale =
+                      riga.peso ??
+                      r.peso;
+
+                    const prezzoFinale =
+                      riga.prezzoKg ??
+                      r.prezzoKg;
+
+                    const costoTotaleFinale =
+                      riga.costoTotale ??
+                      r.costoTotale;
+
+                    return {
+                      ...r,
+
+                      peso:
+                        pesoFinale,
+
+                      prezzoKg:
+                        prezzoFinale,
+
+                      costoTotale:
+                        costoTotaleFinale,
+
+                      // calo/netto NON vengono
+                      // alterati da questa funzione
+                      calo:
+                        r.calo,
+
+                      netto:
+                        r.netto
+                    };
+                  }
+                ),
+
+            fir:
+              riga.fir ??
+              cerObj.fir,
+
+            cer:
+              riga.cer ??
+              cerObj.cer
           };
-        }),
-
-        fir: riga.fir ?? cerObj.fir,
-        cer: riga.cer ?? cerObj.cer
-      };
-    });
+        }
+      );
 
     const updatePayload = {
-      [field]: updatedField,
-      data: dati.data?.toDate?.() || new Date(),
-      fotoURL: fotoArray,
+      [field]:
+        updatedField,
+
+      data:
+        dati.data?.toDate?.() ||
+        new Date(),
+
+      fotoURL:
+        fotoArray,
+
       fileName,
+
       sitoWeb,
-      lastUpdate: serverTimestamp()
+
+      lastUpdate:
+        serverTimestamp()
     };
 
-    console.log("🟥 PAYLOAD FINALE CHE SCRIVIAMO A DB:");
-    console.log(JSON.stringify(updatePayload, null, 2));
+    // =========================
+    // SCRITTURA DB
+    // =========================
+    await updateDoc(
+      ref,
+      updatePayload
+    );
 
-    await updateDoc(ref, updatePayload);
+    // =========================
+    // DATI REALI DOPO UPDATE
+    // =========================
+    const snapAfter =
+      await getDoc(ref);
 
-    console.log("🟩 SCRITTURA COMPLETATA — VERIFICA POST-SCRITTURA");
-    const snapAfter = await getDoc(ref);
-    console.log("📌 DATI DOPO SCRITTURA:", JSON.stringify(snapAfter.data(), null, 2));
+    if (!snapAfter.exists()) {
+      throw new Error(
+        "Documento non trovato dopo la modifica"
+      );
+    }
+
+    const datiDopo =
+      snapAfter.data();
+
+    // =========================
+    // LOG MODIFICA
+    // =========================
+    await scriviLog({
+      pagina:
+        "gestione-scarichi-dettaglio",
+
+      evento:
+        "MODIFICA_SCARICO",
+
+      riferimento: {
+        collezione:
+          collectionName,
+
+        documentoId:
+          riga.docId,
+
+        cerIndex:
+          riga.cerIndex,
+
+        rIndex:
+          riga.rIndex
+      },
+
+      utente:
+        getUtenteReact(),
+
+      before:
+        datiPrima,
+
+      after:
+        datiDopo,
+
+      ripristinabile:
+        true,
+
+      meta: {
+        tipo: "MODIFICA",
+        operazione:
+          "MODIFICA_SCARICO"
+      }
+    });
 
     await salvaDraftScarico({
       ...riga,
-      fotoURL: fotoArray
+      fotoURL:
+        fotoArray
     });
 
-    navigate("/scarichi", {
-  state: { returnToDettaglio: true }
-});
-
+    navigate(
+      "/scarichi",
+      {
+        state: {
+          returnToDettaglio:
+            true
+        }
+      }
+    );
 
   } catch (error) {
-    console.error("❌ ERRORE modificaScarico:", error);
-    alert("Errore durante la modifica");
+    await registraErroreDb({
+      operazione:
+        "MODIFICA_SCARICO",
+
+      collezione:
+        riga?.sourceCollection ||
+        "scarichi",
+
+      documentoId:
+        riga?.docId || null,
+
+      errore:
+        error,
+
+      before:
+        datiPrima
+    });
+
+    alert(
+      "Errore durante la modifica"
+    );
   }
 };
 
 
 
 
-
 const handleStampa = async () => {
-  console.log("🟡 handleStampa — INIZIO");
-
   if (righeFiltrate.length === 0) {
-    console.warn("⚠️ Nessuna riga da stampare");
     return alert("Nessuna riga da stampare");
   }
 
-  console.log("📦 righeFiltrate:", righeFiltrate);
-
   try {
     const { jsPDF } = await import("jspdf");
-    console.log("✅ jsPDF importato");
-
     const autoTable = (await import("jspdf-autotable")).default;
-    console.log("✅ autoTable importato");
-
     const { PdfHeader } = await import("../utils/dateUtils");
-    console.log("✅ PdfHeader importato");
 
-    // 🔥 PDF SEMPRE LANDSCAPE
     const pdf = new jsPDF({
       orientation: "landscape",
       unit: "mm",
       format: "a4"
     });
-    console.log("✅ PDF creato");
 
     const { startY } = await PdfHeader(pdf);
-    console.log("📌 Header applicato, startY:", startY);
 
-    // ORDINA PER ORA (DESC)
-    const righeOrdinate = [...righeFiltrate].sort((a, b) => {
-      const parse = (o) => {
-        if (!o) return -1;
-        const [h, m] = o.split(":").map(Number);
-        return h * 60 + m;
-      };
-      return parse(b.ora) - parse(a.ora);
-    });
-    console.log("📦 righeOrdinate:", righeOrdinate);
-
-    const carichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "carico");
-    const scarichi = righeOrdinate.filter(r => (r.tipo || "").toLowerCase() === "scarico");
-    console.log("📊 carichi:", carichi.length, "scarichi:", scarichi.length);
+    /*
+     * 🔥 USA ESATTAMENTE LO STESSO ORDINAMENTO
+     * DELLE DUE GRIGLIE.
+     *
+     * Non utilizziamo più un ordinamento autonomo
+     * basato sull'ora.
+     *
+     * La stampa usa tutti i risultati filtrati,
+     * non soltanto la pagina visualizzata.
+     */
+    const carichi = righeCarichiAll;
+    const scarichi = righeScarichiAll;
 
     const calc = (r) => {
       const pesoLordo = Number(r.peso ?? 0);
-      const caloKg = Number(r.calo ?? 0);
       const netto = Number(r.netto ?? 0);
       const prezzoKg = Number(r.prezzoKg ?? 0);
       const totale = netto * prezzoKg;
-      return { pesoLordo, caloKg, netto, prezzoKg, totale };
+
+      return {
+        pesoLordo,
+        netto,
+        prezzoKg,
+        totale
+      };
     };
 
-    const totCarichiNetto = carichi.reduce((t, r) => t + calc(r).netto, 0);
-    const totCarichiRicavi = carichi.reduce((t, r) => t + calc(r).totale, 0);
-    const mediaCarichi = totCarichiNetto > 0 ? totCarichiRicavi / totCarichiNetto : 0;
+    const totCarichiNetto = carichi.reduce(
+      (t, r) => t + calc(r).netto,
+      0
+    );
 
-    const totScarichiNetto = scarichi.reduce((t, r) => t + calc(r).netto, 0);
-    const totScarichiCosti = scarichi.reduce((t, r) => t + calc(r).totale, 0);
-    const mediaScarichi = totScarichiNetto > 0 ? totScarichiCosti / totScarichiNetto : 0;
+    const totCarichiRicavi = carichi.reduce(
+      (t, r) => t + calc(r).totale,
+      0
+    );
 
-    const utileFinale = totCarichiRicavi - totScarichiCosti;
-    console.log("💰 totCarichiRicavi:", totCarichiRicavi, "totScarichiCosti:", totScarichiCosti, "utile:", utileFinale);
+    const mediaCarichi =
+      totCarichiNetto > 0
+        ? totCarichiRicavi / totCarichiNetto
+        : 0;
+
+    const totScarichiNetto = scarichi.reduce(
+      (t, r) => t + calc(r).netto,
+      0
+    );
+
+    const totScarichiCosti = scarichi.reduce(
+      (t, r) => t + calc(r).totale,
+      0
+    );
+
+    const mediaScarichi =
+      totScarichiNetto > 0
+        ? totScarichiCosti / totScarichiNetto
+        : 0;
+
+    const utileFinale =
+      totCarichiRicavi - totScarichiCosti;
 
     let y = startY - 25;
 
     pdf.setFontSize(16);
-    pdf.text("Riepilogo Movimenti " + dataLabel, 14, y);
+    pdf.text(
+      "Riepilogo Movimenti " + dataLabel,
+      14,
+      y
+    );
+
     y += 10;
 
     // ============================
@@ -1283,12 +2143,22 @@ const handleStampa = async () => {
       autoTable(pdf, {
         startY: y,
         head: [[
-          "Ora", "Destinatario", "CER", "FIR", "Materiale",
-          "Peso Lordo (Kg)", "Calo", "Tipo Calo",
-          "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
+          "Ora",
+          "Destinatario",
+          "CER",
+          "FIR",
+          "Materiale",
+          "Peso Lordo (Kg)",
+          "Calo",
+          "Tara (Kg)",
+          "Netto (Kg)",
+          "€/Kg",
+          "Totale (€)",
+          "Listino"
         ]],
         body: carichi.map(r => {
           const c = calc(r);
+
           return [
             r.ora,
             r.fornitore,
@@ -1296,8 +2166,19 @@ const handleStampa = async () => {
             r.fir || "",
             r.materiale,
             c.pesoLordo.toFixed(2),
-            c.caloKg.toFixed(2),
-            (r.caloTipo === "perc" ? "%" : "Kg"),
+
+            Number(r.calo ?? 0) === 0
+              ? "-"
+              : `${Number(r.calo).toFixed(2)} ${
+                  r.caloTipo === "perc"
+                    ? "%"
+                    : "Kg"
+                }`,
+
+            Number(r.tara ?? 0) === 0
+              ? "-"
+              : `${Number(r.tara).toFixed(2)} Kg`,
+
             c.netto.toFixed(2),
             c.prezzoKg.toFixed(2),
             c.totale.toFixed(2),
@@ -1305,7 +2186,9 @@ const handleStampa = async () => {
           ];
         }),
         theme: "grid",
-        styles: { fontSize: 9 }
+        styles: {
+          fontSize: 9
+        }
       });
 
       y = pdf.lastAutoTable.finalY + 5;
@@ -1330,12 +2213,22 @@ const handleStampa = async () => {
       autoTable(pdf, {
         startY: y,
         head: [[
-          "Ora", "Fornitore", "CER", "FIR", "Materiale",
-          "Peso Lordo (Kg)", "Calo", "Tipo Calo",
-          "Netto (Kg)", "€/Kg", "Totale (€)", "Listino"
+          "Ora",
+          "Fornitore",
+          "CER",
+          "FIR",
+          "Materiale",
+          "Peso Lordo (Kg)",
+          "Calo",
+          "Tara (Kg)",
+          "Netto (Kg)",
+          "€/Kg",
+          "Totale (€)",
+          "Listino"
         ]],
         body: scarichi.map(r => {
           const c = calc(r);
+
           return [
             r.ora,
             r.fornitore,
@@ -1343,8 +2236,19 @@ const handleStampa = async () => {
             r.fir || "",
             r.materiale,
             c.pesoLordo.toFixed(2),
-            c.caloKg.toFixed(2),
-            (r.caloTipo === "perc" ? "%" : "Kg"),
+
+            Number(r.calo ?? 0) === 0
+              ? "-"
+              : `${Number(r.calo).toFixed(2)} ${
+                  r.caloTipo === "perc"
+                    ? "%"
+                    : "Kg"
+                }`,
+
+            Number(r.tara ?? 0) === 0
+              ? "-"
+              : `${Number(r.tara).toFixed(2)} Kg`,
+
             c.netto.toFixed(2),
             c.prezzoKg.toFixed(2),
             c.totale.toFixed(2),
@@ -1352,7 +2256,9 @@ const handleStampa = async () => {
           ];
         }),
         theme: "grid",
-        styles: { fontSize: 9 }
+        styles: {
+          fontSize: 9
+        }
       });
 
       y = pdf.lastAutoTable.finalY + 5;
@@ -1366,16 +2272,55 @@ const handleStampa = async () => {
       y += 10;
     }
 
+    // ============================
+    // UTILE
+    // ============================
     if (carichi.length && scarichi.length) {
       pdf.setFontSize(14);
-      pdf.text(`UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`, 14, y + 10);
+
+      pdf.text(
+        `UTILE COMPLESSIVO: ${utileFinale.toFixed(2)} €`,
+        14,
+        y + 10
+      );
     }
 
-    await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
-    console.log("✅ PDF salvato e condiviso");
+    await salvaESharePdfCapacitor(
+      pdf,
+      "movimenti.pdf"
+    );
 
   } catch (err) {
-    console.error("❌ ERRORE handleStampa:", err);
+    console.error(
+      "❌ ERRORE handleStampa:",
+      err
+    );
+
+  await scriviLog({
+  pagina: "gestione-scarichi-dettaglio",
+  evento: "ERRORE_STAMPA",
+  utente: getUtenteReact(),
+  riferimento: {
+    operazione: "STAMPA_MOVIMENTI"
+  },
+  before: null,
+  after: {
+    errore:
+      err?.message ||
+      "Errore stampa",
+    codice:
+      err?.code ||
+      null,
+    stack:
+      err?.stack ||
+      null
+  },
+  ripristinabile: false,
+  meta: {
+    tipo: "STAMPA"
+  }
+}).catch(() => {});
+
     alert("Errore durante la stampa");
   }
 };
@@ -1549,18 +2494,161 @@ const nessunMovimento =
 <table className="tabella-scarichi">
   <thead>
     <tr>
-      <th>Ora</th>
-      <th>Destinatario</th>
-      <th>FIR</th>
-      <th>CER</th>
-      <th>Materiale</th>
-      <th>Peso (Kg)</th>
-      <th>Calo </th>
-      <th>Tipo Calo</th>
-      <th>Netto (Kg)</th>
-      <th>€/Kg</th>
-      <th>Ricavo Totale (€)</th>
-      <th>Azioni</th>
+      <th
+  onClick={() =>
+    cambiaSort(
+      "ora",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Ora{iconaSort(sortConfigCarichi, "ora")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "fornitore",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Destinatario{iconaSort(sortConfigCarichi, "fornitore")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "fir",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  FIR{iconaSort(sortConfigCarichi, "fir")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "cer",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  CER{iconaSort(sortConfigCarichi, "cer")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "materiale",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Materiale{iconaSort(sortConfigCarichi, "materiale")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "peso",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Peso (Kg){iconaSort(sortConfigCarichi, "peso")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "calo",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Calo{iconaSort(sortConfigCarichi, "calo")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "tara",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Tara (Kg){iconaSort(sortConfigCarichi, "tara")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "netto",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Netto (Kg){iconaSort(sortConfigCarichi, "netto")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "prezzoKg",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  €/Kg{iconaSort(sortConfigCarichi, "prezzoKg")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "totale",
+      sortConfigCarichi,
+      setSortConfigCarichi,
+      setCurrentPageCarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Ricavo Totale (€){iconaSort(sortConfigCarichi, "totale")}
+</th>
+
+<th>Azioni</th>
     </tr>
   </thead>
 
@@ -1573,10 +2661,9 @@ const nessunMovimento =
         <td>{r.cer}</td>
         <td>{r.materiale}</td>
 
-        {/* 🔥 VALORI CORRETTI */}
-        <td>{Number(r.peso ?? 0).toFixed(2)}</td>
-        <td>{Number(r.calo ?? 0).toFixed(2)}</td>
-        <td>{r.caloTipo === "perc" ? "%" : "Kg"}</td>
+       <td>{Number(r.peso ?? 0).toFixed(2)}</td>
+        <td>  {Number(r.calo ?? 0) === 0    ? "-"    : `${Number(r.calo).toFixed(2)} ${        r.caloTipo === "perc" ? "%" : "Kg"      }`}</td>
+        <td>  {Number(r.tara ?? 0) === 0    ? "-"    : `${Number(r.tara).toFixed(2)}`}</td>
         <td>{Number(r.netto ?? 0).toFixed(2)}</td>
 
         <td>{Number(r.prezzoKg ?? 0).toFixed(2)} €/Kg</td>
@@ -1633,19 +2720,161 @@ const nessunMovimento =
 <table className="tabella-scarichi">
 <thead>
   <tr>
-    <th>Ora</th>
-    <th>Fornitore</th>
-    <th>FIR</th>
-    <th>CER</th>
-    <th>Materiale</th>
-   <th>Peso (Kg)</th>
-<th>Calo </th>
-<th>Tipo Calo</th>
-<th>Netto (Kg)</th>
-<th>€/Kg</th>
-<th>Costo Totale (€)</th>
+ <th
+  onClick={() =>
+    cambiaSort(
+      "ora",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Ora{iconaSort(sortConfigScarichi, "ora")}
+</th>
 
-    <th>Azioni</th>
+<th
+  onClick={() =>
+    cambiaSort(
+      "fornitore",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Fornitore{iconaSort(sortConfigScarichi, "fornitore")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "fir",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  FIR{iconaSort(sortConfigScarichi, "fir")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "cer",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  CER{iconaSort(sortConfigScarichi, "cer")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "materiale",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Materiale{iconaSort(sortConfigScarichi, "materiale")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "peso",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Peso (Kg){iconaSort(sortConfigScarichi, "peso")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "calo",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Calo{iconaSort(sortConfigScarichi, "calo")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "tara",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Tara (Kg){iconaSort(sortConfigScarichi, "tara")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "netto",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Netto (Kg){iconaSort(sortConfigScarichi, "netto")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "prezzoKg",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  €/Kg{iconaSort(sortConfigScarichi, "prezzoKg")}
+</th>
+
+<th
+  onClick={() =>
+    cambiaSort(
+      "totale",
+      sortConfigScarichi,
+      setSortConfigScarichi,
+      setCurrentPageScarichi
+    )
+  }
+  style={{ cursor: "pointer" }}
+>
+  Costo Totale (€){iconaSort(sortConfigScarichi, "totale")}
+</th>
+
+<th>Azioni</th>
   </tr>
 </thead>
 <tbody>
@@ -1656,10 +2885,10 @@ const nessunMovimento =
       <td>{r.fir}</td>
       <td>{r.cer}</td>
       <td>{r.materiale}</td>
-      <td>{r.peso}</td>
-      <td>{r.calo}</td>
-      <td>{r.caloTipo === "perc" ? "%" : "Kg"}</td>
-      <td>{r.netto}</td>
+      <td>{Number(r.peso ?? 0).toFixed(2)}</td>
+      <td>  {Number(r.calo ?? 0) === 0    ? "-"    : `${Number(r.calo).toFixed(2)} ${        r.caloTipo === "perc" ? "%" : "Kg"      }`}</td>
+      <td>  {Number(r.tara ?? 0) === 0    ? "-"    : `${Number(r.tara).toFixed(2)}`}</td>
+      <td>{Number(r.netto ?? 0).toFixed(2)}</td>
       <td>{r.prezzoKg}</td>
       <td>{((r.netto || 0) * (r.prezzoKg || 0)).toFixed(2)}</td>
       <td>
@@ -1744,11 +2973,18 @@ const nessunMovimento =
       : new Date()
   }
   onChange={(time) => {
-    const hh = time.getHours();
-    const mm = time.getMinutes();
+  if (!time) {
+    return;
+  }
 
-   updateEditor("ora", `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
-  }}
+  const hh = time.getHours();
+  const mm = time.getMinutes();
+
+  updateEditor(
+    "ora",
+    `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
+  );
+}}
   showTimeSelect
   showTimeSelectOnly
   timeIntervals={15}
@@ -1757,30 +2993,182 @@ const nessunMovimento =
 />
 </label>
 </div>
-<label>Netto (Kg): 
-  <input
-    type="number"
-    value={editor.netto}
-    readOnly
-    style={{ background: "#eee", fontWeight: "bold" }}
-  />
-</label>
-  <label>Calo{editor.caloTipo === "perc" ? " (%)" : " (Kg)"}: 
-  <input type="number" value={editor.calo} onChange={e=>updateEditor("calo", e.target.value)} />
-</label>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(6, minmax(120px, 1fr))",
+    gap: "12px",
+    marginTop: 15,
+    alignItems: "end"
+  }}
+>
+  <label>
+    Peso Lordo (Kg):
+    <input
+      type="number"
+      value={editor.peso ?? ""}
+      onChange={e =>
+        updateEditor(
+          "peso",
+          e.target.value
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box"
+      }}
+    />
+  </label>
 
-          <label>€/Kg: <input type="number" value={editor.prezzoKg} onChange={e=>updateEditor("prezzoKg", e.target.value)} /></label>
-          <label>FIR: 
-  <input
-    type="text"
-    value={editor.fir || ""}
-    onChange={e => updateEditor("fir", e.target.value.toUpperCase())}
-    style={{ textTransform: "uppercase" }}
-  />
+  <label>
+    Calo
+    {editor.caloTipo === "perc"
+      ? " (%)"
+      : " (Kg)"}
+    :
+    <input
+      type="number"
+      value={editor.calo ?? ""}
+      onChange={e =>
+        updateEditor(
+          "calo",
+          e.target.value
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box"
+      }}
+    />
+  </label>
+<label>
+  Tipo Calo:
+  <select
+    value={editor.caloTipo || "kg"}
+    onChange={e =>
+      updateEditor(
+        "caloTipo",
+        e.target.value
+      )
+    }
+    style={{
+      width: "100%",
+      boxSizing: "border-box"
+    }}
+  >
+    <option value="kg">Kg</option>
+    <option value="perc">%</option>
+  </select>
 </label>
-          <label>Listino: 
-             <select value={editor.listino} onChange={e => updateEditor("listino", e.target.value)}>
-                {Object.keys(listini).map(l => <option key={l} value={l}>{l}</option>)}  </select></label>         
+  <label>
+    Tara (Kg):
+    <input
+      type="number"
+      value={editor.tara ?? ""}
+      onChange={e =>
+        updateEditor(
+          "tara",
+          e.target.value
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box"
+      }}
+    />
+  </label>
+
+  <label>
+    Netto (Kg):
+    <input
+      type="number"
+      value={Number(
+        editor.netto ?? 0
+      ).toFixed(2)}
+      readOnly
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        background: "#eee",
+        fontWeight: "bold"
+      }}
+    />
+  </label>
+
+  <label>
+    €/Kg:
+    <input
+      type="number"
+      value={editor.prezzoKg ?? ""}
+      onChange={e =>
+        updateEditor(
+          "prezzoKg",
+          e.target.value
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box"
+      }}
+    />
+  </label>
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(200px, 1fr))",
+    gap: "12px",
+    marginTop: 12
+  }}
+>
+  <label>
+    FIR:
+    <input
+      type="text"
+      value={editor.fir || ""}
+      onChange={e =>
+        updateEditor(
+          "fir",
+          e.target.value.toUpperCase()
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        textTransform: "uppercase"
+      }}
+    />
+  </label>
+
+  <label>
+    Listino:
+    <select
+      value={editor.listino}
+      onChange={e =>
+        updateEditor(
+          "listino",
+          e.target.value
+        )
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box"
+      }}
+    >
+      {Object.keys(listini).map(l => (
+        <option
+          key={l}
+          value={l}
+        >
+          {l}
+        </option>
+      ))}
+    </select>
+  </label>
+</div>      
           <div style={{marginTop:10}}>
 
 
@@ -1830,16 +3218,16 @@ console.log("EDITOR PRIMA SAVE:", editor);
       setErrori(prev => [...prev, e.message]);
     }
   }}
-  disabled={
-    !campoModificato("peso") &&
-    !campoModificato("calo") &&
-    !campoModificato("netto") &&
-    !campoModificato("prezzoKg") &&
-    !campoModificato("listino") &&
-    !campoModificato("fir") &&
-    !campoModificato("data") &&
-    !campoModificato("ora")
-  }
+ disabled={
+  !campoModificato("peso") &&
+  !campoModificato("calo") &&
+  !campoModificato("tara") &&
+  !campoModificato("prezzoKg") &&
+  !campoModificato("listino") &&
+  !campoModificato("fir") &&
+  !campoModificato("data") &&
+  !campoModificato("ora")
+}
 >
   💾 Salva modifiche
 </button>
