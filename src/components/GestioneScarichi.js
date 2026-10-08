@@ -1102,11 +1102,17 @@ const handleApriDocumento = async () => {
   try {
     let movimenti = getMovimentiValidi();
 
-    // 🔥 Se non ci sono movimenti "liberi" perché sono già consuntivati,
-    // recuperiamo comunque quelli filtrati per poter visualizzare il documento.
+    /*
+     * Se non ci sono movimenti liberi perché già
+     * consuntivati, recuperiamo comunque quelli
+     * filtrati per visualizzare il documento esistente.
+     */
     if (!movimenti.length) {
       movimenti = filteredScarichi.filter((m) => {
-        if (tipoMovimento !== "tutti" && m.tipo !== tipoMovimento) {
+        if (
+          tipoMovimento !== "tutti" &&
+          m.tipo !== tipoMovimento
+        ) {
           return false;
         }
 
@@ -1139,9 +1145,15 @@ const handleApriDocumento = async () => {
       return;
     }
 
-    const tipo = hasScarico ? "prospetto" : "fattura";
+    const tipo = hasScarico
+      ? "prospetto"
+      : "fattura";
 
-    // 🔥 Verifica se i movimenti sono già consuntivati
+    /*
+     * ==========================================
+     * VERIFICA CONSUNTIVAZIONE
+     * ==========================================
+     */
     const tuttiConsuntivati = movimenti.every((m) => {
       return (
         m.movimentoFinanziarioId !== null &&
@@ -1150,14 +1162,20 @@ const handleApriDocumento = async () => {
       );
     });
 
-    // 🔥 Se sono già consuntivati, cerchiamo il documento originale
+    /*
+     * ==========================================
+     * DOCUMENTO GIÀ ESISTENTE
+     * ==========================================
+     */
     if (tuttiConsuntivati) {
       const collectionDocumento =
         tipo === "prospetto"
           ? "prospettiFattura"
           : "fattureCarichi";
 
-      const movimentiIds = movimenti.map((m) => m.id);
+      const movimentiIds = movimenti.map(
+        (m) => m.id
+      );
 
       const snap = await getDocs(
         collection(db, collectionDocumento)
@@ -1167,11 +1185,15 @@ const handleApriDocumento = async () => {
         const data = d.data();
         const ids = data.movimentiIds || [];
 
-        if (!Array.isArray(ids)) return false;
+        if (!Array.isArray(ids)) {
+          return false;
+        }
 
         return (
           ids.length === movimentiIds.length &&
-          ids.every((id) => movimentiIds.includes(id))
+          ids.every((id) =>
+            movimentiIds.includes(id)
+          )
         );
       });
 
@@ -1182,33 +1204,503 @@ const handleApriDocumento = async () => {
         return;
       }
 
-      const documento = documentoTrovato.data();
+      const documento =
+        documentoTrovato.data();
 
-      setModalTipo(tipo);
+      /*
+       * ------------------------------------------
+       * PROSPETTO SCARICHI
+       * ------------------------------------------
+       */
+      if (tipo === "prospetto") {
+        setModalTipo("prospetto");
+
+        setModalData({
+          cliente:
+            documento.cliente ||
+            filtroFornitore,
+
+          movimentiIds,
+
+          blocchi:
+            documento.blocchi || [],
+
+          documentoEsistente: true,
+
+          documentoId:
+            documentoTrovato.id,
+
+          movimentoFinanziarioId:
+            documento.movimentoFinanziarioId ||
+            null,
+
+          DataPagamento:
+            documento.DataPagamento ||
+            null
+        });
+
+        return;
+      }
+
+      /*
+       * ------------------------------------------
+       * FATTURA CARICHI GIÀ ESISTENTE
+       * ------------------------------------------
+       */
+      if (tipo === "fattura") {
+        const config =
+          (await getConfigAzienda()) || {};
+
+        const bancheSnap = await getDocs(
+          collection(db, "banche")
+        );
+
+        const bancheAttive =
+          bancheSnap.docs
+            .map((d) => ({
+              id: d.id,
+              ...d.data()
+            }))
+            .filter(
+              (b) => b.attiva !== false
+            );
+
+        /*
+         * Se la fattura contiene già la fotografia
+         * della banca, usiamo quella.
+         */
+        let banca = documento.banca || null;
+
+        /*
+         * Fallback per fatture vecchie che non
+         * avevano ancora la banca salvata.
+         */
+        if (!banca) {
+          const bancaPredefinita =
+            bancheAttive.find(
+              (b) => b.predefinita === true
+            ) ||
+            bancheAttive[0] ||
+            null;
+
+          banca = bancaPredefinita;
+        }
+
+        const dataFattura =
+          documento.dataFattura
+            ? new Date(documento.dataFattura)
+            : documento.data
+            ? new Date(documento.data)
+            : new Date();
+
+        setModalTipo("fattura");
+
+        setModalData({
+          cliente:
+            documento.cliente ||
+            filtroFornitore,
+
+          clienteDati:
+            documento.clienteDati ||
+            documento.clienteAnagrafica ||
+            null,
+
+          cedente:
+            documento.cedente ||
+            {
+              ragioneSociale:
+                config.ragioneSociale || "",
+
+              indirizzo:
+                config.indirizzo || "",
+
+              capCitta:
+                config.capCitta || "",
+
+              piva:
+                config.piva || "",
+
+              codiceFiscale:
+                config.codiceFiscale ||
+                config.piva ||
+                "",
+
+              codiceDestinatario:
+                config.codiceDestinatario ||
+                config["Cod.destinatario"] ||
+                "",
+
+              pec:
+                config.pec || "",
+
+              email:
+                config.emailAziendale ||
+                config.mailRecupero ||
+                "",
+
+              regimeFiscale:
+                config.regimeFiscale ||
+                "RF18"
+            },
+
+          banca,
+
+          movimentiIds,
+
+          blocchi:
+            documento.blocchi || [],
+
+          documentoEsistente: true,
+
+          documentoId:
+            documentoTrovato.id,
+
+          movimentoFinanziarioId:
+            documento.movimentoFinanziarioId ||
+            null,
+
+          DataPagamento:
+            documento.DataPagamento ||
+            null,
+
+          numeroFattura:
+            documento.numeroFattura ||
+            documento.numero ||
+            "",
+
+          dataFattura,
+
+          tipoDocumento:
+            documento.tipoDocumento ||
+            "TD24",
+
+          naturaIva:
+            documento.naturaIva ||
+            config.naturaIvaDefault ||
+            "N6.1",
+
+          riferimentoNormativo:
+            documento.riferimentoNormativo ||
+            config.riferimentoNormativo ||
+            "N6.1 - ART. 74 C.7 E 8 DPR 633/72",
+
+          condizioniPagamento:
+            documento.condizioniPagamento ||
+            config.condizioniPagamentoDefault ||
+            "TP02",
+
+          modalitaPagamento:
+            documento.modalitaPagamento ||
+            config.modalitaPagamentoDefault ||
+            "MP05",
+
+          dataScadenzaPagamento:
+            documento.dataScadenzaPagamento
+              ? new Date(
+                  documento.dataScadenzaPagamento
+                )
+              : dataFattura
+        });
+
+        return;
+      }
+    }
+
+    /*
+     * ==========================================
+     * NUOVO DOCUMENTO
+     * ==========================================
+     */
+
+    /*
+     * ------------------------------------------
+     * PROSPETTO SCARICHI
+     * ------------------------------------------
+     */
+    if (tipo === "prospetto") {
+      setModalTipo("prospetto");
 
       setModalData({
-        cliente: documento.cliente || filtroFornitore,
-        movimentiIds,
-        blocchi: documento.blocchi || [],
-        documentoEsistente: true,
-        documentoId: documentoTrovato.id,
-        movimentoFinanziarioId:
-          documento.movimentoFinanziarioId || null,
-        DataPagamento:
-          documento.DataPagamento || null
+        cliente: filtroFornitore,
+
+        movimentiIds:
+          movimenti.map((m) => m.id),
+
+        blocchi: movimenti.flatMap(
+          (m) => m.cer || []
+        ),
+
+        documentoEsistente: false
       });
 
       return;
     }
 
-    // 🔥 Comportamento normale per movimenti ancora da consuntivare
-    setModalTipo(tipo);
+    /*
+     * ------------------------------------------
+     * NUOVA FATTURA CARICHI
+     * ------------------------------------------
+     */
+
+    const config =
+      (await getConfigAzienda()) || {};
+
+    /*
+     * ==========================================
+     * ANAGRAFICA CLIENTE
+     * ==========================================
+     */
+    const clienteNome =
+      filtroFornitore ||
+      movimenti[0]?.fornitore ||
+      "";
+
+    let clienteDati = null;
+
+    const fornitoriSnap = await getDocs(
+      collection(db, "fornitori")
+    );
+
+    const normalizza = (v) =>
+      String(v || "")
+        .trim()
+        .toLowerCase();
+
+    const clienteTrovato =
+      fornitoriSnap.docs.find((d) => {
+        const data = d.data();
+
+        const nome =
+          data.nome ||
+          data.ragioneSociale ||
+          "";
+
+        return (
+          normalizza(nome) ===
+          normalizza(clienteNome)
+        );
+      });
+
+    if (clienteTrovato) {
+      const dataCliente =
+        clienteTrovato.data();
+
+      clienteDati = {
+        id: clienteTrovato.id,
+
+        ragioneSociale:
+          dataCliente.ragioneSociale ||
+          dataCliente.nome ||
+          clienteNome,
+
+        nome:
+          dataCliente.nome ||
+          "",
+
+        piva:
+          dataCliente.piva ||
+          dataCliente.piva_cf ||
+          dataCliente.pivaCf ||
+          dataCliente.codiceFiscale ||
+          "",
+
+        codiceFiscale:
+          dataCliente.codiceFiscale ||
+          dataCliente.piva_cf ||
+          dataCliente.pivaCf ||
+          dataCliente.piva ||
+          "",
+
+        indirizzo:
+          dataCliente.indirizzo ||
+          "",
+
+        numeroCivico:
+          dataCliente.numeroCivico ||
+          dataCliente.civico ||
+          "",
+
+        cap:
+          dataCliente.cap ||
+          "",
+
+        comune:
+          dataCliente.comune ||
+          "",
+
+        provincia:
+          dataCliente.provincia ||
+          "",
+
+        capCitta:
+          dataCliente.capCitta ||
+          "",
+
+        codiceDestinatario:
+          dataCliente.codiceDestinatario ||
+          dataCliente["Cod.destinatario"] ||
+          dataCliente.codiceSdi ||
+          "",
+
+        pec:
+          dataCliente.pec ||
+          "",
+
+        email:
+          dataCliente.email ||
+          dataCliente.mail ||
+          ""
+      };
+    }
+
+    /*
+     * ==========================================
+     * BANCHE
+     * ==========================================
+     */
+    const bancheSnap = await getDocs(
+      collection(db, "banche")
+    );
+
+    const bancheAttive =
+      bancheSnap.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .filter(
+          (b) => b.attiva !== false
+        );
+
+    const bancaPredefinita =
+      bancheAttive.find(
+        (b) => b.predefinita === true
+      ) ||
+      bancheAttive[0] ||
+      null;
+
+    /*
+     * ==========================================
+     * NUMERO FATTURA PROPOSTO
+     * ==========================================
+     */
+    const ultimoNumero =
+      Number(
+        config.ultimoNumeroFattura || 0
+      );
+
+    const numeroFatturaProposto =
+      String(
+        ultimoNumero + 1
+      ).padStart(6, "0");
+
+    /*
+     * ==========================================
+     * DATI FISCALI
+     * ==========================================
+     */
+    const dataFattura =
+      new Date();
+
+    const dataScadenzaPagamento =
+      new Date(dataFattura);
+
+    /*
+     * ==========================================
+     * DATI CEDENTE
+     * ==========================================
+     */
+    const cedente = {
+      ragioneSociale:
+        config.ragioneSociale || "",
+
+      indirizzo:
+        config.indirizzo || "",
+
+      capCitta:
+        config.capCitta || "",
+
+      piva:
+        config.piva || "",
+
+      codiceFiscale:
+        config.codiceFiscale ||
+        config.piva ||
+        "",
+
+      codiceDestinatario:
+        config.codiceDestinatario ||
+        config["Cod.destinatario"] ||
+        "",
+
+      pec:
+        config.pec || "",
+
+      email:
+        config.emailAziendale ||
+        config.mailRecupero ||
+        "",
+
+      regimeFiscale:
+        config.regimeFiscale ||
+        "RF18"
+    };
+
+    /*
+     * ==========================================
+     * APERTURA NUOVA FATTURA
+     * ==========================================
+     */
+    setModalTipo("fattura");
 
     setModalData({
-      cliente: filtroFornitore,
-      movimentiIds: movimenti.map((m) => m.id),
-      blocchi: movimenti.flatMap((m) => m.cer || []),
-      documentoEsistente: false
+      cliente: clienteNome,
+
+      clienteDati,
+
+      cedente,
+
+      banca: bancaPredefinita,
+
+      movimentiIds:
+        movimenti.map((m) => m.id),
+
+      blocchi:
+        movimenti.flatMap(
+          (m) => m.cer || []
+        ),
+
+      documentoEsistente: false,
+
+      /*
+       * Dati fattura
+       */
+      numeroFattura:
+        numeroFatturaProposto,
+
+      dataFattura,
+
+      tipoDocumento:
+        "TD24",
+
+      naturaIva:
+        config.naturaIvaDefault ||
+        "N6.1",
+
+      riferimentoNormativo:
+        config.riferimentoNormativo ||
+        "N6.1 - ART. 74 C.7 E 8 DPR 633/72",
+
+      condizioniPagamento:
+        config.condizioniPagamentoDefault ||
+        "TP02",
+
+      modalitaPagamento:
+        config.modalitaPagamentoDefault ||
+        "MP05",
+
+      dataScadenzaPagamento:
+        dataScadenzaPagamento
     });
 
   } catch (err) {
