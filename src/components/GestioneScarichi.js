@@ -1,151 +1,31 @@
 // src/components/GestioneScarichi.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db, auth } from "../firebase";
-import { collection, getDocs, updateDoc, doc, getDoc, addDoc, setDoc,deleteDoc } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, getDoc, addDoc, setDoc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import jsPDF from "jspdf";
 import { scriviLog } from "../utils/log";
-import autoTable from "jspdf-autotable";
 import Select from "react-select";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
-export const applyListino = async ({
-  movimentiIds = [],
-  listino,
-  db,
-  scarichi = [],
-  setScarichi
-}) => {
-  if (!movimentiIds.length) return scarichi;
-  if (!listino || listino === "tutti") return scarichi;
 
-  try {
-    const listiniSnap = await getDocs(collection(db, "listini"));
+import {  salvaProspettoUnificato as salvaProspettoUnificatoService,getConfigAzienda,caricaAnagraficaCliente,caricaBancheAttive} from "./GestioneScarichi/services/documentiService";
+import {  calcolaRighePerGiorno,  ordinaRighePerGiorno} from "./GestioneScarichi/utils/riepilogoGiornaliero";
+import { stampaProspetto } from "./GestioneScarichi/stampa/stampaProspetto";
+import { stampaDocumento } from "./GestioneScarichi/stampa/stampaDocumento";
+import {stampaMovimenti} from "./GestioneScarichi/stampa/stampaMovimenti";
+import { validaEPreparaProspetto } from "./GestioneScarichi/services/fatturaService";
+import { getUtenteReact,caricaMovimenti,applyListino,caricaListini } from "./GestioneScarichi/services/movimentiService";
+import {
+  formatEuro,getLabelFornDest,
+  normalizzaCER,formatDataIT,
+  calcolaRiga, round2, normalizeDate
+} from "./GestioneScarichi/utils/calcoli";
 
-    let listinoSelezionato = null;
 
-    listiniSnap.docs.forEach((d) => {
-      const data = d.data();
-      const nome = (data.nome || "").toString().trim().toLowerCase();
 
-      if (nome === listino.toString().trim().toLowerCase()) {
-        listinoSelezionato = data;
-      }
-    });
-
-    if (!listinoSelezionato) {
-      console.error("❌ LISTINO NON TROVATO:", listino);
-      return scarichi;
-    }
-
-    const prezzi = listinoSelezionato.prezzi || {};
-    const smartMap = {};
-
-    Object.entries(prezzi).forEach(([key, val]) => {
-      const k = (key ?? "")
-        .toString()
-        .toUpperCase()
-        .trim()
-        .replace(/[^A-Z0-9]/g, "");
-
-      smartMap[k] = val;
-      smartMap[k.replace(/\./g, "")] = val;
-    });
-
-    const norm = (v) =>
-      (v ?? "")
-        .toString()
-        .toUpperCase()
-        .trim()
-        .replace(/[^A-Z0-9]/g, "");
-
-    const aggiornati = scarichi.map((movimento) => {
-      if (!movimentiIds.includes(movimento.id)) {
-        return movimento;
-      }
-
-      const tipo = movimento.tipo || "scarico";
-      const field = tipo === "carico" ? "carico" : "scarico";
-
-      if (!Array.isArray(movimento.cer)) {
-        return movimento;
-      }
-
-      const cerAggiornati = movimento.cer.map((cer) => ({
-        ...cer,
-
-        righe: (cer.righe || []).map((r) => {
-          const raw = r.materiale;
-          const key = norm(raw);
-
-          const prezzoObj =
-            smartMap[key] ||
-            smartMap[raw] ||
-            null;
-
-          if (!prezzoObj) {
-            return r;
-          }
-
-          const acquisto =
-            prezzoObj.acquisto ??
-            prezzoObj.prezzoAcquisto ??
-            0;
-
-          const vendita =
-            prezzoObj.vendita ??
-            prezzoObj.prezzoVendita ??
-            0;
-
-          const prezzoFinale =
-            tipo === "scarico"
-              ? acquisto
-              : vendita;
-
-          return {
-            ...r,
-
-            prezzoAcquisto:
-              tipo === "scarico"
-                ? Number(acquisto)
-                : Number(r.prezzoAcquisto ?? 0),
-
-            prezzoVendita:
-              tipo === "carico"
-                ? Number(vendita)
-                : Number(r.prezzoVendita ?? 0),
-
-            prezzo: Number(prezzoFinale ?? 0),
-
-            listino
-          };
-        })
-      }));
-
-      return {
-        ...movimento,
-
-        cer: cerAggiornati,
-
-        listino
-      };
-    });
-
-    // 🔥 MODIFICA SOLO LA COPIA IN MEMORIA
-    if (typeof setScarichi === "function") {
-      setScarichi(aggiornati);
-    }
-
-    return aggiornati;
-
-  } catch (e) {
-    console.error("💥 ERRORE APPLYLISTINO:", e);
-    return scarichi;
-  }
-};
 registerLocale("it", it);
 const GestioneScarichi = () => {
 const [scarichi, setScarichi] = useState([]);
@@ -178,7 +58,8 @@ const [filtroDestinatario, setFiltroDestinatario] = useState("tutti");
   const [listiniDisponibili, setListiniDisponibili] = useState([]);
   const [utentiDisponibili, setUtentiDisponibili] = useState([]);
   const [modalTipo, setModalTipo] = useState(null); 
-const round2 = (n) => {  const num = Number(n) || 0;  return Number(num.toFixed(2));};
+const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
+const salvataggioInCorsoRef = useRef(false);
 const [modalData, setModalData] = useState(null);
   const [listini, setListini] = useState({});
 const [filtroCER, setFiltroCER] = useState("tutti");
@@ -186,13 +67,13 @@ const [cerDisponibili, setCerDisponibili] = useState([]);
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-const normalizeDate = (d) => {  if (!d) return null;  if (d instanceof Date) return d;  if (d?.toDate) return d.toDate();  return new Date(d);};
-  const getLabelFornDest = () => {  if (tipoMovimento === "carico") return "Smaltitori";  if (tipoMovimento === "scarico") return "Fornitori";  return "Fornitore / Smaltitore";};
+
+ 
   const navigate = useNavigate();
   const location = useLocation();
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
  const goHome = () => {  window.location.href = "/admin";};
-  const formatDataIT = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  
 const requestSort = (key) => {  let direction = "asc";  if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";  setSortConfig({ key, direction });};
 useEffect(() => {
   const today = new Date();
@@ -201,17 +82,7 @@ useEffect(() => {
   setAl(today);
 }, []);
 
-const getUtenteReact = () => {
-  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
 
-  return (
-    u?.username ||
-    u?.email ||
-    auth.currentUser?.displayName ||
-    auth.currentUser?.email ||
-    "sconosciuto"
-  );
-};
 const pulitiIds = React.useMemo(() => {
   return (modalData?.movimentiIds || []).map(id =>
     id.replace(/^scarico_/, "").replace(/^carico_/, "")
@@ -219,32 +90,18 @@ const pulitiIds = React.useMemo(() => {
 }, [modalData]);
 const fetchMovimenti = async () => {
   try {
-    const scarichiSnap = await getDocs(collection(db, "scarichi"));
-    const carichiSnap = await getDocs(collection(db, "carichi"));
-    const parseData = normalizeDate;
-  const parseDoc = (d, tipo) => {
-  const data = d.data();
-  const movimenti = Array.isArray(data[tipo]) ? data[tipo] : [];
-  return {
-    id: d.id, // 🔥 ID FIRESTORE VERO (OBBLIGATORIO)
-    uiId: `${tipo}_${d.id}`, // solo UI
-    realId: d.id, // safety
-    tipo,    data: parseData(data.data),    fornitore: data.fornitore || "sconosciuto",    listino: data.listino || "sconosciuto",    utente: data.utente || "sconosciuto",    
-    movimentoFinanziarioId:
-  data.movimentoFinanziarioId !== undefined &&
-  data.movimentoFinanziarioId !== null &&
-  String(data.movimentoFinanziarioId).trim() !== ""    ? data.movimentoFinanziarioId    : null,
-    cer: movimenti.map(m => ({
-      fir: m.fir || "-",      cer: m.cer || m.codiceCER || "-",      tipo: m.tipo,      righe: (m.righe || []).map(r => ({        ...r,        netto: r.netto || 0,        prezzoAcquisto: r.prezzoAcquisto || 0,        prezzoVendita: r.prezzoVendita || 0      }))    }))  };};
-    const scarichi = scarichiSnap.docs.map(d => parseDoc(d, "scarico"));
-    const carichi = carichiSnap.docs.map(d => parseDoc(d, "carico"));
-    const tuttiMovimenti = [...scarichi, ...carichi];
-    tuttiMovimenti.sort((a, b) => b.data - a.data);
+    const tuttiMovimenti = await caricaMovimenti(db);
+
     setScarichi(tuttiMovimenti);
+
     if (tuttiMovimenti.length) {
-      const ordinati = [...tuttiMovimenti].sort((a, b) => a.data - b.data);
+      const ordinati = [...tuttiMovimenti].sort(
+        (a, b) => a.data - b.data
+      );
+
       const oggi = new Date();
       oggi.setHours(23, 59, 59, 999);
+
       setMinDataDB(ordinati[0]?.data || null);
       setMaxDataDB(oggi);
     }
@@ -252,34 +109,14 @@ const fetchMovimenti = async () => {
     console.error("Errore caricamento movimenti:", err);
   }
 };
-const validaEPreparaProspetto = async (movimentiIds) => {
-  const collections = ["prospettiFattura", "fattureCarichi"];
-  const conflittiPagati = [];
-  const daEliminare = [];
-  for (const col of collections) {
-    const snap = await getDocs(collection(db, col));
-    snap.docs.forEach((d) => {
-      const p = d.data();
-      const ids = p.movimentiIds || p.scarichiIds || [];
-      if (!Array.isArray(ids)) return;
-      const overlap = ids.filter((id) => movimentiIds.includes(id));
-      if (overlap.length === 0) return;
-      if (p.DataPagamento) {        conflittiPagati.push({          id: d.id,          collection: col,          fornitore: p.fornitore,          dataPagamento: p.DataPagamento,          overlap,        });      
-    } else {        daEliminare.push({ id: d.id, collection: col });      }    });
-  }
-  if (conflittiPagati.length > 0) {    const msg = conflittiPagati
-      .map(
-        (c) =>
-          `Fornitore: ${c.fornitore} - Pagato il: ${            c.dataPagamento?.toDate?.()?.toLocaleDateString("it-IT") ||            c.dataPagamento ||            "N/D"          }`      )
-      .join("\n");
-    throw new Error("SCARICO_GIA_PAGATO\n\n" + msg);
-  }
-  for (const d of daEliminare) {    await deleteDoc(doc(db, d.collection, d.id));  }
-  return true;
-};
 
 
+const salvataggioDocumentoRef = useRef(false);
 const handleSalvaDocumento = async () => {
+  if (salvataggioDocumentoRef.current) return;
+
+  salvataggioDocumentoRef.current = true;
+setSalvataggioInCorso(true);
   try {
     if (!modalData) {
       alert("❌ Dati modal mancanti");
@@ -302,7 +139,7 @@ const handleSalvaDocumento = async () => {
       return;
     }
 
-    await validaEPreparaProspetto(movimentiIds);
+  await validaEPreparaProspetto(db, movimentiIds);
 
     if (listinoApplicato !== "tutti") {
       const listiniSnap = await getDocs(collection(db, "listini"));
@@ -520,7 +357,7 @@ const handleSalvaDocumento = async () => {
       ripristinabile: true
     });
 
-    alert("✅ Documento salvato correttamente");
+    //alert("✅ Documento salvato correttamente");
     setModalData(null);
 
   } catch (err) {
@@ -534,23 +371,16 @@ const handleSalvaDocumento = async () => {
     } else {
       alert("❌ Errore salvataggio");
     }
+  } finally {
+    salvataggioDocumentoRef.current = false;
+    setSalvataggioInCorso(false);
   }
 };
 
 
 
 const salvaProspettoUnificato = async (modalData, tipo) => {
-  const scarichiIds = modalData.movimentiIds || [];
-  if (!scarichiIds.length) {    throw new Error("Nessun movimento selezionato");  }
-  await validaEPreparaProspetto(scarichiIds);
- let totale = 0;
-(modalData.blocchi || []).forEach(b => {
-  (b.righe || []).forEach(r => {   const kg = money(r.netto);    const prezzo = money(r.prezzo);    totale += round2(kg * prezzo);  });
-});
-totale = round2(totale);
-  const collectionName =
-    tipo === "prospetto" ? "prospetti" : "fattureCarichi";
-  return addDoc(collection(db, collectionName), {    tipo,    cliente: modalData.cliente,    totale,    movimentiIds: scarichiIds,    blocchi: modalData.blocchi,    dataCreazione: new Date().toISOString(),    DataPagamento: null  });
+  return await salvaProspettoUnificatoService({    db,    modalData,    tipo,    money,    round2,  });
 };
  
 useEffect(() => {
@@ -587,23 +417,7 @@ useEffect(() => {
 useEffect(() => {
   fetchMovimenti();
 }, [reloadKey]);
-  // --- LOAD LISTINI (FIX NUOVO DB) ---
-const loadListini = async () => {
-  try {
-    const snap = await getDocs(collection(db, "listini"));
-    const mapListini = {};
-    snap.docs.forEach(d => {
-      const data = d.data();
-      mapListini[data.nome] = {
-        prezzi: data.prezzi,
-        tipoListino: data.tipoListino
-      };
-    });
-    setListini(mapListini);
-  } catch (e) {
-    console.error(e);
-  }
-};
+
 useEffect(() => {
   const set = new Set();
   scarichi.forEach(s => {
@@ -776,6 +590,18 @@ const isDocumentoDisabled = () => {
 
   return !hasScarico && !hasCarico;
 };
+
+
+const loadListini = async () => {
+  try {
+    const mapListini = await caricaListini(db);
+    setListini(mapListini);
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+
 const getDocumentoLabel = () => {
   if (filtroFornitore === "tutti") {
     return "⚠️ Seleziona controparte";
@@ -808,260 +634,18 @@ filteredScarichi.forEach(s => {
   if (!scarichiPerGiorno[giornoIT]) scarichiPerGiorno[giornoIT] = [];
   scarichiPerGiorno[giornoIT].push(s);
 });
-const getConfigAzienda = async () => {
-  const snap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
-  if (!snap.exists()) return null;
-  return snap.data();
-};
 
-const righePerGiorno = Object.keys(scarichiPerGiorno).map(giornoIT => {
-  const movimentiDelGiorno = scarichiPerGiorno[giornoIT];
-  const safe = (v) => Number(v) || 0;
-const tuttiCer = movimentiDelGiorno.flatMap(s =>
-  (s.cer || []).map(cer => ({    fir: cer.fir || "-",    cer: cer.cer || cer.codiceCER || "-",    tipo: cer.tipo ?? s.tipo,    listino: s.listino,    movimentoFinanziarioId: s.movimentoFinanziarioId,
-    righe: (cer.righe || []).map(r => ({      ...r,      fir: cer.fir || "-",      cer: cer.cer || cer.codiceCER || "-",
-      materiale: r.materiale,      netto: r.netto || 0,      prezzoAcquisto: r.prezzoAcquisto || 0,      prezzoVendita: r.prezzoVendita || 0,    }))  }))
-);
-  const nrMovimentiScarico = tuttiCer.filter(c => c.tipo === "scarico").length;
-  const nrMovimentiCarico = tuttiCer.filter(c => c.tipo === "carico").length;
-  const nrFIR = tuttiCer.map(c => c.fir).filter(Boolean).length;
-  const pesoScarichi = tuttiCer
-    .filter(c => c.tipo === "scarico")
-    .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
-  const pesoCarichi = tuttiCer
-    .filter(c => c.tipo === "carico")
-    .reduce((tot, c) => tot + c.righe.reduce((s, r) => s + safe(r.netto), 0), 0);
- 
-    // =========================
-//   SCARICHI
-// =========================
-
-// Peso lordo scarichi
-const pesoLordoScarichi = tuttiCer
-  .filter(c => c.tipo === "scarico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.peso || 0), 0),
-  0);
-
-// Calo scarichi (Kg o % con arrotondamento)
-const caloScarichi = tuttiCer
-  .filter(c => c.tipo === "scarico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => {
-      const peso = safe(r.peso || 0);
-      const calo = safe(r.calo || 0);
-
-      const caloKg = r.caloTipo === "perc"
-        ? (peso * calo) / 100
-        : calo;
-
-      const caloKgRounded =
-        (caloKg % 1) <= 0.50
-          ? Math.floor(caloKg)
-          : Math.ceil(caloKg);
-
-      return s + caloKgRounded;
-    }, 0),
-  0);
-
-// 🔥 NUOVO: Tara scarichi (sempre in KG)
-const taraScarichi = tuttiCer
-  .filter(c => c.tipo === "scarico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.tara || 0), 0),
-  0);
-
-// Peso netto scarichi
-const pesoNettoScarichi = tuttiCer
-  .filter(c => c.tipo === "scarico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.netto || 0), 0),
-  0);
-
-
-// =========================
-//   CARICHI
-// =========================
-
-// Peso lordo carichi
-const pesoLordoCarichi = tuttiCer
-  .filter(c => c.tipo === "carico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.peso || 0), 0),
-  0);
-
-// Calo carichi (Kg o % con arrotondamento)
-const caloCarichi = tuttiCer
-  .filter(c => c.tipo === "carico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => {
-      const peso = safe(r.peso || 0);
-      const calo = safe(r.calo || 0);
-
-      const caloKg = r.caloTipo === "perc"
-        ? (peso * calo) / 100
-        : calo;
-
-      const caloKgRounded =
-        (caloKg % 1) <= 0.50
-          ? Math.floor(caloKg)
-          : Math.ceil(caloKg);
-
-      return s + caloKgRounded;
-    }, 0),
-  0);
-
-// 🔥 NUOVO: Tara carichi (sempre in KG)
-const taraCarichi = tuttiCer
-  .filter(c => c.tipo === "carico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.tara || 0), 0),
-  0);
-
-// Peso netto carichi
-const pesoNettoCarichi = tuttiCer
-  .filter(c => c.tipo === "carico")
-  .reduce((tot, c) =>
-    tot + c.righe.reduce((s, r) => s + safe(r.netto || 0), 0),
-  0);
-
-
- 
-    const costiTotali = tuttiCer
-    .filter(c => c.tipo === "scarico")
-    .reduce((tot, c) =>
-      tot + c.righe.reduce((s, r) =>
-        s + safe(r.prezzoAcquisto) * safe(r.netto), 0
-      )
-    , 0);
-  const ricaviTotali = tuttiCer
-    .filter(c => c.tipo === "carico")
-    .reduce((tot, c) =>
-      tot + c.righe.reduce((s, r) =>
-        s + safe(r.prezzoVendita) * safe(r.netto), 0
-      )
-    , 0);
-  const utentiDelGiorno = [...new Set(
-    movimentiDelGiorno.map(s =>
-      `${s.fornitore || s.destinatario || "sconosciuto"} / ${s.utente || "Sconosciuto"}`
-    )
-  )].join("; ");
- const totaleMovimenti = movimentiDelGiorno.length;
-const consuntivati = movimentiDelGiorno.filter(
-  m => m.movimentoFinanziarioId
-).length;
-const hasConsuntivati = consuntivati > 0;
-let backgroundColor = "";
-let textColor = "#000";
-const filtroAttivo =
-  filtroFornitore !== "tutti" ||
-  filtroListino !== "tutti" ||
-  filtroUtente !== "tutti" ||
-  filtroCER !== "tutti";
-if (hasConsuntivati && filtroAttivo) {
-  backgroundColor = "#40ef46"; // verde SOLO con controparti selezionate
-} else if (nrMovimentiScarico > 0 && nrMovimentiCarico > 0) {
-  backgroundColor = "#326c9f";
-  textColor = "#fff";
-} else if (nrMovimentiCarico > 0) {
-  backgroundColor = "#C8E6C9";
-} else {
-  backgroundColor = "#FFECB3";
-}
- return {    
-    giornoIT,    
-    nrMovimentiScarico,    
-    nrMovimentiCarico,    
-    nrFIR,    
-    pesoLordoScarichi,    
-    caloScarichi,    
-    taraScarichi,  // 🔥 NUOVO
-    pesoNettoScarichi,    
-    pesoLordoCarichi,    
-    caloCarichi,    
-    taraCarichi,  // 🔥 NUOVO
-    pesoNettoCarichi,    
-    costiTotali,    
-    ricaviTotali,    
-    utenti: utentiDelGiorno,    
-    backgroundColor,    
-    textColor,    
-    tooltip: hasConsuntivati      
-      ? `Consuntivati: ${consuntivati}/${totaleMovimenti}`      
-      : ""
-  };
-  });
-const righeOrdinate = [...righePerGiorno].sort((a, b) => {
-  if (sortConfig.key === "data") {
-    const [ggA, mmA, yyyyA] = a.giornoIT.split("/").map(Number);
-    const [ggB, mmB, yyyyB] = b.giornoIT.split("/").map(Number);
-    return sortConfig.direction === "asc"
-      ? new Date(yyyyA, mmA-1, ggA) - new Date(yyyyB, mmB-1, ggB)
-      : new Date(yyyyB, mmB-1, ggB) - new Date(yyyyA, mmA-1, ggA);
-  } else if (sortConfig.key === "movimenti") {
-    const totA = a.nrMovimentiScarico + a.nrMovimentiCarico;
-    const totB = b.nrMovimentiScarico + b.nrMovimentiCarico;
-    return sortConfig.direction === "asc" ? totA - totB : totB - totA;
-  } else if (sortConfig.key === "costi") {
-    return sortConfig.direction === "asc" ? a.costiTotali - b.costiTotali : b.costiTotali - a.costiTotali;
-  } else if (sortConfig.key === "ricavi") {
-    return sortConfig.direction === "asc" ? a.ricaviTotali - b.ricaviTotali : b.ricaviTotali - a.ricaviTotali;
-  } else if (sortConfig.key === "nrFIR") {
-    return sortConfig.direction === "asc" ? a.nrFIR - b.nrFIR : b.nrFIR - a.nrFIR;
-  } else if (sortConfig.key === "nrFornitori") {
-    return sortConfig.direction === "asc" ? a.nrFornitori - b.nrFornitori : b.nrFornitori - a.nrFornitori;
-  } else if (sortConfig.key === "pesoLordoScarichi") {
-  return sortConfig.direction === "asc"
-    ? a.pesoLordoScarichi - b.pesoLordoScarichi
-    : b.pesoLordoScarichi - a.pesoLordoScarichi;
-}
-
-else if (sortConfig.key === "caloScarichi") {
-  return sortConfig.direction === "asc"
-    ? a.caloScarichi - b.caloScarichi
-    : b.caloScarichi - a.caloScarichi;
-}
-
-// 🔥 NUOVO: Sort per taraScarichi
-else if (sortConfig.key === "taraScarichi") {
-  return sortConfig.direction === "asc"
-    ? a.taraScarichi - b.taraScarichi
-    : b.taraScarichi - a.taraScarichi;
-}
-
-else if (sortConfig.key === "pesoNettoScarichi") {
-  return sortConfig.direction === "asc"
-    ? a.pesoNettoScarichi - b.pesoNettoScarichi
-    : b.pesoNettoScarichi - a.pesoNettoScarichi;
-}
-
-else if (sortConfig.key === "pesoLordoCarichi") {
-  return sortConfig.direction === "asc"
-    ? a.pesoLordoCarichi - b.pesoLordoCarichi
-    : b.pesoLordoCarichi - a.pesoLordoCarichi;
-}
-
-else if (sortConfig.key === "caloCarichi") {
-  return sortConfig.direction === "asc"
-    ? a.caloCarichi - b.caloCarichi
-    : b.caloCarichi - a.caloCarichi;
-}
-
-// 🔥 NUOVO: Sort per taraCarichi
-else if (sortConfig.key === "taraCarichi") {
-  return sortConfig.direction === "asc"
-    ? a.taraCarichi - b.taraCarichi
-    : b.taraCarichi - a.taraCarichi;
-}
-
-else if (sortConfig.key === "pesoNettoCarichi") {
-  return sortConfig.direction === "asc"
-    ? a.pesoNettoCarichi - b.pesoNettoCarichi
-    : b.pesoNettoCarichi - a.pesoNettoCarichi;
-}
-
-  return 0;
+const righePerGiorno = calcolaRighePerGiorno({
+  scarichiPerGiorno,
+  filtroFornitore,
+  filtroListino,
+  filtroUtente,
+  filtroCER,
 });
+const righeOrdinate = ordinaRighePerGiorno(
+  righePerGiorno,
+  sortConfig
+);
 const firPerGiorno = {};
 filteredScarichi.forEach(s => {
  const dataObj = normalizeDate(s.data);
@@ -1249,7 +833,7 @@ const handleApriDocumento = async () => {
        */
       if (tipo === "fattura") {
         const config =
-          (await getConfigAzienda()) || {};
+          (await getConfigAzienda(db)) || {};
 
         const bancheSnap = await getDocs(
           collection(db, "banche")
@@ -1443,7 +1027,7 @@ const handleApriDocumento = async () => {
      */
 
     const config =
-      (await getConfigAzienda()) || {};
+      (await getConfigAzienda(db)) || {};
 
     /*
      * ==========================================
@@ -1455,129 +1039,10 @@ const handleApriDocumento = async () => {
       movimenti[0]?.fornitore ||
       "";
 
-    let clienteDati = null;
+    const clienteDati = await caricaAnagraficaCliente(db, clienteNome);
 
-    const fornitoriSnap = await getDocs(
-      collection(db, "fornitori")
-    );
-
-    const normalizza = (v) =>
-      String(v || "")
-        .trim()
-        .toLowerCase();
-
-    const clienteTrovato =
-      fornitoriSnap.docs.find((d) => {
-        const data = d.data();
-
-        const nome =
-          data.nome ||
-          data.ragioneSociale ||
-          "";
-
-        return (
-          normalizza(nome) ===
-          normalizza(clienteNome)
-        );
-      });
-
-    if (clienteTrovato) {
-      const dataCliente =
-        clienteTrovato.data();
-
-      clienteDati = {
-        id: clienteTrovato.id,
-
-        ragioneSociale:
-          dataCliente.ragioneSociale ||
-          dataCliente.nome ||
-          clienteNome,
-
-        nome:
-          dataCliente.nome ||
-          "",
-
-        piva:
-          dataCliente.piva ||
-          dataCliente.piva_cf ||
-          dataCliente.pivaCf ||
-          dataCliente.codiceFiscale ||
-          "",
-
-        codiceFiscale:
-          dataCliente.codiceFiscale ||
-          dataCliente.piva_cf ||
-          dataCliente.pivaCf ||
-          dataCliente.piva ||
-          "",
-
-        indirizzo:
-          dataCliente.indirizzo ||
-          "",
-
-        numeroCivico:
-          dataCliente.numeroCivico ||
-          dataCliente.civico ||
-          "",
-
-        cap:
-          dataCliente.cap ||
-          "",
-
-        comune:
-          dataCliente.comune ||
-          "",
-
-        provincia:
-          dataCliente.provincia ||
-          "",
-
-        capCitta:
-          dataCliente.capCitta ||
-          "",
-
-        codiceDestinatario:
-          dataCliente.codiceDestinatario ||
-          dataCliente["Cod.destinatario"] ||
-          dataCliente.codiceSdi ||
-          "",
-
-        pec:
-          dataCliente.pec ||
-          "",
-
-        email:
-          dataCliente.email ||
-          dataCliente.mail ||
-          ""
-      };
-    }
-
-    /*
-     * ==========================================
-     * BANCHE
-     * ==========================================
-     */
-    const bancheSnap = await getDocs(
-      collection(db, "banche")
-    );
-
-    const bancheAttive =
-      bancheSnap.docs
-        .map((d) => ({
-          id: d.id,
-          ...d.data()
-        }))
-        .filter(
-          (b) => b.attiva !== false
-        );
-
-    const bancaPredefinita =
-      bancheAttive.find(
-        (b) => b.predefinita === true
-      ) ||
-      bancheAttive[0] ||
-      null;
+const { bancheAttive, bancaPredefinita } =
+  await caricaBancheAttive(db);
 
     /*
      * ==========================================
@@ -1714,400 +1179,52 @@ const handleApriDocumento = async () => {
     );
   }
 };
-const handleStampa = async () => {
-  const movimenti = filteredScarichi;
 
-  if (!movimenti || !Array.isArray(movimenti)) return;
+const handleStampa = async () => {
+await stampaMovimenti({
+filteredScarichi,
+righeOrdinate,
+round2,
+salvaESharePdfCapacitor,
+scriviLog,
+getUtenteReact,
+});
+};
+
+
+
+const confermaSalvataggioProspetto = async () => {
+  if (salvataggioInCorsoRef.current) return;
+
+  salvataggioInCorsoRef.current = true;
+  setSalvataggioInCorso(true);
 
   try {
-    const autoTable = (await import("jspdf-autotable")).default;
-    const { PdfHeader } = await import("../utils/dateUtils");
+    await salvaProspettoUnificato(
+      modalData,
+      modalTipo === "prospetto" ? "prospetto" : "fattura"
+    );
 
-    const formatDate = (date) => {
-      const d =
-        date instanceof Date
-          ? date
-          : date?.toDate
-          ? date.toDate()
-          : new Date(date);
-
-      return d.toLocaleDateString("it-IT");
-    };
-
-    const formatHour = (date) => {
-      const d =
-        date instanceof Date
-          ? date
-          : date?.toDate
-          ? date.toDate()
-          : new Date(date);
-
-      return d.toLocaleTimeString("it-IT", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
-    const safe = (v) => Number(v) || 0;
-    const getUtente = (m) => m.utente || m.email || "sconosciuto";
-
-    const gruppi = {};
-
-    let totaleScarichi = 0;
-    let totaleCarichi = 0;
-    let totalePesoScarichi = 0;
-    let totalePesoCarichi = 0;
-    let totaleCosti = 0;
-    let totaleRicavi = 0;
-
-    movimenti.forEach((s) => {
-      if (!s.data) return;
-
-      const dataObj =
-        s.data instanceof Date
-          ? s.data
-          : s.data?.toDate
-          ? s.data.toDate()
-          : null;
-
-      if (!dataObj) return;
-
-      const giorno = formatDate(dataObj);
-
-      if (!gruppi[giorno]) {
-        gruppi[giorno] = {
-          scarichi: 0,
-          carichi: 0,
-          firSet: new Set(),
-          pesoScarichi: 0,
-          pesoCarichi: 0,
-          costi: 0,
-          ricavi: 0,
-          utenti: new Set(),
-          dettagli: [],
-        };
-      }
-
-      const g = gruppi[giorno];
-      const utente = getUtente(s);
-      const controparte =
-        s.fornitore || s.destinatario || "sconosciuto";
-
-      (s.cer || []).forEach((cer) => {
-        const tipo = cer.tipo ?? s.tipo;
-
-        const righe =
-          cer.righe || [
-            {
-              netto: safe(cer.netto),
-              prezzoAcquisto: safe(cer.prezzoAcquisto),
-              prezzoVendita: safe(cer.prezzoVendita),
-            },
-          ];
-
-        const peso = righe.reduce(
-          (t, r) => t + safe(r.netto),
-          0
-        );
-
-        const costo = righe.reduce(
-          (t, r) =>
-            t +
-            round2(
-              round2(r.prezzoAcquisto) *
-              round2(r.netto)
-            ),
-          0
-        );
-
-        const ricavo = righe.reduce(
-          (t, r) =>
-            t +
-            round2(
-              round2(r.prezzoVendita) *
-              round2(r.netto)
-            ),
-          0
-        );
-
-        if (tipo === "scarico") {
-          g.scarichi++;
-          g.pesoScarichi += peso;
-          g.costi += costo;
-
-          totaleScarichi++;
-          totalePesoScarichi += peso;
-          totaleCosti += costo;
-        } else {
-          g.carichi++;
-          g.pesoCarichi += peso;
-          g.ricavi += ricavo;
-
-          totaleCarichi++;
-          totalePesoCarichi += peso;
-          totaleRicavi += ricavo;
-        }
-
-        if (cer.fir) {
-          g.firSet.add(cer.fir);
-        }
-
-        g.utenti.add(utente);
-
-        g.dettagli.push({
-          ora: formatHour(dataObj),
-          controparte,
-          fir: cer.fir || "-",
-          peso,
-          costo,
-          ricavo,
-          utente,
-          tipo,
-        });
-      });
-    });
-
-    const { pdf, startY } = await PdfHeader();
-
-    let y = startY - 30;
-
-    pdf.setFontSize(14);
-    pdf.text("Report Movimenti", 14, y);
-    y += 8;
-
-    /*
-     * 🔥 IMPORTANTE:
-     * La stampa segue esattamente l'ordine della pagina.
-     * righeOrdinate viene costruito usando sortConfig.
-     */
-    righeOrdinate.forEach((rigaOrdinata) => {
-      const giorno = rigaOrdinata.giornoIT;
-      const g = gruppi[giorno];
-
-      if (!g) return;
-
-      pdf.setFontSize(12);
-      pdf.text(`Giorno: ${giorno}`, 14, y);
-      y += 4;
-
-      autoTable(pdf, {
-        startY: y,
-        head: [
-          [
-            "Ora",
-            "Movimento",
-            "FIR",
-            "Peso",
-            "Costi",
-            "Ricavi",
-            "Utente",
-          ],
-        ],
-        body: g.dettagli.map((d) => [
-          d.ora,
-          d.controparte,
-          d.fir,
-          d.peso.toFixed(2),
-          d.tipo === "scarico"
-            ? d.costo.toFixed(2)
-            : "",
-          d.tipo === "carico"
-            ? d.ricavo.toFixed(2)
-            : "",
-          d.utente,
-        ]),
-        theme: "grid",
-        styles: {
-          fontSize: 9,
-        },
-      });
-
-      y = pdf.lastAutoTable.finalY + 5;
-
-      pdf.text(
-        `Totale giorno: ${g.scarichi}/${g.carichi} | FIR: ${g.firSet.size}`,
-        14,
-        y
-      );
-
-      y += 10;
-
-      if (y > 260) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
-
-    const utile = totaleRicavi - totaleCosti;
-
-    pdf.addPage();
-
-    pdf.setFontSize(14);
-    pdf.text("Totali Complessivi", 14, 20);
-
-    autoTable(pdf, {
-      startY: 30,
-      head: [
-        [
-          "Movimenti",
-          "Peso S",
-          "Peso C",
-          "Costi",
-          "Ricavi",
-          "Utile",
-        ],
-      ],
-      body: [
-        [
-          `${totaleScarichi}/${totaleCarichi}`,
-          totalePesoScarichi.toFixed(2),
-          totalePesoCarichi.toFixed(2),
-          totaleCosti.toFixed(2),
-          totaleRicavi.toFixed(2),
-          utile.toFixed(2),
-        ],
-      ],
-    });
-
-    await salvaESharePdfCapacitor(pdf, "movimenti.pdf");
-
+    setModalProspetto(false);
   } catch (err) {
-    console.error("Errore stampa movimenti:", err);
-
-    try {
-      await scriviLog({
-        pagina: "GestioneScarichi",
-        evento: "ERRORE_STAMPA",
-        utente: getUtenteReact(),
-        riferimento: {
-          funzione: "handleStampa",
-        },
-        before: null,
-        after: {
-          errore: err?.message || "Errore sconosciuto",
-          codice: err?.code || null,
-        },
-        ripristinabile: false,
-      });
-    } catch (erroreLog) {
-      console.error(
-        "❌ ERRORE SCRITTURA LOG STAMPA:",
-        erroreLog
-      );
-    }
-
-    alert("❌ Errore durante la stampa dei movimenti");
+    console.error("Errore salvataggio prospetto:", err);
+    alert(err.message || "Errore durante il salvataggio.");
+  } finally {
+    salvataggioInCorsoRef.current = false;
+    setSalvataggioInCorso(false);
   }
 };
-const confermaSalvataggioProspetto = async () => {
-  setModalProspetto(false);
- await salvaProspettoUnificato(modalData, modalTipo === "prospetto" ? "prospetto" : "fattura");
-};
+
 
 
 const stampaSoloProspetto = async () => {
-  setModalProspetto(false);
-
-  const righe = [];
-
-  righeOrdinate.forEach(g => {
-    const movimentiDelGiorno = filteredScarichi.filter(s => {
-      const dataObj =
-        s.data instanceof Date
-          ? s.data
-          : s.data?.toDate?.() || null;
-
-      if (!dataObj) return false;
-
-      return dataObj.toLocaleDateString("it-IT") === g.giornoIT;
-    });
-
-    movimentiDelGiorno.forEach(m => {
-      if (m.tipo !== "scarico") return;
-
-      (m.cer || []).forEach(c => {
-        (c.righe || []).forEach(r => {
-          const peso = Number(r.peso || 0);
-          const calo = Number(r.calo || 0);
-
-          const caloKgRaw =
-            r.caloTipo === "perc"
-              ? (peso * calo) / 100
-              : calo;
-
-          const caloKg =
-            (caloKgRaw % 1) <= 0.5
-              ? Math.floor(caloKgRaw)
-              : Math.ceil(caloKgRaw);
-
-          const netto = peso - caloKg;
-
-          righe.push({
-            fir: c.fir || "",
-            cer: c.cer || c.codiceCER || "-",
-            materiale: r.materiale || "",
-            pesoLordo: peso,
-            caloKg,
-            caloPerc: r.caloTipo === "perc" ? calo : null,
-            netto,
-            prezzoKg: Number(r.prezzoAcquisto || 0),
-            fornitore: m.fornitore || ""
-          });
-        });
-      });
-    });
+  await stampaProspetto({
+    setModalProspetto,
+    righeOrdinate,
+    filteredScarichi,
+    filtroFornitore,
+    salvaESharePdfCapacitor,
   });
-
-  const fornitoreFinale =
-    filtroFornitore && filtroFornitore !== "tutti"
-      ? filtroFornitore
-      : righe[0]?.fornitore || "";
-
-  const autoTable = (await import("jspdf-autotable")).default;
-  const { PdfHeader } = await import("../utils/dateUtils");
-
-  const { pdf, startY } = await PdfHeader();
-
-  pdf.setFontSize(14);
-  pdf.text("Prospetto Fattura", 14, startY - 10);
-
-  autoTable(pdf, {
-    startY,
-    head: [["FIR", "CER", "Materiale", "Peso Lordo", "Calo", "Netto", "Prezzo €/Kg", "Totale €"]],
-    body: righe.map(r => {
-      const tot = r.netto * r.prezzoKg;
-
-      const caloLabel =
-        r.caloPerc != null
-          ? `${r.caloPerc}% (${r.caloKg} Kg)`
-          : `${r.caloKg} Kg`;
-
-      return [
-        r.fir || "-",
-        r.cer || "-",
-        r.materiale || "-",
-        r.pesoLordo.toFixed(2),
-        caloLabel,
-        r.netto.toFixed(2),
-        r.prezzoKg.toFixed(2),
-        tot.toFixed(2)
-      ];
-    }),
-    styles: { fontSize: 9 }
-  });
-
-  const nomePulito = (fornitoreFinale || "sconosciuto")
-    .replace(/[^a-zA-Z0-9]/g, "_")
-    .toLowerCase();
-
-  const today = new Date()
-    .toLocaleDateString("it-IT")
-    .replace(/\//g, "-");
-
-  await salvaESharePdfCapacitor(
-    pdf,
-    `prospetto_${nomePulito}_${today}.pdf`
-  );
 };
 
 
@@ -2147,604 +1264,62 @@ const getMovimentiValidi = () => {
 const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
 
-const calcolaRiga = (r, tipo) => {
-  const peso = Number(r.peso || r.netto || 0);
-  const calo = Number(r.calo || 0);
-  // 🔥 NUOVO: Aggiunge TARA
-  const tara = Number(r.tara || 0);
 
-  const caloKgRaw = r.caloTipo === "perc" ? (peso * calo) / 100 : calo;
-  const caloKg =
-    (caloKgRaw % 1) <= 0.5 ? Math.floor(caloKgRaw) : Math.ceil(caloKgRaw);
-
-  // 🔥 MODIFICATO: Netto = Peso - Calo - Tara
-  const netto = peso - caloKg - tara;
-  const prezzo =
-    tipo === "scarico"
-      ? Number(r.prezzoAcquisto ?? 0)
-      : Number(r.prezzoVendita ?? 0);
-
-  return { peso, calo, caloKg, tara, netto, prezzo, tot: money(netto * prezzo) };
-};
 const handleStampaDocumento = async () => {
-  try {
-    if (!modalData?.movimentiIds?.length) {
-      alert("❌ Nessun movimento selezionato");
-      return;
-    }
-
-    const isProspetto = modalTipo === "prospetto";
-    const titolo = isProspetto
-      ? "Prospetto Fattura"
-      : "Fattura";
-
-    const movs = scarichi
-      .filter((m) =>
-        modalData.movimentiIds.includes(m.id)
-      )
-      .filter((m) =>
-        isProspetto
-          ? m.tipo === "scarico"
-          : m.tipo === "carico"
-      );
-
-    if (!movs.length) {
-      alert("❌ Nessun movimento da stampare");
-      return;
-    }
-
-    /*
-     * ==========================================
-     * DESCRIZIONI CER DAL DATABASE
-     * ==========================================
-     */
-    const cerSnap = await getDocs(
-      collection(db, "cer_descrizioni")
-    );
-
-    const cerDescrizioni = {};
-
-    cerSnap.docs.forEach((d) => {
-      const dati = d.data();
-
-      const codice = String(
-        dati.codice || d.id || ""
-      )
-        .replace(/\D/g, "")
-        .trim();
-
-      if (codice) {
-        cerDescrizioni[codice] =
-          dati.descrizione || "";
-      }
-    });
-
-    /*
-     * ==========================================
-     * DATI AZIENDA DAL DATABASE
-     * ==========================================
-     */
-    const datiAzienda =
-      (await getConfigAzienda()) || {};
-
-    const ragioneSociale =
-      datiAzienda.ragioneSociale || "";
-
-    const indirizzo =
-      datiAzienda.indirizzo || "";
-
-    const capCitta =
-      datiAzienda.capCitta || "";
-
-    const piva =
-      datiAzienda.piva || "";
-
-    const codDestinatario =
-      datiAzienda["Cod.destinatario"] ||
-      datiAzienda.codDestinatario ||
-      "";
-
-    const pec =
-      datiAzienda.pec || "";
-
-    const email =
-      datiAzienda.mailRecupero || "";
-
-    /*
-     * ==========================================
-     * FORMATTAZIONI
-     * ==========================================
-     */
-    const formatDate = (date) => {
-      if (!date) return "";
-
-      const d =
-        date instanceof Date
-          ? date
-          : date?.toDate
-          ? date.toDate()
-          : new Date(date);
-
-      if (Number.isNaN(d.getTime())) {
-        return "";
-      }
-
-      return d.toLocaleDateString("it-IT");
-    };
-
-    const formatNumero = (value) => {
-      const numero = Number(value || 0);
-      return numero === 0
-        ? "-"
-        : numero.toFixed(2);
-    };
-
-    const formatEuro = (value) => {
-      return Number(value || 0).toLocaleString(
-        "it-IT",
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }
-      );
-    };
-
-    const normalizzaCER = (value) => {
-      return String(value || "")
-        .replace(/\D/g, "")
-        .trim();
-    };
-
-    /*
-     * ==========================================
-     * TABELLA
-     * ==========================================
-     */
-    const autoTable =
-      (await import("jspdf-autotable")).default;
-
-    const {
-      pdf,
-      startY
-    } = await (
-      await import("../utils/dateUtils")
-    ).PdfHeader();
-
-    const body = [];
-    let totale = 0;
-
-    movs.forEach((m) => {
-      (m.cer || []).forEach((c) => {
-        const codiceCER =
-          c.cer ||
-          c.codiceCER ||
-          c.codice ||
-          "-";
-
-        const codiceCERNormalizzato =
-          normalizzaCER(codiceCER);
-
-        const descrizioneCER =
-          cerDescrizioni[
-            codiceCERNormalizzato
-          ] || "";
-
-        const dataFIR =
-          c.dataFIR ||
-          c.firData ||
-          c.data ||
-          m.data;
-
-        /*
-         * ======================================
-         * E.E.R.
-         * ======================================
-         */
-        body.push([
-          {
-            content:
-              `E.E.R. ${codiceCER}` +
-              (
-                descrizioneCER
-                  ? ` ${descrizioneCER}`
-                  : ""
-              ),
-            colSpan: 7,
-            styles: {
-              fontStyle: "bold",
-              fillColor: [238, 238, 238],
-              halign: "left",
-            },
-          },
-        ]);
-
-        /*
-         * ======================================
-         * FIR + DATA
-         * ======================================
-         */
-        body.push([
-          {
-            content:
-              `FIR: ${c.fir || m.fir || "-"}` +
-              (
-                formatDate(dataFIR)
-                  ? `  DEL ${formatDate(dataFIR)}`
-                  : ""
-              ),
-            colSpan: 7,
-            styles: {
-              fontStyle: "bold",
-              halign: "left",
-            },
-          },
-        ]);
-
-        /*
-         * ======================================
-         * RIGHE MATERIALI
-         * ======================================
-         */
-        (c.righe || []).forEach((r) => {
-          const tipo =
-            isProspetto
-              ? "scarico"
-              : "carico";
-
-          const {
-            peso,
-            calo,
-            caloKg,
-            tara,
-            netto,
-            prezzo,
-            tot,
-          } = calcolaRiga(r, tipo);
-
-          totale += tot;
-
-          /*
-           * CALO
-           * 0 -> -
-           * Kg -> 10.00 Kg
-           * %  -> 2.00 %
-           */
-          let caloLabel = "-";
-
-          if (Number(caloKg || 0) !== 0) {
-            if (r.caloTipo === "perc") {
-              caloLabel =
-                `${Number(calo || 0).toFixed(2)} %`;
-            } else {
-              caloLabel =
-                `${Number(caloKg).toFixed(2)} Kg`;
-            }
-          }
-
-          body.push([
-            `ROTTAME ${r.materiale || "-"}`,
-
-            formatNumero(peso),
-
-            caloLabel,
-
-            formatNumero(tara),
-
-            formatNumero(netto),
-
-            formatNumero(prezzo),
-
-            formatEuro(tot),
-          ]);
-        });
-      });
-    });
-
-    totale = round2(totale);
-
-    /*
-     * ==========================================
-     * TITOLO
-     * ==========================================
-     */
-    pdf.setFontSize(14);
-
-    pdf.text(
-      `${titolo} - ${modalData.cliente || ""}`,
-      14,
-      startY - 10
-    );
-
-    /*
-     * ==========================================
-     * TABELLA PDF
-     * ==========================================
-     */
-    autoTable(pdf, {
-      startY,
-
-    head: [[
-  "DESCRIZIONE",
-  "Q.TÀ (KG)",
-  "CALO",
-  "TARA (KG)",
-  "Q.TÀ DA FATTURARE (KG)",
-  "Prezzo Kg. €",
-  "TOT. €",
-]],
-
-      body,
-
-      theme: "grid",
-
-      styles: {
-        fontSize: 8.5,
-        cellPadding: 2,
-        valign: "middle",
-      },
-
-      headStyles: {
-        fontStyle: "bold",
-        halign: "center",
-      },
-
-      columnStyles: {
-        0: {
-          cellWidth: 51,
-        },
-
-        1: {
-          cellWidth: 18,
-          halign: "right",
-        },
-
-        2: {
-          cellWidth: 22,
-          halign: "right",
-        },
-
-        3: {
-          cellWidth: 18,
-          halign: "right",
-        },
-
-        4: {
-          cellWidth: 30,
-          halign: "right",
-        },
-
-        5: {
-          cellWidth: 20,
-          halign: "right",
-        },
-
-        6: {
-          cellWidth: 23,
-          halign: "right",
-        },
-      },
-    });
-
-    /*
-     * ==========================================
-     * TOTALE FATTURA
-     * ==========================================
-     */
-    let y =
-      pdf.lastAutoTable.finalY + 8;
-
-    if (y > 250) {
-      pdf.addPage();
-      y = 20;
-    }
-
-    pdf.setFontSize(12);
-    pdf.setFont(
-      "helvetica",
-      "bold"
-    );
-
-    pdf.text(
-      "TOTALE FATTURA",
-      14,
-      y
-    );
-
-    pdf.text(
-      `€ ${formatEuro(totale)}`,
-      195,
-      y,
-      {
-        align: "right",
-      }
-    );
-
-    y += 12;
-
-    /*
-     * ==========================================
-     * NOTA FISCALE
-     * ==========================================
-     */
-    const notaFiscale = [
-      "N.B.:",
-      "",
-      "IN FATTURA ALLA VOCE",
-      "“RIEPILOGO IVA-NATURA IVA/Rif.normativo”",
-      "VA RIPORTATA LA SEGUENTE DICITURA:",
-      "",
-      "N6.1: Inversione contabile - cessione di rottami",
-      "e altri materiali di recupero",
-      "(Reverse charge art. 74, commi 7 e 8, DPR 633/72)",
-      "",
-      "Invitandovi a prendere nota di quanto sopra",
-      "riportato, porgiamo i nostri più cordiali saluti.",
-    ].join("\n");
-
-    const notaRighe =
-      pdf.splitTextToSize(
-        notaFiscale,
-        180
-      );
-
-    if (
-      y +
-        notaRighe.length * 4 +
-        50 >
-      285
-    ) {
-      pdf.addPage();
-      y = 20;
-    }
-
-    pdf.setFont(
-      "helvetica",
-      "normal"
-    );
-
-    pdf.setFontSize(8.5);
-
-    pdf.text(
-      notaRighe,
-      14,
-      y
-    );
-
-    y +=
-      notaRighe.length * 4 + 10;
-
-    /*
-     * ==========================================
-     * DATI AZIENDALI
-     * ==========================================
-     */
-    const datiAziendaRighe = [];
-
-    if (ragioneSociale) {
-      datiAziendaRighe.push(
-        ragioneSociale
-      );
-    }
-
-    if (indirizzo || capCitta) {
-      datiAziendaRighe.push(
-        [indirizzo, capCitta]
-          .filter(Boolean)
-          .join(" - ")
-      );
-    }
-
-    if (piva) {
-      datiAziendaRighe.push(
-        `P.IVA: ${piva}`
-      );
-    }
-
-    if (codDestinatario) {
-      datiAziendaRighe.push(
-        `Cod. destinatario: ${codDestinatario}`
-      );
-    }
-
-    if (pec) {
-      datiAziendaRighe.push(
-        `Pec: ${pec}`
-      );
-    }
-
-    if (email) {
-      datiAziendaRighe.push(
-        `E-mail: ${email}`
-      );
-    }
-
-    pdf.setFont(
-      "helvetica",
-      "bold"
-    );
-
-    pdf.setFontSize(9);
-
-    pdf.text(
-      datiAziendaRighe,
-      14,
-      y
-    );
-
-    /*
-     * ==========================================
-     * SALVATAGGIO
-     * ==========================================
-     */
-    const nomePulito =
-      (
-        modalData.cliente ||
-        "sconosciuto"
-      )
-        .replace(
-          /[^a-zA-Z0-9]/g,
-          "_"
-        )
-        .toLowerCase();
-
-    const today =
-      new Date()
-        .toLocaleDateString(
-          "it-IT"
-        )
-        .replace(/\//g, "-");
-
-    await salvaESharePdfCapacitor(
-      pdf,
-      `${
-        isProspetto
-          ? "prospetto"
-          : "fattura"
-      }_${nomePulito}_${today}.pdf`
-    );
-
-  } catch (err) {
-    console.error(
-      "Errore stampa documento:",
-      err
-    );
-
-    try {
-      await scriviLog({
-        pagina: "GestioneScarichi",
-        evento:
-          "ERRORE_STAMPA_DOCUMENTO",
-        riferimento: {
-          funzione:
-            "handleStampaDocumento",
-        },
-        before: null,
-        after: {
-          errore:
-            err?.message ||
-            "Errore sconosciuto",
-          codice:
-            err?.code || null,
-        },
-        utente:
-          getUtenteReact(),
-        ripristinabile: false,
-      });
-    } catch (erroreLog) {
-      console.error(
-        "❌ ERRORE SCRITTURA LOG:",
-        erroreLog
-      );
-    }
-
-    alert(
-      "❌ Errore durante la stampa del documento"
-    );
-  }
+await stampaDocumento({
+db,
+modalData,
+modalTipo,
+scarichi,
+getConfigAzienda,
+salvaESharePdfCapacitor,
+scriviLog,
+});
 };
+
 
   return (
     <div className="gestione-scarichi-container">
+
+{salvataggioInCorso && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      background: "rgba(0,0,0,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 100000,
+      color: "white",
+      fontSize: 20,
+      fontWeight: "bold",
+      cursor: "wait",
+    }}
+  >
+    <div
+      style={{
+        background: "rgba(0,0,0,0.65)",
+        padding: "24px 32px",
+        borderRadius: 12,
+        textAlign: "center",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+      }}
+    >
+      <div style={{ fontSize: 36, marginBottom: 12 }}>
+        ⏳
+      </div>
+      Operazione in corso...
+      <div style={{ fontSize: 14, marginTop: 10, fontWeight: "normal" }}>
+        Attendere il completamento del salvataggio
+      </div>
+    </div>
+  </div>
+)}
+
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
         <button onClick={goHome}>🏠 Dashboard</button>
         <button onClick={handleLogout}>
@@ -2908,7 +1483,7 @@ const handleStampaDocumento = async () => {
         />
       </label></div>
   <label className="filter-item">
-    {getLabelFornDest()}:
+    {getLabelFornDest(tipoMovimento)}:
     <Select
       value={
         filtroFornitore === "tutti"
@@ -3077,49 +1652,109 @@ const handleStampaDocumento = async () => {
         {filtroUtente === "tutti" && <td>{r.utenti || r.utentiDelGiorno || "-"}</td>}
       </tr>    ))}
   </tbody>
-</table>{modalProspetto && (
-  <div style={{
-    position: "fixed",    top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.6)",    display: "flex",
-    justifyContent: "center",    alignItems: "center"
-  }}>    <div style={{
-      background: "white",      padding: 20,
-      borderRadius: 10,      width: "80%",
-      maxHeight: "80vh",      overflow: "auto"
-    }}>
-      <h3>Prospetto Fattura</h3>
+</table>
+
+{modalProspetto && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 99999,
+      pointerEvents: salvataggioInCorso ? "auto" : "auto"
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: "white",
+        padding: 20,
+        borderRadius: 10,
+        width: "80%",
+        maxHeight: "80vh",
+        overflow: "auto",
+        opacity: salvataggioInCorso ? 0.7 : 1,
+        pointerEvents: salvataggioInCorso ? "none" : "auto"
+      }}
+    >
+      <h3>
+        {salvataggioInCorso
+          ? "Salvataggio in corso..."
+          : "Prospetto Fattura"}
+      </h3>
+
       <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
         <thead>
           <tr>
-            <th>FIR</th>            <th>CER</th>
-            <th>Materiale</th>            <th>Peso Lordo (Kg)</th>
-            <th>Calo</th>            <th>Tara (Kg)</th>            {/* 🔥 NUOVO */}
+            <th>FIR</th>
+            <th>CER</th>
+            <th>Materiale</th>
+            <th>Peso Lordo (Kg)</th>
+            <th>Calo</th>
+            <th>Tara (Kg)</th>
             <th>Netto (Kg)</th>
-            <th>prezzo €/Kg</th>            <th>Totale €</th>
+            <th>Prezzo €/Kg</th>
+            <th>Totale €</th>
           </tr>
         </thead>
+
         <tbody>
-{prospettoRighe.map((r, i) => {
-  const netto = round2(r.netto);
- const prezzo = money(r.prezzo);
-  const tot = money(netto * prezzo);
-  return (
-    <tr key={i}>      <td>{r.fir}</td>
-      <td>{r.cer}</td>      <td>{r.materiale}</td>
-      <td>{round2(r.peso)}</td>      <td>{round2(r.calo)}</td>
-      <td>{round2(r.tara || 0)}</td>      {/* 🔥 NUOVO */}
-      <td>{netto}</td>      <td>{prezzo}</td>
-      <td>{tot.toFixed(2)}</td>    </tr>  );})}
+          {prospettoRighe.map((r, i) => {
+            const netto = round2(r.netto);
+            const prezzo = money(r.prezzo);
+            const tot = money(netto * prezzo);
+
+            return (
+              <tr key={i}>
+                <td>{r.fir}</td>
+                <td>{r.cer}</td>
+                <td>{r.materiale}</td>
+                <td>{round2(r.peso)}</td>
+                <td>{round2(r.calo)}</td>
+                <td>{round2(r.tara || 0)}</td>
+                <td>{netto}</td>
+                <td>{prezzo}</td>
+                <td>{tot.toFixed(2)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+
       <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-        <button onClick={stampaSoloProspetto}>🖨 Stampa</button>
-        <button onClick={confermaSalvataggioProspetto}>💾 Salva</button>
-        <button onClick={() => setModalProspetto(false)}>❌ Chiudi</button>
+        <button
+          onClick={stampaSoloProspetto}
+          disabled={salvataggioInCorso}
+        >
+          🖨 Stampa
+        </button>
+
+<button
+  onClick={confermaSalvataggioProspetto}
+  disabled={salvataggioInCorso}
+>
+  {salvataggioInCorso ? "⏳ Salvataggio..." : "💾 Salva"}
+</button>
+
+
+        <button
+          onClick={() => setModalProspetto(false)}
+          disabled={salvataggioInCorso}
+        >
+          ❌ Chiudi
+        </button>
       </div>
     </div>
   </div>
 )}
+
+
 {modalData && (
   <div key={reloadKey} style={{
       position: "fixed",      top: 0,      left: 0,      width: "100vw",      height: "100vh",      background: "rgba(0,0,0,0.6)",      display: "flex",      justifyContent: "center",      alignItems: "center",      zIndex: 99999    }}  >
@@ -3369,16 +2004,22 @@ const handleStampaDocumento = async () => {
   </div>
 )}
       <div style={{ marginTop: 20 }}>
-       <button
+
+<button
   onClick={handleSalvaDocumento}
-  disabled={modalData.documentoEsistente}
+  disabled={modalData.documentoEsistente || salvataggioInCorso}
   style={{
-    opacity: modalData.documentoEsistente ? 0.5 : 1,
-    cursor: modalData.documentoEsistente ? "not-allowed" : "pointer"
+    opacity:
+      modalData.documentoEsistente || salvataggioInCorso ? 0.5 : 1,
+    cursor:
+      modalData.documentoEsistente || salvataggioInCorso
+        ? "not-allowed"
+        : "pointer"
   }}
 >
-  💾 Salva
+  {salvataggioInCorso ? "Salvataggio in corso..." : "Salva prospetto"}
 </button>
+
         <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
         <button          onClick={() => setModalData(null)}          style={{ marginLeft: 10 }}        >          ❌ Chiudi        </button>
       </div>

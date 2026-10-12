@@ -48,6 +48,27 @@ const safeDate = (d) => {
 };
 const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   const [fornitori, setFornitori] = useState([]);
+  const [modalControparte, setModalControparte] = useState({
+  aperta: false,
+  modalita: null,
+  id: null
+});
+
+const [formControparte, setFormControparte] = useState({
+  nome: "",
+  indirizzo: "",
+  numeroCivico: "",
+  cap: "",
+  comune: "",
+  provincia: "",
+  nazione: "IT",
+  telefono: "",
+  email: "",
+  piva: "",
+  codiceFiscale: "",
+  codiceDestinatario: "",
+  pec: ""
+});
   const [scarichi, setScarichi] = useState([]);
   const [carichi, setCarichi] = useState([]);
   const [errori, setErrori] = useState([]);
@@ -418,99 +439,28 @@ const countCarichiTotali = (fornitore) => {
     }
   }, [minDataDB, maxDataDB]);
 
-  // ---------------- AGGIUNGI ----------------
-  // ---------------- AGGIUNGI ----------------
-const handleApriFormNuovoFornitore = async () => {
-  try {
-    const returnPage = localStorage.getItem("scaricoReturnPage");
+const handleApriFormNuovoFornitore = () => {
+  setFormControparte({
+    nome: "",
+    indirizzo: "",
+    numeroCivico: "",
+    cap: "",
+    comune: "",
+    provincia: "",
+    nazione: "IT",
+    telefono: "",
+    email: "",
+    piva: "",
+    codiceFiscale: "",
+    codiceDestinatario: "",
+    pec: ""
+  });
 
-    const nomeRaw = prompt("Nome controparte (obbligatorio):");
-    if (!nomeRaw) if (returnPage === "/scarichi") {
-      localStorage.removeItem("scaricoReturnPage");
-      window.location.href = `/scarichi`; 
-     } else return;
-
-    const nome = nomeRaw.trim();
-    if (!nome) if (returnPage === "/scarichi") {
-      localStorage.removeItem("scaricoReturnPage");
-      window.location.href = `/scarich`; 
-     } else return;
-
-    const indirizzo = prompt("Indirizzo (opzionale):") || "";
-    const piva_cf = prompt("P.IVA / CF (opzionale):") || "";
-
-    const nomeKey = nome.toLowerCase().trim();
-
-    // 🔥 CHECK VERO SU FIRESTORE
-    const snap = await getDocs(collection(db, "fornitori"));
-
-    const existing = snap.docs.find(d =>
-      (d.data().nome || "").toLowerCase().trim() === nomeKey
-    );
-
-    let refId;
-
-    if (existing) {
-      refId = existing.id;
-
-      await updateDoc(doc(db, "fornitori", refId), {
-        nome,
-        indirizzo,
-        piva_cf
-      });
-
-      await scriviLog({
-        operationId: createOperationId(),
-        pagina: "GestioneControparti",
-        evento: "FORNITORE_UPDATE",
-        tipo: "UPDATE",
-        collezioneRef: "fornitori",
-        documentoId: refId,
-        before: existing.data(),
-        after: { nome, indirizzo, piva_cf },
-        utente: getUtenteReact(),
-        ripristinabile: true
-      });
-
-    } else {
-      const ref = await addDoc(collection(db, "fornitori"), {
-        nome,
-        indirizzo,
-        piva_cf
-      });
-
-      refId = ref.id;
-
-      await scriviLog({
-        operationId: createOperationId(),
-        pagina: "GestioneControparti",
-        evento: "FORNITORE_CREATE",
-        tipo: "CREATE",
-        collezioneRef: "fornitori",
-        documentoId: refId,
-        before: null,
-        after: { nome, indirizzo, piva_cf },
-        utente: getUtenteReact(),
-        ripristinabile: true
-      });
-    }
-
-    await loadData();
-
-    localStorage.setItem("nuovoFornitore", nome);
-
-    // 🔥 NAVIGAZIONE PULITA
-    if (returnPage === "/scarichi") {
-      localStorage.removeItem("scaricoReturnPage");
-      window.location.href = `/scarichi?newFornitore=${encodeURIComponent(nome)}`;
-    } else {
-      localStorage.removeItem("scaricoReturnPage");
-      alert(`Controparte "${nome}" salvata correttamente`);
-    }
-
-  } catch (e) {
-    setErrori(prev => [...prev, e.message || e]);
-  }
+  setModalControparte({
+    aperta: true,
+    modalita: "nuova",
+    id: null
+  });
 };
   const aggiungiFornitore = () => handleApriFormNuovoFornitore();
 const fornitoriOptions = [...fornitori]
@@ -521,35 +471,245 @@ const fornitoriOptions = [...fornitori]
     value: f.nome,
     label: f.nome
   }));
-  // ---------------- MODIFICA ----------------
-  const modificaFornitore = async (f) => {
-    const indirizzo = prompt(`Modifica indirizzo controparte (${f.nome})`, f.indirizzo || "") || "";
-    const piva_cf = prompt(`Modifica P.IVA / CF (${f.nome})`, f.piva_cf || "") || "";
-    try {
-      const ref = doc(db,"fornitori",f.id);
-      await updateDoc(ref, { indirizzo, piva_cf });
-     const operationId = createOperationId();
+ const modificaFornitore = (f) => {
+  setFormControparte({
+    nome: f.nome || "",
+    indirizzo: f.indirizzo || "",
+    numeroCivico: f.numeroCivico || "",
+    cap: f.cap || "",
+    comune: f.comune || "",
+    provincia: f.provincia || "",
+    nazione: f.nazione || "IT",
+    telefono: f.telefono || "",
+    email: f.email || "",
+    piva: f.piva || "",
+    codiceFiscale: f.codiceFiscale || "",
+    codiceDestinatario:
+      f.codiceDestinatario ||
+      f["Cod.destinatario"] ||
+      "",
+    pec: f.pec || ""
+  });
 
-await scriviLog({
-  operationId,
-  pagina: "GestioneControparti",
-  evento: "CONTROPARTE_UPDATE",
-  tipo: "UPDATE",
-  collezioneRef: "fornitori",
-  documentoId: f.id,
-  before: {
-    nome: f.nome,
-    indirizzo: f.indirizzo,
-    piva_cf: f.piva_cf
-  },
-  after: { indirizzo, piva_cf },
-  utente: getUtenteReact(),
-  ripristinabile: true
-});
-      loadData();
-    } catch(e){ setErrori(prev=>[...prev,e.message]); }
-  };
+  setModalControparte({
+    aperta: true,
+    modalita: "modifica",
+    id: f.id
+  });
+};
+const visualizzaControparte = (f) => {
+  setFormControparte({
+    nome: f.nome || "",
+    indirizzo: f.indirizzo || "",
+    numeroCivico: f.numeroCivico || "",
+    cap: f.cap || "",
+    comune: f.comune || "",
+    provincia: f.provincia || "",
+    nazione: f.nazione || "IT",
+    telefono: f.telefono || "",
+    email: f.email || "",
+    piva: f.piva || "",
+    codiceFiscale: f.codiceFiscale || "",
+    codiceDestinatario:
+      f.codiceDestinatario ||
+      f["Cod.destinatario"] ||
+      "",
+    pec: f.pec || ""
+  });
 
+  setModalControparte({
+    aperta: true,
+    modalita: "visualizza",
+    id: f.id
+  });
+};const salvaControparte = async () => {
+  try {
+    const nome = formControparte.nome.trim();
+
+    if (!nome) {
+      alert("❌ Il nome della controparte è obbligatorio");
+      return;
+    }
+
+    const nomeKey = nome.toLowerCase();
+
+    const duplicato = fornitori.find(
+      (f) =>
+        f.id !== modalControparte.id &&
+        (f.nome || "").trim().toLowerCase() === nomeKey
+    );
+
+    if (duplicato) {
+      alert(
+        "⚠️ Esiste già una controparte con questo nome"
+      );
+      return;
+    }
+
+    const dati = {
+      nome,
+
+      indirizzo:
+        formControparte.indirizzo.trim(),
+
+      numeroCivico:
+        formControparte.numeroCivico.trim(),
+
+      cap:
+        formControparte.cap.trim(),
+
+      comune:
+        formControparte.comune.trim(),
+
+      provincia:
+        formControparte.provincia
+          .trim()
+          .toUpperCase(),
+
+      nazione:
+        (
+          formControparte.nazione ||
+          "IT"
+        )
+          .trim()
+          .toUpperCase(),
+
+      telefono:
+        formControparte.telefono.trim(),
+
+      email:
+        formControparte.email.trim(),
+
+      piva:
+        formControparte.piva
+          .trim()
+          .toUpperCase(),
+
+      codiceFiscale:
+        formControparte.codiceFiscale
+          .trim()
+          .toUpperCase(),
+
+      codiceDestinatario:
+        formControparte.codiceDestinatario
+          .trim()
+          .toUpperCase(),
+
+      pec:
+        formControparte.pec.trim(),
+
+      /*
+       * Manteniamo il vecchio campo per
+       * compatibilità con il gestionale.
+       */
+      piva_cf:
+        formControparte.piva.trim() ||
+        formControparte.codiceFiscale.trim()
+    };
+
+    let refId = modalControparte.id;
+    let before = null;
+
+    if (modalControparte.modalita === "modifica") {
+      const f = fornitori.find(
+        (x) => x.id === modalControparte.id
+      );
+
+      before = f || null;
+
+      await updateDoc(
+        doc(
+          db,
+          "fornitori",
+          modalControparte.id
+        ),
+        dati
+      );
+
+      await scriviLog({
+        operationId: createOperationId(),
+        pagina: "GestioneControparti",
+        evento: "CONTROPARTE_UPDATE",
+        tipo: "UPDATE",
+        collezioneRef: "fornitori",
+        documentoId: modalControparte.id,
+        before,
+        after: dati,
+        utente: getUtenteReact(),
+        ripristinabile: true
+      });
+
+    } else {
+      const ref = await addDoc(
+        collection(db, "fornitori"),
+        dati
+      );
+
+      refId = ref.id;
+
+      await scriviLog({
+        operationId: createOperationId(),
+        pagina: "GestioneControparti",
+        evento: "CONTROPARTE_CREATE",
+        tipo: "CREATE",
+        collezioneRef: "fornitori",
+        documentoId: refId,
+        before: null,
+        after: dati,
+        utente: getUtenteReact(),
+        ripristinabile: true
+      });
+    }
+
+    await loadData();
+
+    const returnPage =
+      localStorage.getItem(
+        "scaricoReturnPage"
+      );
+
+    localStorage.setItem(
+      "nuovoFornitore",
+      nome
+    );
+
+    setModalControparte({
+      aperta: false,
+      modalita: null,
+      id: null
+    });
+
+    if (returnPage === "/scarichi") {
+      localStorage.removeItem(
+        "scaricoReturnPage"
+      );
+
+      window.location.href =
+        `/scarichi?newFornitore=${encodeURIComponent(nome)}`;
+
+      return;
+    }
+
+    alert(
+      `✅ Controparte "${nome}" salvata correttamente`
+    );
+
+  } catch (e) {
+    console.error(
+      "❌ ERRORE SALVATAGGIO CONTROPARTE:",
+      e
+    );
+
+    setErrori((prev) => [
+      ...prev,
+      e.message || String(e)
+    ]);
+
+    alert(
+      "❌ Errore durante il salvataggio della controparte"
+    );
+  }
+};
   // ---------------- ELIMINA ----------------
   const eliminaFornitore = async (f) => {
     if (countScarichiTotali(f)>0 || countCarichiTotali(f)>0) { alert("Non eliminabile: esistono movimenti collegati (carichi o scarichi)."); return; }
@@ -839,8 +999,23 @@ if (sortConfig.key) {
     return (
       <tr key={f.id}>
         <td><b>{f.nome}</b></td>
-        <td>{f.indirizzo || "-"}</td>
-        <td>{f.piva_cf || "-"}</td>
+        <td>
+  {[
+    f.indirizzo,
+    f.numeroCivico,
+    f.cap,
+    f.comune,
+    f.provincia
+  ]
+    .filter(Boolean)
+    .join(" ") || "-"}
+</td>
+     <td>
+  {f.piva ||
+    f.codiceFiscale ||
+    f.piva_cf ||
+    "-"}
+</td>
 
         <td style={{ color: n > 0 ? "red" : "inherit" }}>
           {n}
@@ -850,27 +1025,27 @@ if (sortConfig.key) {
           {nc}
         </td>
 
-        <td>
-        <button onClick={() => safeRenameControparte(f)}>
-  ✏️ Rename
-</button>
-          <button onClick={() => modificaFornitore(f)}>
-            Modifica
-          </button>
+   <td>
+  <button
+    onClick={() => visualizzaControparte(f)}
+  >
+    👁️ Dati
+  </button>
 
-          {tot === 0 ? (
-            <button
-              onClick={() => eliminaFornitore(f)}
-              style={{ marginLeft: 5, background: "red", color: "white" }}
-            >
-              Elimina
-            </button>
-          ) : (
-            <button disabled style={{ marginLeft: 5 }}>
-              Non eliminabile
-            </button>
-          )}
-        </td>
+  <button
+    onClick={() => safeRenameControparte(f)}
+  >
+    ✏️ Rename
+  </button>
+
+  <button
+    onClick={() => modificaFornitore(f)}
+  >
+    Modifica
+  </button>
+
+  ...
+</td>
       </tr>
     );
   })}
@@ -878,6 +1053,372 @@ if (sortConfig.key) {
       </table>
 
       {errori.length>0 && <div style={{color:"red",marginTop:20}}>{errori.join("\n")}</div>}
+
+{modalControparte.aperta && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 99999
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: "white",
+        padding: 20,
+        borderRadius: 10,
+        width: "700px",
+        maxWidth: "90vw",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+      }}
+    >
+      <h2>
+        {modalControparte.modalita === "nuova"
+          ? "➕ Nuova Controparte"
+          : modalControparte.modalita === "modifica"
+          ? "✏️ Modifica Controparte"
+          : "👁️ Dati Controparte"}
+      </h2>
+
+      <h3>Dati anagrafici</h3>
+
+      <div style={{ marginBottom: 10 }}>
+        <label>Nome / Ragione Sociale:</label>
+        <br />
+        <input
+          type="text"
+          value={formControparte.nome}
+          readOnly={
+            modalControparte.modalita === "visualizza"
+          }
+          onChange={(e) =>
+            setFormControparte((prev) => ({
+              ...prev,
+              nome: e.target.value
+            }))
+          }
+          style={{ width: "100%" }}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 180px",
+          gap: 10,
+          marginBottom: 10
+        }}
+      >
+        <div>
+          <label>Indirizzo:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.indirizzo}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                indirizzo: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>Numero civico:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.numeroCivico}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                numeroCivico: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "120px 1fr 100px 100px",
+          gap: 10,
+          marginBottom: 10
+        }}
+      >
+        <div>
+          <label>CAP:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.cap}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                cap: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>Comune:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.comune}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                comune: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>Provincia:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.provincia}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                provincia: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>Nazione:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.nazione}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                nazione: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          marginBottom: 20
+        }}
+      >
+        <div>
+          <label>Telefono:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.telefono}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                telefono: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>E-mail:</label>
+          <br />
+          <input
+            type="email"
+            value={formControparte.email}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                email: e.target.value
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+
+      <h3>Dati fiscali / SDI</h3>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          marginBottom: 10
+        }}
+      >
+        <div>
+          <label>Partita IVA:</label>
+          <br />
+          <input
+            type="text"
+            value={formControparte.piva}
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                piva:
+                  e.target.value.toUpperCase()
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label>Codice fiscale:</label>
+          <br />
+          <input
+            type="text"
+            value={
+              formControparte.codiceFiscale
+            }
+            readOnly={
+              modalControparte.modalita === "visualizza"
+            }
+            onChange={(e) =>
+              setFormControparte((prev) => ({
+                ...prev,
+                codiceFiscale:
+                  e.target.value.toUpperCase()
+              }))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label>Codice destinatario:</label>
+        <br />
+        <input
+          type="text"
+          value={
+            formControparte.codiceDestinatario
+          }
+          readOnly={
+            modalControparte.modalita === "visualizza"
+          }
+          onChange={(e) =>
+            setFormControparte((prev) => ({
+              ...prev,
+              codiceDestinatario:
+                e.target.value.toUpperCase()
+            }))
+          }
+          maxLength={7}
+          style={{
+            width: "250px",
+            textTransform: "uppercase"
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label>PEC:</label>
+        <br />
+        <input
+          type="email"
+          value={formControparte.pec}
+          readOnly={
+            modalControparte.modalita === "visualizza"
+          }
+          onChange={(e) =>
+            setFormControparte((prev) => ({
+              ...prev,
+              pec: e.target.value
+            }))
+          }
+          style={{ width: "100%" }}
+        />
+      </div>
+
+      <div
+        style={{
+          marginTop: 20,
+          display: "flex",
+          gap: 10
+        }}
+      >
+        {modalControparte.modalita !==
+          "visualizza" && (
+          <button onClick={salvaControparte}>
+            💾 Salva
+          </button>
+        )}
+
+        <button
+          onClick={() =>
+            setModalControparte({
+              aperta: false,
+              modalita: null,
+              id: null
+            })
+          }
+        >
+          ❌ Chiudi
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };
