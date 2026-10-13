@@ -1763,7 +1763,9 @@ if (inModifica && returnToDettaglio) {
     label: c
   }));
 
-  const materialiOptions = materialiFiltrati.map(m => ({
+const materialiOptions = [...materialiFiltrati]
+  .sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }))
+  .map(m => ({
     value: m.nome,
     label: m.nome
   }));
