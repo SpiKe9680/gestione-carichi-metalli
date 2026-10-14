@@ -2,19 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  serverTimestamp,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  arrayUnion,
-  query,
-  where,updateDoc
-} from "firebase/firestore";
+import {  collection,  getDocs,  addDoc,  serverTimestamp,  doc,  getDoc,  setDoc,  deleteDoc,  arrayUnion,  query,  where,updateDoc} from "firebase/firestore";
 import autoTable from "jspdf-autotable";
 import { scriviLog } from "../utils/log";
 import "./Scarichi.css";
@@ -25,12 +13,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import { PdfHeader, loadConfigAzienda } from "../utils/dateUtils";
 import Select from "react-select";
 import CreatableSelect from "react-select/creatable";
-import { Filesystem, Directory } from "@capacitor/filesystem";
-import { Capacitor } from "@capacitor/core";
-import { Share } from "@capacitor/share";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 import { assicuratiFornitore } from "../services/fornitoriService";
-
 import { useLocation } from "react-router-dom";
 
 

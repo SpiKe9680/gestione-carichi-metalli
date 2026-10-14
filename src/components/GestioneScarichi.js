@@ -11,6 +11,8 @@ import { scriviLog } from "../utils/log";
 import Select from "react-select";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 
+
+import { stampaFattura } from "./GestioneScarichi/stampa/stampaFattura";
 import {  salvaProspettoUnificato as salvaProspettoUnificatoService,getConfigAzienda,caricaAnagraficaCliente,caricaBancheAttive} from "./GestioneScarichi/services/documentiService";
 import {  calcolaRighePerGiorno,  ordinaRighePerGiorno} from "./GestioneScarichi/utils/riepilogoGiornaliero";
 import { stampaProspetto } from "./GestioneScarichi/stampa/stampaProspetto";
@@ -112,26 +114,37 @@ const fetchMovimenti = async () => {
 
 
 const salvataggioDocumentoRef = useRef(false);
+
 const handleSalvaDocumento = async () => {
   if (salvataggioDocumentoRef.current) return;
 
   salvataggioDocumentoRef.current = true;
-setSalvataggioInCorso(true);
+  setSalvataggioInCorso(true);
+
   try {
     if (!modalData) {
       alert("❌ Dati modal mancanti");
       return;
     }
 
-    const tipo = modalTipo === "prospetto" ? "prospetto" : "fattura";
-    const tipoMov = modalTipo === "prospetto" ? "scarico" : "carico";
-    const collectionName =
-      tipo === "prospetto" ? "prospettiFattura" : "fattureCarichi";
+    const tipo =
+      modalTipo === "prospetto" ? "prospetto" : "fattura";
 
-    const movimentiIds = (modalData.movimentiIds || []).filter(Boolean);
+    const tipoMov =
+      modalTipo === "prospetto" ? "scarico" : "carico";
+
+    const collectionName =
+      tipo === "prospetto"
+        ? "prospettiFattura"
+        : "fattureCarichi";
+
+    const movimentiIds = (modalData.movimentiIds || [])
+      .filter(Boolean);
 
     const movs = scarichi.filter(
-      (m) => movimentiIds.includes(m.id) && m.tipo === tipoMov
+      (m) =>
+        movimentiIds.includes(m.id) &&
+        m.tipo === tipoMov
     );
 
     if (!movs.length) {
@@ -139,24 +152,37 @@ setSalvataggioInCorso(true);
       return;
     }
 
-  await validaEPreparaProspetto(db, movimentiIds);
+    // Mantiene la logica esistente:
+    // i documenti non pagati sovrapposti vengono sostituiti,
+    // mentre quelli pagati bloccano il salvataggio.
+    await validaEPreparaProspetto(db, movimentiIds);
 
     if (listinoApplicato !== "tutti") {
-      const listiniSnap = await getDocs(collection(db, "listini"));
+      const listiniSnap = await getDocs(
+        collection(db, "listini")
+      );
 
       let listinoSelezionato = null;
 
       listiniSnap.docs.forEach((d) => {
         const data = d.data();
-        const nome = (data.nome || "").toString().trim().toLowerCase();
+        const nome = (data.nome || "")
+          .toString()
+          .trim()
+          .toLowerCase();
 
-        if (nome === listinoApplicato.toString().trim().toLowerCase()) {
+        if (
+          nome ===
+          listinoApplicato.toString().trim().toLowerCase()
+        ) {
           listinoSelezionato = data;
         }
       });
 
       if (!listinoSelezionato) {
-        throw new Error("LISTINO NON TROVATO: " + listinoApplicato);
+        throw new Error(
+          "LISTINO NON TROVATO: " + listinoApplicato
+        );
       }
 
       const prezzi = listinoSelezionato.prezzi || {};
@@ -187,7 +213,12 @@ setSalvataggioInCorso(true);
         const field =
           m.tipo === "carico" ? "carico" : "scarico";
 
-        const ref = doc(db, collectionMovimento, m.id);
+        const ref = doc(
+          db,
+          collectionMovimento,
+          m.id
+        );
+
         const snap = await getDoc(ref);
 
         if (!snap.exists()) {
@@ -195,7 +226,6 @@ setSalvataggioInCorso(true);
           continue;
         }
 
-        // SNAPSHOT COMPLETO DEL DOCUMENTO ORIGINALE
         const data = snap.data();
         const before = data;
 
@@ -213,9 +243,7 @@ setSalvataggioInCorso(true);
               smartMap[r.materiale] ||
               null;
 
-            if (!prezzoObj) {
-              return r;
-            }
+            if (!prezzoObj) return r;
 
             const acquisto =
               prezzoObj.acquisto ??
@@ -243,37 +271,35 @@ setSalvataggioInCorso(true);
                   ? Number(vendita)
                   : Number(r.prezzoVendita ?? 0),
               prezzo: Number(prezzoFinale),
-              listino: listinoApplicato
+              listino: listinoApplicato,
             };
-          })
+          }),
         }));
 
-        // DOCUMENTO COMPLETO DOPO LA MODIFICA
         const after = {
           ...data,
           [field]: aggiornato,
           listino: listinoApplicato,
-          lastUpdate: Date.now()
+          lastUpdate: Date.now(),
         };
 
         await updateDoc(ref, {
           [field]: aggiornato,
           listino: listinoApplicato,
-          lastUpdate: after.lastUpdate
+          lastUpdate: after.lastUpdate,
         });
 
-        // LOG CON DOCUMENTO COMPLETO PRIMA E DOPO
         await scriviLog({
           pagina: "GestioneScarichi",
           evento: "APPLICA_LISTINO_SALVATAGGIO",
           riferimento: {
             collezione: collectionMovimento,
-            documentoId: m.id
+            documentoId: m.id,
           },
           before,
           after,
           utente: getUtenteReact(),
-          ripristinabile: true
+          ripristinabile: true,
         });
       }
     }
@@ -283,8 +309,13 @@ setSalvataggioInCorso(true);
         fir: c.fir || m.fir || "-",
         cer: c.cer || c.codiceCER || "-",
         righe: (c.righe || []).map((r) => {
-          const { peso, caloKg, tara, netto, prezzo } =
-            calcolaRiga(r, tipoMov);
+          const {
+            peso,
+            caloKg,
+            tara,
+            netto,
+            prezzo,
+          } = calcolaRiga(r, tipoMov);
 
           return {
             materiale: r.materiale,
@@ -321,6 +352,33 @@ setSalvataggioInCorso(true);
       movimentoFinanziarioId: null,
     };
 
+    // I dati fiscali vengono salvati soltanto nelle fatture.
+    // I prospetti degli scarichi restano invariati.
+    if (tipo === "fattura") {
+      Object.assign(payload, {
+        clienteDati: modalData.clienteDati || null,
+        cedente: modalData.cedente || null,
+        banca:
+          modalData.banca ||
+          modalData.bancaPredefinita ||
+          null,
+
+        numeroFattura: modalData.numeroFattura || "",
+        dataFattura: modalData.dataFattura || null,
+        tipoDocumento: modalData.tipoDocumento || "TD24",
+        naturaIva: modalData.naturaIva || "N6.1",
+        riferimentoNormativo:
+          modalData.riferimentoNormativo ||
+          "N6.1 - ART. 74 C.7 E 8 DPR 633/72",
+        condizioniPagamento:
+          modalData.condizioniPagamento || "TP02",
+        modalitaPagamento:
+          modalData.modalitaPagamento || "MP05",
+        dataScadenzaPagamento:
+          modalData.dataScadenzaPagamento || null,
+      });
+    }
+
     const documentoRef = doc(
       db,
       collectionName,
@@ -328,15 +386,14 @@ setSalvataggioInCorso(true);
     );
 
     const documentoSnap = await getDoc(documentoRef);
+
     const beforeDocumento = documentoSnap.exists()
       ? documentoSnap.data()
       : null;
 
-    await setDoc(
-      documentoRef,
-      payload,
-      { merge: true }
-    );
+    await setDoc(documentoRef, payload, {
+      merge: true,
+    });
 
     await scriviLog({
       pagina: "GestioneScarichi",
@@ -346,27 +403,27 @@ setSalvataggioInCorso(true);
           : "SALVATAGGIO_FATTURA",
       riferimento: {
         collezione: collectionName,
-        documentoId: documentoRef.id
+        documentoId: documentoRef.id,
       },
       before: beforeDocumento,
       after: {
         ...(beforeDocumento || {}),
-        ...payload
+        ...payload,
       },
       utente: getUtenteReact(),
-      ripristinabile: true
+      ripristinabile: true,
     });
 
-    //alert("✅ Documento salvato correttamente");
     setModalData(null);
-
   } catch (err) {
     console.error(err);
 
-    if (String(err.message).startsWith("SCARICO_GIA_PAGATO")) {
+    if (
+      String(err.message).startsWith("SCARICO_GIA_PAGATO")
+    ) {
       alert(
         "❌ Esiste già un documento pagato per questi movimenti:\n\n" +
-        err.message
+          err.message
       );
     } else {
       alert("❌ Errore salvataggio");
@@ -376,6 +433,7 @@ setSalvataggioInCorso(true);
     setSalvataggioInCorso(false);
   }
 };
+
 
 
 
@@ -680,6 +738,7 @@ goBack={() => {
  refreshScarichi={async () => {
   await fetchMovimenti();
 }}/>  );}
+
 const handleApriDocumento = async () => {
   if (isDocumentoDisabled()) return;
 
@@ -835,40 +894,20 @@ const handleApriDocumento = async () => {
         const config =
           (await getConfigAzienda(db)) || {};
 
-        const bancheSnap = await getDocs(
-          collection(db, "banche")
-        );
-
-        const bancheAttive =
-          bancheSnap.docs
-            .map((d) => ({
-              id: d.id,
-              ...d.data()
-            }))
-            .filter(
-              (b) => b.attiva !== false
-            );
+        const {
+          bancheAttive,
+          bancaPredefinita
+        } = await caricaBancheAttive(db);
 
         /*
          * Se la fattura contiene già la fotografia
-         * della banca, usiamo quella.
+         * della banca, manteniamo quella.
+         * Altrimenti utilizziamo la predefinita.
          */
-        let banca = documento.banca || null;
-
-        /*
-         * Fallback per fatture vecchie che non
-         * avevano ancora la banca salvata.
-         */
-        if (!banca) {
-          const bancaPredefinita =
-            bancheAttive.find(
-              (b) => b.predefinita === true
-            ) ||
-            bancheAttive[0] ||
-            null;
-
-          banca = bancaPredefinita;
-        }
+        const banca =
+          documento.banca ||
+          bancaPredefinita ||
+          null;
 
         const dataFattura =
           documento.dataFattura
@@ -928,6 +967,10 @@ const handleApriDocumento = async () => {
             },
 
           banca,
+
+          bancheAttive,
+
+          bancaPredefinita,
 
           movimentiIds,
 
@@ -1039,10 +1082,18 @@ const handleApriDocumento = async () => {
       movimenti[0]?.fornitore ||
       "";
 
-    const clienteDati = await caricaAnagraficaCliente(db, clienteNome);
+    const clienteDati =
+      await caricaAnagraficaCliente(db, clienteNome);
 
-const { bancheAttive, bancaPredefinita } =
-  await caricaBancheAttive(db);
+    /*
+     * ==========================================
+     * BANCHE ATTIVE
+     * ==========================================
+     */
+    const {
+      bancheAttive,
+      bancaPredefinita
+    } = await caricaBancheAttive(db);
 
     /*
      * ==========================================
@@ -1126,6 +1177,10 @@ const { bancheAttive, bancaPredefinita } =
       cedente,
 
       banca: bancaPredefinita,
+
+      bancheAttive,
+
+      bancaPredefinita,
 
       movimentiIds:
         movimenti.map((m) => m.id),
@@ -1265,17 +1320,25 @@ const toOptions = (arr) =>
   arr.map(v => ({ value: v, label: v }));
 
 
+
+
 const handleStampaDocumento = async () => {
-await stampaDocumento({
-db,
-modalData,
-modalTipo,
-scarichi,
-getConfigAzienda,
-salvaESharePdfCapacitor,
-scriviLog,
-});
+  const funzioneStampa =
+    modalTipo === "fattura"
+      ? stampaFattura
+      : stampaDocumento;
+
+  await funzioneStampa({
+    db,
+    modalData,
+    modalTipo,
+    scarichi,
+    getConfigAzienda,
+    salvaESharePdfCapacitor,
+    scriviLog,
+  });
 };
+
 
 
   return (
@@ -1883,87 +1946,303 @@ scriviLog,
     </label>
   </div>
 )}
-      <p><b>Cliente:</b> {modalData.cliente}</p>
-      <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
-        <thead>
-          <tr>           <th>Materiale</th>
-<th>Peso Lordo (Kg)</th>
-<th>Calo</th>
-<th>Tara (Kg)</th>            {/* 🔥 NUOVO */}
-<th>Netto (Kg)</th>
-<th>Prezzo €/Kg</th>
-<th>Totale €</th>
 
-          </tr>
-        </thead>
-        <tbody>
-{(() => {
-  const movs = scarichi.filter(m =>
-    modalData.movimentiIds.includes(m.id)
-  );
-  console.group("🧾 MODAL RENDER DEBUG");
-  console.log("modalTipo:", modalTipo);
-  console.log("movimentiIds:", modalData.movimentiIds);
-  console.log("movimenti trovati:", movs.length);
-  movs.forEach(m => {
-    console.log("➡️ MOVIMENTO:", {
-      id: m.id,
-      tipo: m.tipo,
-      cerCount: m.cer?.length || 0,
-      movimentoFinanziarioId: m.movimentoFinanziarioId
-    });
-    (m.cer || []).forEach(c => {
-      console.log("   FIR:", c.fir);
-      console.log("   CER:", c.cer || c.codiceCER);
-      console.log("   RIGHE COUNT:", c.righe?.length || 0);
-    });
-  });
-  console.groupEnd();
-  return movs;
-})()
-  .filter(m => {
-    if (modalTipo === "prospetto") return m.tipo === "scarico";
-    if (modalTipo === "fattura") return m.tipo === "carico";
-    return true;
-  })
-  .flatMap(m =>
-    (m.cer || []).map(c => ({
-      fir: c.fir || m.fir || "-",
-      cer: c.cer || c.codiceCER || "-",
-      tipo: m.tipo,
-      righe: c.righe || []
-    }))
-  )
-  .map((b, i) => (
-    <React.Fragment key={i}>
-      <tr>
-        <td colSpan="8" style={{ background: "#eee", fontWeight: "bold" }}>      {/* 🔥 MODIFICATO: da 6 a 8 colonne */}
-          FIR: {b.fir} | CER: {b.cer}
-        </td>
-      </tr>
+<p><b>Cliente:</b> {modalData.cliente}</p>
 
-{b.righe.map((r, j) => {
-  const { peso, calo, caloKg, tara, netto, prezzo, tot } = calcolaRiga(r, b.tipo);
-  const caloLabel =
-    r.caloTipo === "perc" ? `${calo}% (${caloKg} Kg)` : `${caloKg} Kg`;
+{modalTipo === "fattura" && (
+  <div style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+    marginTop: 15,
+    marginBottom: 20,
+    padding: 15,
+    border: "1px solid #ccc",
+    borderRadius: 6
+  }}>
+    <h3 style={{ gridColumn: "1 / -1", margin: 0 }}>
+      Dati fattura elettronica
+    </h3>
 
-  return (
-    <tr key={j}>
-      <td>{r.materiale}</td>
-      <td>{peso.toFixed(2)}</td>
-      <td>{caloLabel}</td>
-      <td>{tara.toFixed(2)}</td>      {/* 🔥 NUOVO */}
-      <td>{netto.toFixed(2)}</td>
-      <td>{prezzo.toFixed(2)}</td>
-      <td>{tot.toFixed(2)}</td>
+    <label>
+      Numero fattura
+      <input
+        type="text"
+        value={modalData.numeroFattura || ""}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          numeroFattura: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      />
+    </label>
+
+    <label>
+      Data fattura
+      <input
+        type="date"
+        value={
+          modalData.dataFattura
+            ? (() => {
+                const d = modalData.dataFattura instanceof Date
+                  ? modalData.dataFattura
+                  : modalData.dataFattura?.toDate
+                    ? modalData.dataFattura.toDate()
+                    : new Date(modalData.dataFattura);
+                return Number.isNaN(d.getTime())
+                  ? ""
+                  : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              })()
+            : ""
+        }
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          dataFattura: e.target.value
+            ? new Date(`${e.target.value}T12:00:00`)
+            : null
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      />
+    </label>
+
+    <label>
+      Tipo documento
+      <select
+        value={modalData.tipoDocumento || "TD24"}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          tipoDocumento: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      >
+        <option value="TD01">TD01 - Fattura</option>
+        <option value="TD24">TD24 - Fattura differita</option>
+      </select>
+    </label>
+
+    <label>
+      Natura IVA
+      <select
+        value={modalData.naturaIva || "N6.1"}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          naturaIva: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      >
+        <option value="N6.1">N6.1 - Reverse charge rottami</option>
+        <option value="N6.2">N6.2</option>
+        <option value="N6.3">N6.3</option>
+        <option value="N6.4">N6.4</option>
+        <option value="N6.5">N6.5</option>
+        <option value="N6.6">N6.6</option>
+        <option value="N6.7">N6.7</option>
+        <option value="N6.8">N6.8</option>
+        <option value="N6.9">N6.9</option>
+      </select>
+    </label>
+
+    <label style={{ gridColumn: "1 / -1" }}>
+      Riferimento normativo IVA
+      <input
+        type="text"
+        value={modalData.riferimentoNormativo || ""}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          riferimentoNormativo: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      />
+    </label>
+
+    <label>
+      Condizioni di pagamento
+      <select
+        value={modalData.condizioniPagamento || "TP02"}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          condizioniPagamento: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      >
+        <option value="TP01">TP01 - Pagamento a rate</option>
+        <option value="TP02">TP02 - Pagamento completo</option>
+        <option value="TP03">TP03 - Anticipo</option>
+      </select>
+    </label>
+
+    <label>
+      Modalità di pagamento
+      <select
+        value={modalData.modalitaPagamento || "MP05"}
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          modalitaPagamento: e.target.value
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      >
+        <option value="MP01">MP01 - Contanti</option>
+        <option value="MP02">MP02 - Assegno</option>
+        <option value="MP05">MP05 - Bonifico</option>
+        <option value="MP08">MP08 - Carta di pagamento</option>
+        <option value="MP12">MP12 - RIBA</option>
+        <option value="MP19">MP19 - RID</option>
+      </select>
+    </label>
+<label>
+  Banca di accredito
+  <select
+    value={
+      (modalData.banca || modalData.bancaPredefinita)?.id || ""
+    }
+    onChange={e => {
+      const bancaSelezionata =
+        (modalData.bancheAttive || []).find(
+          b => b.id === e.target.value
+        ) || null;
+
+      setModalData(prev => ({
+        ...prev,
+        banca: bancaSelezionata
+      }));
+    }}
+    style={{
+      display: "block",
+      width: "100%",
+      boxSizing: "border-box"
+    }}
+  >
+    <option value="">Seleziona banca</option>
+
+    {(modalData.bancheAttive || []).map(banca => (
+      <option key={banca.id} value={banca.id}>
+        {banca.nome || banca.intestatario || banca.banca || banca.id}
+        {banca.iban ? ` - ${banca.iban}` : ""}
+      </option>
+    ))}
+  </select>
+</label>
+    <label>
+      Data scadenza pagamento
+      <input
+        type="date"
+        value={
+          modalData.dataScadenzaPagamento
+            ? (() => {
+                const d = modalData.dataScadenzaPagamento instanceof Date
+                  ? modalData.dataScadenzaPagamento
+                  : modalData.dataScadenzaPagamento?.toDate
+                    ? modalData.dataScadenzaPagamento.toDate()
+                    : new Date(modalData.dataScadenzaPagamento);
+                return Number.isNaN(d.getTime())
+                  ? ""
+                  : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              })()
+            : ""
+        }
+        onChange={e => setModalData(prev => ({
+          ...prev,
+          dataScadenzaPagamento: e.target.value
+            ? new Date(`${e.target.value}T12:00:00`)
+            : null
+        }))}
+        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+      />
+    </label>
+  </div>
+)}
+
+<table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
+  <thead>
+    <tr>
+      <th>Materiale</th>
+      <th>Peso Lordo (Kg)</th>
+      <th>Calo</th>
+      <th>Tara (Kg)</th>
+      <th>Netto (Kg)</th>
+      <th>Prezzo €/Kg</th>
+      <th>Totale €</th>
     </tr>
-  );
-})}
+  </thead>
+  <tbody>
+    {(() => {
+      const movs = scarichi.filter(m =>
+        modalData.movimentiIds.includes(m.id)
+      );
 
-    </React.Fragment>
-  ))}
-        </tbody>
-      </table>
+      console.group("🧾 MODAL RENDER DEBUG");
+      console.log("modalTipo:", modalTipo);
+      console.log("movimentiIds:", modalData.movimentiIds);
+      console.log("movimenti trovati:", movs.length);
+
+      movs.forEach(m => {
+        console.log("➡️ MOVIMENTO:", {
+          id: m.id,
+          tipo: m.tipo,
+          cerCount: m.cer?.length || 0,
+          movimentoFinanziarioId: m.movimentoFinanziarioId
+        });
+
+        (m.cer || []).forEach(c => {
+          console.log("   FIR:", c.fir);
+          console.log("   CER:", c.cer || c.codiceCER);
+          console.log("   RIGHE COUNT:", c.righe?.length || 0);
+        });
+      });
+
+      console.groupEnd();
+      return movs;
+    })()
+      .filter(m => {
+        if (modalTipo === "prospetto") return m.tipo === "scarico";
+        if (modalTipo === "fattura") return m.tipo === "carico";
+        return true;
+      })
+      .flatMap(m =>
+        (m.cer || []).map(c => ({
+          fir: c.fir || m.fir || "-",
+          cer: c.cer || c.codiceCER || "-",
+          tipo: m.tipo,
+          righe: c.righe || []
+        }))
+      )
+      .map((b, i) => (
+        <React.Fragment key={i}>
+          <tr>
+            <td
+              colSpan="7"
+              style={{ background: "#eee", fontWeight: "bold" }}
+            >
+              FIR: {b.fir} | CER: {b.cer}
+            </td>
+          </tr>
+
+          {b.righe.map((r, j) => {
+            const { peso, calo, caloKg, tara, netto, prezzo, tot } =
+              calcolaRiga(r, b.tipo);
+
+            const caloLabel =
+              r.caloTipo === "perc"
+                ? `${calo}% (${caloKg} Kg)`
+                : `${caloKg} Kg`;
+
+            return (
+              <tr key={j}>
+                <td>{r.materiale}</td>
+                <td>{peso.toFixed(2)}</td>
+                <td>{caloLabel}</td>
+                <td>{tara.toFixed(2)}</td>
+                <td>{netto.toFixed(2)}</td>
+                <td>{prezzo.toFixed(2)}</td>
+                <td>{tot.toFixed(2)}</td>
+              </tr>
+            );
+          })}
+        </React.Fragment>
+      ))}
+  </tbody>
+</table>
+
 
 <h3 style={{ marginTop: 20 }}>
   Totale: {(() => {
@@ -2017,7 +2296,7 @@ scriviLog,
         : "pointer"
   }}
 >
-  {salvataggioInCorso ? "Salvataggio in corso..." : "Salva prospetto"}
+  {salvataggioInCorso ? "Salvataggio in corso..." : modalTipo === "fattura" ? "Salva fattura":  "Salva prospetto"}
 </button>
 
         <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
