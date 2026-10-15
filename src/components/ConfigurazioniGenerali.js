@@ -25,6 +25,7 @@ const [listinoCaricoDefault, setListinoCaricoDefault] = useState("");
 const [listinoScaricoDefault, setListinoScaricoDefault] = useState("");
 
   const [logoBase64, setLogoBase64] = useState("");
+  const [logoMimeType, setLogoMimeType] = useState("image/png");
   const [ragioneSociale, setRagioneSociale] = useState("");
   const [indirizzo, setIndirizzo] = useState("");
   const [capCitta, setCapCitta] = useState("");
@@ -32,7 +33,7 @@ const [listinoScaricoDefault, setListinoScaricoDefault] = useState("");
   const [guadagnoMinKg, setGuadagnoMinKg] = useState(0.2);
   const [loading, setLoading] = useState(false);
   const [messaggio, setMessaggio] = useState("");
-   const [messaggioFIR, setMessaggioFIR] = useState("");
+
   const [mailRecupero, setMailRecupero] = useState("");
 const [listini, setListini] = useState([]);
 const [codiceFiscale, setCodiceFiscale] = useState("");
@@ -100,6 +101,7 @@ setEmailAziendale(
   ""
 );
 setLogoBase64(data.logoBase64 || "");
+setLogoMimeType(data.logoMimeType || "image/png");
 
 setGuadagnoMinKg(
   data.guadagnoMinKg !== undefined
@@ -203,18 +205,53 @@ useEffect(() => {
   fetchBanche();
 }, []);
 
-  // -------- LOGO --------
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result.split(",")[1];
-      setLogoBase64(base64);
-    };
-    reader.readAsDataURL(file);
+const handleFileChange = (e) => {
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  const tipiConsentiti = [
+    "image/png",
+    "image/jpeg",
+    "image/webp"
+  ];
+
+  if (!tipiConsentiti.includes(file.type)) {
+    setMessaggio("Formato immagine non supportato. Usa PNG, JPEG o WebP.");
+    e.target.value = "";
+    return;
+  }
+
+  // Evita immagini troppo grandi nel documento Firestore.
+  if (file.size > 500 * 1024) {
+    setMessaggio("Il logo è troppo grande. Scegli un'immagine inferiore a 500 KB.");
+    e.target.value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onloadend = () => {
+    if (typeof reader.result !== "string") {
+      setMessaggio("Errore durante la lettura del logo.");
+      return;
+    }
+
+    const base64 = reader.result.split(",")[1];
+
+    setLogoBase64(base64);
+    setLogoMimeType(file.type);
+    setMessaggio("");
   };
+
+  reader.onerror = () => {
+    setMessaggio("Errore durante la lettura del logo.");
+  };
+
+  reader.readAsDataURL(file);
+};
+
 
  const handleSave = async () => {
   setLoading(true);
@@ -224,6 +261,7 @@ useEffect(() => {
       doc(db, "configurazioni", "datiAzienda"),
       {
         logoBase64,
+        logoMimeType,
         ragioneSociale,
         indirizzo,
         capCitta,
@@ -277,66 +315,7 @@ useEffect(() => {
   }
 };
 
-   const handleAllineaFir = async () => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "scarichi"));
-
-  for (const docSnap of snap.docs) {
-    const data = docSnap.data();
-
-    if (Array.isArray(data.firIndex)) {
-      continue;
-    }
-
-    const firIndex = (data.scarico || [])
-      .map(x => (x.fir || "").trim().toUpperCase())
-      .filter(Boolean);
-
-    await setDoc(
-      doc(db, "scarichi", docSnap.id),
-      { firIndex },
-      { merge: true }
-    );
-
-    console.log("✅ scarico aggiornato", docSnap.id);
-  }
-
-  console.log("✅ MIGRAZIONE SCARICHI COMPLETATA");
-
-      setMessaggio("MIGRAZIONE CARICHI/SCARICHI COMPLETATA ✅");
-
-const snap2 = await getDocs(collection(db, "carichi"));
-
-  for (const docSnap2 of snap2.docs) {
-    const data = docSnap2.data();
-
-    if (Array.isArray(data.firIndex)) {
-      continue;
-    }
-
-    const firIndex = (data.carico || [])
-      .map(x => (x.fir || "").trim().toUpperCase())
-      .filter(Boolean);
-
-    await setDoc(
-      doc(db, "carichi", docSnap2.id),
-      { firIndex },
-      { merge: true }
-    );
-
-    console.log("✅ carico aggiornato", docSnap2.id);
-  }
-
-  console.log("✅ MIGRAZIONE CARICHI  COMPLETATA");
-
-    } catch (err) {
-      console.error(err);
-      setMessaggio("Errore durante la MIGRAZIONE ❌");
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 const resetBanca = () => {
   setBancaNome("");
   setBancaIban("");
@@ -554,7 +533,7 @@ const toggleBancaAttiva = async (banca) => {
         <br />
         {logoBase64 && (
           <img
-            src={`data:image/png;base64,${logoBase64}`}
+            src={`data:${logoMimeType};base64,${logoBase64}`}
             alt="Logo"
             style={{
               maxWidth: 150,
@@ -1118,21 +1097,7 @@ const toggleBancaAttiva = async (banca) => {
       </button>
 
       {messaggio && <div style={{ marginTop: 15 }}>{messaggio}</div>}
-
-
-       {/* 🔥 residuo 
-       <button onClick={handleAllineaFir} disabled={loading}>
-        {loading ? "Allineando..." : "Allinea FIR"}
-      </button>
-      */}
-
-      {messaggio && <div style={{ marginTop: 15 }}>{messaggioFIR}</div>}
-
-
-    </div>
-
- 
-          
+ </div>
   );
 };
 
