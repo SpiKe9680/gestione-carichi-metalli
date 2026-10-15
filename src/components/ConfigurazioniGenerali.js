@@ -1120,9 +1120,11 @@ const toggleBancaAttiva = async (banca) => {
       {messaggio && <div style={{ marginTop: 15 }}>{messaggio}</div>}
 
 
-      <button onClick={handleAllineaFir} disabled={loading}>
+       {/* 🔥 residuo 
+       <button onClick={handleAllineaFir} disabled={loading}>
         {loading ? "Allineando..." : "Allinea FIR"}
       </button>
+      */}
 
       {messaggio && <div style={{ marginTop: 15 }}>{messaggioFIR}</div>}
 

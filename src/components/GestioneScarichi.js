@@ -20,12 +20,8 @@ import { stampaDocumento } from "./GestioneScarichi/stampa/stampaDocumento";
 import {stampaMovimenti} from "./GestioneScarichi/stampa/stampaMovimenti";
 import { validaEPreparaProspetto } from "./GestioneScarichi/services/fatturaService";
 import { getUtenteReact,caricaMovimenti,applyListino,caricaListini } from "./GestioneScarichi/services/movimentiService";
-import {
-  formatEuro,getLabelFornDest,
-  normalizzaCER,formatDataIT,
-  calcolaRiga, round2, normalizeDate
-} from "./GestioneScarichi/utils/calcoli";
-
+import {  formatEuro,getLabelFornDest,  normalizzaCER,formatDataIT,  calcolaRiga, round2, normalizeDate} from "./GestioneScarichi/utils/calcoli";
+import {  generaXmlFatturaPa,  scaricaXmlFatturaPa,} from "./GestioneScarichi/services/fatturaPaService";
 
 
 registerLocale("it", it);
@@ -115,6 +111,7 @@ const fetchMovimenti = async () => {
 
 const salvataggioDocumentoRef = useRef(false);
 
+
 const handleSalvaDocumento = async () => {
   if (salvataggioDocumentoRef.current) return;
 
@@ -152,10 +149,11 @@ const handleSalvaDocumento = async () => {
       return;
     }
 
-    // Mantiene la logica esistente:
-    // i documenti non pagati sovrapposti vengono sostituiti,
-    // mentre quelli pagati bloccano il salvataggio.
-    await validaEPreparaProspetto(db, movimentiIds);
+    // Non ripete la validazione quando si modifica
+    // un documento già esistente.
+    if (!modalData.documentoEsistente) {
+      await validaEPreparaProspetto(db, movimentiIds);
+    }
 
     if (listinoApplicato !== "tutti") {
       const listiniSnap = await getDocs(
@@ -196,7 +194,6 @@ const handleSalvaDocumento = async () => {
           .replace(/[^A-Z0-9]/g, "");
 
         smartMap[k] = val;
-        smartMap[k.replace(/\./g, "")] = val;
       });
 
       const norm = (v) =>
@@ -348,12 +345,14 @@ const handleSalvaDocumento = async () => {
       totale: round2(totale),
       movimentiIds,
       blocchi,
-      dataCreazione: dataSalvataggio.toISOString(),
-      movimentoFinanziarioId: null,
+      dataCreazione:
+        modalData.dataCreazione || dataSalvataggio.toISOString(),
+      movimentoFinanziarioId:
+        modalData.movimentoFinanziarioId ?? null,
     };
 
     // I dati fiscali vengono salvati soltanto nelle fatture.
-    // I prospetti degli scarichi restano invariati.
+    // I prospetti mantengono il comportamento originale.
     if (tipo === "fattura") {
       Object.assign(payload, {
         clienteDati: modalData.clienteDati || null,
@@ -379,10 +378,16 @@ const handleSalvaDocumento = async () => {
       });
     }
 
+    // Riutilizza l'ID originale quando si modifica
+    // un documento già salvato.
+    const documentoId =
+      modalData.documentoId ||
+      [...movimentiIds].sort().join("-");
+
     const documentoRef = doc(
       db,
       collectionName,
-      [...movimentiIds].sort().join("-")
+      documentoId
     );
 
     const documentoSnap = await getDoc(documentoRef);
@@ -414,7 +419,23 @@ const handleSalvaDocumento = async () => {
       ripristinabile: true,
     });
 
-    setModalData(null);
+    if (tipo === "fattura") {
+      // Mantiene aperta la fattura dopo il salvataggio.
+      // Sarà possibile modificarla e salvarla nuovamente.
+      setModalData((prev) => ({
+        ...prev,
+        ...payload,
+        documentoEsistente: true,
+        documentoId: documentoRef.id,
+        fatturaSalvata: true,
+        fatturaModificata: false,
+      }));
+
+      alert("✅ Fattura salvata correttamente");
+    } else {
+      // Il prospetto conserva il comportamento originale.
+      setModalData(null);
+    }
   } catch (err) {
     console.error(err);
 
@@ -434,6 +455,86 @@ const handleSalvaDocumento = async () => {
   }
 };
 
+const handleGeneraXmlFattura = async () => {
+  if (modalTipo !== "fattura") return;
+
+  const documentoId = modalData?.documentoId;
+
+  if (!documentoId || !modalData?.fatturaSalvata) {
+    alert("Prima salva la fattura, poi genera l'XML.");
+    return;
+  }
+
+  try {
+    const riferimento = doc(db, "fattureCarichi", documentoId);
+    const snapshot = await getDoc(riferimento);
+
+    if (!snapshot.exists()) {
+      alert("Fattura non trovata in archivio. Salva nuovamente la fattura.");
+      return;
+    }
+
+    const fatturaSalvata = snapshot.data();
+
+    const fattura = {
+      ...fatturaSalvata,
+      clienteDati: modalData.clienteDati || fatturaSalvata.clienteDati,
+      numeroFattura: modalData.numeroFattura || fatturaSalvata.numeroFattura,
+      dataFattura: modalData.dataFattura || fatturaSalvata.dataFattura,
+      tipoDocumento: modalData.tipoDocumento || fatturaSalvata.tipoDocumento,
+      naturaIva: modalData.naturaIva || fatturaSalvata.naturaIva,
+      riferimentoNormativo:
+        modalData.riferimentoNormativo ||
+        fatturaSalvata.riferimentoNormativo,
+      condizioniPagamento:
+        modalData.condizioniPagamento ||
+        fatturaSalvata.condizioniPagamento,
+      modalitaPagamento:
+        modalData.modalitaPagamento ||
+        fatturaSalvata.modalitaPagamento,
+      dataScadenzaPagamento:
+        modalData.dataScadenzaPagamento ||
+        fatturaSalvata.dataScadenzaPagamento,
+    };
+
+    const { xml, errori } = generaXmlFatturaPa(fattura);
+
+    if (errori.length) {
+      setModalData((prev) => ({
+        ...prev,
+        erroriXmlFattura: errori,
+      }));
+
+      alert(
+        "Impossibile generare l'XML. Controlla questi dati:\n\n- " +
+          errori.join("\n- ")
+      );
+      return;
+    }
+
+    await updateDoc(riferimento, {
+      clienteDati: fattura.clienteDati,
+      numeroFattura: fattura.numeroFattura,
+      dataFattura: fattura.dataFattura,
+      tipoDocumento: fattura.tipoDocumento,
+      naturaIva: fattura.naturaIva,
+      riferimentoNormativo: fattura.riferimentoNormativo,
+      condizioniPagamento: fattura.condizioniPagamento,
+      modalitaPagamento: fattura.modalitaPagamento,
+      dataScadenzaPagamento: fattura.dataScadenzaPagamento,
+    });
+
+    scaricaXmlFatturaPa(xml, fattura.numeroFattura);
+
+    setModalData((prev) => ({
+      ...prev,
+      erroriXmlFattura: [],
+    }));
+  } catch (errore) {
+    console.error("Errore generazione XML FatturaPA:", errore);
+    alert("Errore durante la generazione dell'XML: " + errore.message);
+  }
+};
 
 
 
@@ -900,21 +1001,48 @@ const handleApriDocumento = async () => {
         } = await caricaBancheAttive(db);
 
         /*
-         * Se la fattura contiene già la fotografia
-         * della banca, manteniamo quella.
-         * Altrimenti utilizziamo la predefinita.
+         * Mantiene la fotografia storica della banca.
+         * Se assente, utilizza quella predefinita.
          */
         const banca =
           documento.banca ||
           bancaPredefinita ||
           null;
 
+        /*
+         * Converte Date e Timestamp Firestore.
+         * Se la data manca o non è valida, restituisce oggi.
+         */
+        const convertiData = (valore) => {
+          if (!valore) return null;
+
+          let data;
+
+          if (typeof valore.toDate === "function") {
+            data = valore.toDate();
+          } else if (valore instanceof Date) {
+            data = valore;
+          } else {
+            data = new Date(valore);
+          }
+
+          return data instanceof Date &&
+            !Number.isNaN(data.getTime())
+            ? data
+            : null;
+        };
+
+        const oggi = new Date();
+        oggi.setHours(0, 0, 0, 0);
+
         const dataFattura =
-          documento.dataFattura
-            ? new Date(documento.dataFattura)
-            : documento.data
-            ? new Date(documento.data)
-            : new Date();
+          convertiData(documento.dataFattura) ||
+          convertiData(documento.data) ||
+          new Date(oggi);
+
+        const dataScadenzaPagamento =
+          convertiData(documento.dataScadenzaPagamento) ||
+          new Date(oggi);
 
         setModalTipo("fattura");
 
@@ -1021,17 +1149,13 @@ const handleApriDocumento = async () => {
             config.modalitaPagamentoDefault ||
             "MP05",
 
-          dataScadenzaPagamento:
-            documento.dataScadenzaPagamento
-              ? new Date(
-                  documento.dataScadenzaPagamento
-                )
-              : dataFattura
+          dataScadenzaPagamento
         });
 
         return;
       }
     }
+
 
     /*
      * ==========================================
@@ -1339,7 +1463,60 @@ const handleStampaDocumento = async () => {
   });
 };
 
+const natureIvaOptions = [
+  {
+    value: "N6.1",
+    label: "N6.1 - Rottami e altri materiali di recupero",
+    riferimento: "Inversione contabile - rottami e altri materiali di recupero (art. 74, commi 7 e 8, DPR 633/72)"
+  },
+  {
+    value: "N6.2",
+    label: "N6.2 - Oro e argento puro",
+    riferimento: "Inversione contabile - oro e argento puro (art. 17, comma 5, DPR 633/72)"
+  },
+  {
+    value: "N6.3",
+    label: "N6.3 - Subappalto nel settore edile",
+    riferimento: "Inversione contabile - subappalto nel settore edile (art. 17, comma 6, lettera a, DPR 633/72)"
+  },
+  {
+    value: "N6.4",
+    label: "N6.4 - Cessione di fabbricati",
+    riferimento: "Inversione contabile - cessione di fabbricati (art. 17, comma 6, lettera a-bis, DPR 633/72)"
+  },
+  {
+    value: "N6.5",
+    label: "N6.5 - Cessione di telefoni cellulari",
+    riferimento: "Inversione contabile - cessione di telefoni cellulari (art. 17, comma 6, lettera b, DPR 633/72)"
+  },
+  {
+    value: "N6.6",
+    label: "N6.6 - Cessione di prodotti elettronici",
+    riferimento: "Inversione contabile - cessione di prodotti elettronici (art. 17, comma 6, lettera c, DPR 633/72)"
+  },
+  {
+    value: "N6.7",
+    label: "N6.7 - Edilizia, settori connessi e pulizia",
+    riferimento: "Inversione contabile - prestazioni comparto edile e settori connessi / pulizia (art. 17, comma 6, lettera a-ter, DPR 633/72)"
+  },
+  {
+    value: "N6.8",
+    label: "N6.8 - Operazioni settore energetico",
+    riferimento: "Inversione contabile - operazioni settore energetico (art. 17, comma 6, lettere d-bis, d-ter, d-quater, DPR 633/72)"
+  },
+  {
+    value: "N6.9",
+    label: "N6.9 - Altri casi",
+    riferimento: "Inversione contabile - altri casi (operazioni residue soggette a reverse charge non rientranti nei codici precedenti)"
+  }
+];
 
+
+const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
+  scarichi.some(m =>
+    m.id === id && Boolean(m.movimentoFinanziarioId)
+  )
+);
 
   return (
     <div className="gestione-scarichi-container">
@@ -1825,17 +2002,17 @@ const handleStampaDocumento = async () => {
       <h2>
   {modalTipo === "prospetto"
     ? (
-        modalData.documentoEsistente
+        documentoConsuntivato
           ? "📑 Prospetto Fattura (Pagata)"
           : "📑 Prospetto Fattura (Da Pagare)"
       )
     : (
-        modalData.documentoEsistente
+        documentoConsuntivato
           ? "📄 Fattura (Pagata)"
           : "📄 Fattura (Da Pagare)"
       )}
 </h2>
-{!modalData.documentoEsistente && (
+{!modalData.documentoEsistente && !documentoConsuntivato && (
   <div style={{
     marginBottom: "15px",
     display: "flex",
@@ -1967,6 +2144,7 @@ const handleStampaDocumento = async () => {
     <label>
       Numero fattura
       <input
+      disabled={documentoConsuntivato}
         type="text"
         value={modalData.numeroFattura || ""}
         onChange={e => setModalData(prev => ({
@@ -1977,87 +2155,152 @@ const handleStampaDocumento = async () => {
       />
     </label>
 
-    <label>
-      Data fattura
-      <input
-        type="date"
-        value={
-          modalData.dataFattura
-            ? (() => {
-                const d = modalData.dataFattura instanceof Date
-                  ? modalData.dataFattura
-                  : modalData.dataFattura?.toDate
-                    ? modalData.dataFattura.toDate()
-                    : new Date(modalData.dataFattura);
-                return Number.isNaN(d.getTime())
-                  ? ""
-                  : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-              })()
-            : ""
-        }
-        onChange={e => setModalData(prev => ({
-          ...prev,
-          dataFattura: e.target.value
-            ? new Date(`${e.target.value}T12:00:00`)
-            : null
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
-      />
-    </label>
 
-    <label>
-      Tipo documento
-      <select
-        value={modalData.tipoDocumento || "TD24"}
-        onChange={e => setModalData(prev => ({
-          ...prev,
-          tipoDocumento: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
-      >
-        <option value="TD01">TD01 - Fattura</option>
-        <option value="TD24">TD24 - Fattura differita</option>
-      </select>
-    </label>
+<label>
+  Data fattura
+  <input
+    type="text"
+    disabled={documentoConsuntivato}
+    placeholder="GG/MM/AAAA"
+    value={
+      modalData.dataFattura
+        ? (() => {
+            const d =
+              modalData.dataFattura instanceof Date
+                ? modalData.dataFattura
+                : modalData.dataFattura?.toDate
+                ? modalData.dataFattura.toDate()
+                : new Date(modalData.dataFattura);
 
-    <label>
-      Natura IVA
-      <select
-        value={modalData.naturaIva || "N6.1"}
-        onChange={e => setModalData(prev => ({
-          ...prev,
-          naturaIva: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
-      >
-        <option value="N6.1">N6.1 - Reverse charge rottami</option>
-        <option value="N6.2">N6.2</option>
-        <option value="N6.3">N6.3</option>
-        <option value="N6.4">N6.4</option>
-        <option value="N6.5">N6.5</option>
-        <option value="N6.6">N6.6</option>
-        <option value="N6.7">N6.7</option>
-        <option value="N6.8">N6.8</option>
-        <option value="N6.9">N6.9</option>
-      </select>
-    </label>
+            return Number.isNaN(d.getTime())
+              ? ""
+              : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+          })()
+        : ""
+    }
+    onChange={e => {
+      const valore = e.target.value;
 
-    <label style={{ gridColumn: "1 / -1" }}>
-      Riferimento normativo IVA
-      <input
-        type="text"
-        value={modalData.riferimentoNormativo || ""}
-        onChange={e => setModalData(prev => ({
+      if (!valore) {
+        setModalData(prev => ({
           ...prev,
-          riferimentoNormativo: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
-      />
-    </label>
+          dataFattura: null
+        }));
+        return;
+      }
+
+      const match = valore.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+      if (!match) {
+        setModalData(prev => ({
+          ...prev,
+          dataFatturaInput: valore
+        }));
+        return;
+      }
+
+      const giorno = Number(match[1]);
+      const mese = Number(match[2]);
+      const anno = Number(match[3]);
+      const data = new Date(anno, mese - 1, giorno, 12, 0, 0);
+
+      if (
+        data.getFullYear() === anno &&
+        data.getMonth() === mese - 1 &&
+        data.getDate() === giorno
+      ) {
+        setModalData(prev => ({
+          ...prev,
+          dataFattura: data,
+          dataFatturaInput: undefined
+        }));
+      }
+    }}
+    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+  />
+</label>
+
+
+
+<label>
+  Causale fattura elettronica
+  <select
+  disabled={documentoConsuntivato}
+    value={modalData.tipoDocumento || "TD24"}
+    onChange={e => setModalData(prev => ({
+      ...prev,
+      tipoDocumento: e.target.value
+    }))}
+    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+  >
+    <option value="TD01">TD01 - Fattura</option>
+    <option value="TD02">TD02 - Acconto/anticipo su fattura</option>
+    <option value="TD03">TD03 - Acconto/anticipo su parcella</option>
+    <option value="TD05">TD05 - Nota di debito</option>
+    <option value="TD06">TD06 - Parcella</option>
+    <option value="TD16">TD16 - Integrazione fattura reverse charge interno</option>
+    <option value="TD17">TD17 - Integrazione/autofattura per acquisto servizi dall'estero</option>
+    <option value="TD18">TD18 - Integrazione per acquisto di beni intracomunitari</option>
+    <option value="TD19">TD19 - Integrazione/autofattura per acquisto di beni ex art. 17 c. 2 DPR 633/72</option>
+    <option value="TD20">TD20 - Autofattura per regolarizzazione/integrazione fattura</option>
+    <option value="TD21">TD21 - Autofattura per splafonamento</option>
+    <option value="TD22">TD22 - Estrazione beni da deposito IVA</option>
+    <option value="TD23">TD23 - Estrazione beni da deposito IVA con versamento IVA</option>
+    <option value="TD24">TD24 - Fattura differita di cui all'art. 21, comma 4, lett. a)</option>
+    <option value="TD25">TD25 - Fattura differita di cui all'art. 21, comma 4, terzo periodo lett. b)</option>
+    <option value="TD26">TD26 - Cessione di beni ammortizzabili e per passaggi interni</option>
+    <option value="TD27">TD27 - Fattura per autoconsumo o cessioni gratuite senza rivalsa</option>
+    <option value="TD29">TD29 - Comunicazione per omessa o irregolare fatturazione</option>
+  </select>
+</label>
+
+
+
+<label>
+  Natura IVA
+  <select
+  disabled={documentoConsuntivato}
+    value={modalData.naturaIva || "N6.1"}
+    onChange={e => {
+      const natura = natureIvaOptions.find(
+        opzione => opzione.value === e.target.value
+      );
+
+      setModalData(prev => ({
+        ...prev,
+        naturaIva: e.target.value,
+        riferimentoNormativo: natura?.riferimento || ""
+      }));
+    }}
+    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+  >
+    {natureIvaOptions.map(opzione => (
+      <option key={opzione.value} value={opzione.value}>
+        {opzione.label}
+      </option>
+    ))}
+  </select>
+</label>
+
+<label style={{ gridColumn: "1 / -1" }}>
+  Riferimento normativo IVA
+  <input
+  disabled={documentoConsuntivato}
+    type="text"
+    value={modalData.riferimentoNormativo || ""}
+    onChange={e => setModalData(prev => ({
+      ...prev,
+      riferimentoNormativo: e.target.value
+    }))}
+    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+  />
+</label>
+
 
     <label>
       Condizioni di pagamento
       <select
+      disabled={documentoConsuntivato}
         value={modalData.condizioniPagamento || "TP02"}
         onChange={e => setModalData(prev => ({
           ...prev,
@@ -2074,6 +2317,7 @@ const handleStampaDocumento = async () => {
     <label>
       Modalità di pagamento
       <select
+      disabled={documentoConsuntivato}
         value={modalData.modalitaPagamento || "MP05"}
         onChange={e => setModalData(prev => ({
           ...prev,
@@ -2092,6 +2336,7 @@ const handleStampaDocumento = async () => {
 <label>
   Banca di accredito
   <select
+  disabled={documentoConsuntivato}
     value={
       (modalData.banca || modalData.bancaPredefinita)?.id || ""
     }
@@ -2122,33 +2367,72 @@ const handleStampaDocumento = async () => {
     ))}
   </select>
 </label>
-    <label>
-      Data scadenza pagamento
-      <input
-        type="date"
-        value={
-          modalData.dataScadenzaPagamento
-            ? (() => {
-                const d = modalData.dataScadenzaPagamento instanceof Date
-                  ? modalData.dataScadenzaPagamento
-                  : modalData.dataScadenzaPagamento?.toDate
-                    ? modalData.dataScadenzaPagamento.toDate()
-                    : new Date(modalData.dataScadenzaPagamento);
-                return Number.isNaN(d.getTime())
-                  ? ""
-                  : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-              })()
-            : ""
-        }
-        onChange={e => setModalData(prev => ({
+
+
+<label>
+  Data scadenza pagamento
+  <input
+    disabled={documentoConsuntivato}
+    type="text"
+    placeholder="GG/MM/AAAA"
+    value={
+      modalData.dataScadenzaPagamento
+        ? (() => {
+            const d =
+              modalData.dataScadenzaPagamento instanceof Date
+                ? modalData.dataScadenzaPagamento
+                : modalData.dataScadenzaPagamento?.toDate
+                ? modalData.dataScadenzaPagamento.toDate()
+                : new Date(modalData.dataScadenzaPagamento);
+
+            return Number.isNaN(d.getTime())
+              ? ""
+              : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+          })()
+        : ""
+    }
+    onChange={e => {
+      const valore = e.target.value;
+
+      if (!valore) {
+        setModalData(prev => ({
           ...prev,
-          dataScadenzaPagamento: e.target.value
-            ? new Date(`${e.target.value}T12:00:00`)
-            : null
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
-      />
-    </label>
+          dataScadenzaPagamento: null
+        }));
+        return;
+      }
+
+      const match = valore.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+      if (!match) {
+        setModalData(prev => ({
+          ...prev,
+          dataScadenzaPagamentoInput: valore
+        }));
+        return;
+      }
+
+      const giorno = Number(match[1]);
+      const mese = Number(match[2]);
+      const anno = Number(match[3]);
+      const data = new Date(anno, mese - 1, giorno, 12, 0, 0);
+
+      if (
+        data.getFullYear() === anno &&
+        data.getMonth() === mese - 1 &&
+        data.getDate() === giorno
+      ) {
+        setModalData(prev => ({
+          ...prev,
+          dataScadenzaPagamento: data,
+          dataScadenzaPagamentoInput: undefined
+        }));
+      }
+    }}
+    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+  />
+</label>
+
   </div>
 )}
 
@@ -2268,7 +2552,11 @@ const handleStampaDocumento = async () => {
 </h3>
 
 
-{!modalData.documentoEsistente && (
+{(
+  modalTipo === "fattura"
+    ? !documentoConsuntivato
+    : !modalData.documentoEsistente
+) && (
   <div style={{ marginTop: 10, marginBottom: 10 }}>
     <div style={{ fontWeight: "bold", marginBottom: 5 }}>
       Salva il movimento pagabile dal:
@@ -2284,20 +2572,39 @@ const handleStampaDocumento = async () => {
 )}
       <div style={{ marginTop: 20 }}>
 
-<button
-  onClick={handleSalvaDocumento}
-  disabled={modalData.documentoEsistente || salvataggioInCorso}
-  style={{
-    opacity:
-      modalData.documentoEsistente || salvataggioInCorso ? 0.5 : 1,
-    cursor:
-      modalData.documentoEsistente || salvataggioInCorso
-        ? "not-allowed"
-        : "pointer"
-  }}
->
-  {salvataggioInCorso ? "Salvataggio in corso..." : modalTipo === "fattura" ? "Salva fattura":  "Salva prospetto"}
-</button>
+
+
+{(
+  modalTipo === "fattura"
+    ? !documentoConsuntivato
+    : !modalData.documentoEsistente
+) && (
+  <>
+    <button
+      onClick={handleSalvaDocumento}
+      disabled={salvataggioInCorso}
+      style={{
+        opacity: salvataggioInCorso ? 0.5 : 1,
+        cursor: salvataggioInCorso ? "not-allowed" : "pointer",
+      }}
+    >
+      {salvataggioInCorso
+        ? "Salvataggio in corso..."
+        : modalTipo === "fattura"
+          ? "Salva fattura"
+          : "Salva prospetto"}
+    </button>
+
+    {modalTipo === "fattura" && (
+      <button
+        onClick={handleGeneraXmlFattura}
+        style={{ marginLeft: 10 }}
+      >
+        Genera XML FatturaPA
+      </button>
+    )}
+  </>
+)}
 
         <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
         <button          onClick={() => setModalData(null)}          style={{ marginLeft: 10 }}        >          ❌ Chiudi        </button>
