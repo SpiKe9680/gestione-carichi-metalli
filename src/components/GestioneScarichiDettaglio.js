@@ -4,75 +4,24 @@ import { db, auth } from "../firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, addDoc, setDoc, serverTimestamp,Timestamp  } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
-import { FiUpload, FiDownload } from 'react-icons/fi';
-import autoTable from "jspdf-autotable";
-// --- Blocchetto Data/Ora per editor ---
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
-
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 registerLocale("it", it);
-const getUtenteReact = () => {
-  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+const getUtenteReact = () => {  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+  return (    u?.username ||    u?.email ||    auth.currentUser?.displayName ||    auth.currentUser?.email ||    "sconosciuto"  );};
+const registraErroreDb = async ({  operazione,  collezione = null,  documentoId = null,  errore,  before = null}) => {
+  console.error(    `❌ ERRORE DB - ${operazione}:`,    errore  );
 
-  return (
-    u?.username ||
-    u?.email ||
-    auth.currentUser?.displayName ||
-    auth.currentUser?.email ||
-    "sconosciuto"
-  );
+  try {    await scriviLog({      pagina: "gestione-scarichi-dettaglio",      evento: "DB_ERRORE",      utente: getUtenteReact(),
+      riferimento: {        collezione,        documentoId,        operazione      },      before,      after: {        errore: errore?.message || "Errore sconosciuto",
+        codice: errore?.code || null,        stack: errore?.stack || null      },      ripristinabile: false,      meta: {        tipo: "DB_ERRORE",        operazione
+      }    });
+  } catch (erroreLog) {    console.error(      "❌ ERRORE SCRITTURA LOG DB:",      erroreLog    );  }
 };
-
-
-const registraErroreDb = async ({
-  operazione,
-  collezione = null,
-  documentoId = null,
-  errore,
-  before = null
-}) => {
-  console.error(
-    `❌ ERRORE DB - ${operazione}:`,
-    errore
-  );
-
-  try {
-    await scriviLog({
-      pagina: "gestione-scarichi-dettaglio",
-      evento: "DB_ERRORE",
-      utente: getUtenteReact(),
-      riferimento: {
-        collezione,
-        documentoId,
-        operazione
-      },
-      before,
-      after: {
-        errore: errore?.message || "Errore sconosciuto",
-        codice: errore?.code || null,
-        stack: errore?.stack || null
-      },
-      ripristinabile: false,
-      meta: {
-        tipo: "DB_ERRORE",
-        operazione
-      }
-    });
-  } catch (erroreLog) {
-    console.error(
-      "❌ ERRORE SCRITTURA LOG DB:",
-      erroreLog
-    );
-  }
-};
-
-
 const GestioneScarichiDettaglio = ({ giornoSelezionato, goBack, filtroFornitoreProp = "tutti", filtroListinoProp = "tutti", tipoMovimentoProp = "scarico" }) => {
-
   const [tipoMovimento] = useState(tipoMovimentoProp); // default scarico
   const [righe, setRighe] = useState([]);
-
   const [listini, setListini] = useState({});
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [editor, setEditor] = useState(null);
@@ -91,52 +40,21 @@ const [currentPageScarichi, setCurrentPageScarichi] = useState(1);
 const [filtroFIR, setFiltroFIR] = useState("tutti");
 const [filtroMateriale, setFiltroMateriale] = useState("tutti");
 const valoriTipo = React.useMemo(() => ["tutti", ...Array.from(new Set(righe.map(r => r.tipo).filter(Boolean)))], [righe]);
-
 const [filtroTipo, setFiltroTipo] = useState("tutti");
-const [sortConfigCarichi, setSortConfigCarichi] = useState({
-  key: "ora",
-  direction: "desc"
-});
-
-const [sortConfigScarichi, setSortConfigScarichi] = useState({
-  key: "ora",
-  direction: "desc"
-});
-
-const cambiaSort = (
-  key,
-  sortConfig,
-  setSortConfig,
-  setPagina
-) => {
-  const direction =
-    sortConfig.key === key && sortConfig.direction === "asc"
-      ? "desc"
-      : "asc";
-
-  setSortConfig({
-    key,
-    direction
-  });
-
+const [sortConfigCarichi, setSortConfigCarichi] = useState({  key: "ora",  direction: "desc"});
+const [sortConfigScarichi, setSortConfigScarichi] = useState({  key: "ora",  direction: "desc"});
+const cambiaSort = (  key,  sortConfig,  setSortConfig,  setPagina) => {
+  const direction =    sortConfig.key === key && sortConfig.direction === "asc"      ? "desc"      : "asc";
+  setSortConfig({    key,    direction  });
   setPagina(1);
 };
 
-const iconaSort = (sortConfig, key) => {
-  if (sortConfig.key !== key) return " ↕";
-  return sortConfig.direction === "asc"
-    ? " ▲"
-    : " ▼";
-};
+const iconaSort = (sortConfig, key) => {  if (sortConfig.key !== key) return " ↕";
+  return sortConfig.direction === "asc"    ? " ▲"    : " ▼";};
 
-const ordinaRighe = (righe, sortConfig) => {
-  const getValore = (r, key) => {
-    switch (key) {
-      case "totale":
-        return Number(r.netto ?? 0) * Number(r.prezzoKg ?? 0);
-
-      default:
-        return r[key];
+const ordinaRighe = (righe, sortConfig) => {  const getValore = (r, key) => {
+    switch (key) {      case "totale":        return Number(r.netto ?? 0) * Number(r.prezzoKg ?? 0);
+      default:        return r[key];
     }
   };
 
@@ -371,6 +289,7 @@ return movimenti.flatMap((cer) => {
     rIndex,
     cer: cer.cer,
     fir: cer.fir,
+    caloTipo: r.caloTipo ?? cer.caloTipo ?? "kg",
     sourceCollection: cer.sourceCollection,
     tipo: tipoMov,
     fornitore: scarico.fornitore,
@@ -424,6 +343,7 @@ return movimenti.flatMap((cer) => {
     rIndex: 0,
     cer: cer.cer,
     fir: cer.fir || "",
+    caloTipo: cer.caloTipo || "kg",
     materiale: cer.materiale || "N/D",
     sourceCollection: cer.sourceCollection,
     tipo: tipoMov,
@@ -3218,9 +3138,10 @@ console.log("EDITOR PRIMA SAVE:", editor);
       setErrori(prev => [...prev, e.message]);
     }
   }}
- disabled={
+disabled={
   !campoModificato("peso") &&
   !campoModificato("calo") &&
+  !campoModificato("caloTipo") &&
   !campoModificato("tara") &&
   !campoModificato("prezzoKg") &&
   !campoModificato("listino") &&
