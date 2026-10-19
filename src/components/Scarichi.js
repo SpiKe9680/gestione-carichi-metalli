@@ -1298,13 +1298,14 @@ setPreviewFoto(foto);
 
         autoTable(pdf, {
           startY: y,
-          head: [["Materiale", "Peso", "Calo", "Netto"]],
+          head: [["Materiale", "Peso(Kg)", "Calo", "Tara(Kg)", "Netto(Kg)"]],
           body: (c.righe || []).map(r => [
             r.materiale,
             Number(r.peso || 0).toFixed(2),
             r.caloTipo === "perc"
-              ? `${Number(r.calo).toFixed(2)}%`
-              : Number(r.calo).toFixed(2),
+  ? `${Number(r.calo || 0).toFixed(2)}%`
+  : `${Number(r.calo || 0).toFixed(2)} kg`,
+            Number(r.tara || 0).toFixed(2),
             Number(r.netto || 0).toFixed(2),
           ]),
           theme: "grid",
@@ -1399,8 +1400,21 @@ setPreviewFoto(foto);
         }
       }
 
-      const filename = `${tipo === "carico" ? "Carico" : "Scarico"}_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`;
+      const primoFir = (docData.scarico || [])
+  .map(c => c.fir)
+  .find(fir => fir && fir.trim()) || "X";
 
+const dataFile = docData.data?.toDate
+  ? docData.data.toDate()
+  : new Date(docData.data);
+
+const dataFormattata = !isNaN(dataFile.getTime())
+  ? `${dataFile.getFullYear()}${String(dataFile.getMonth() + 1).padStart(2, "0")}${String(dataFile.getDate()).padStart(2, "0")}`
+  : "00000000";
+
+const filename = tipo === "carico"
+  ? `Carico_${docData.fornitore || "X"}_${docData.listino || "X"}.pdf`
+  : `Scarico_${docData.fornitore || "X"}_${primoFir}_${dataFormattata}.pdf`;
       await salvaESharePdfCapacitor(pdf, filename);
       return;
 

@@ -2097,7 +2097,7 @@ const handleStampa = async () => {
 
             Number(r.tara ?? 0) === 0
               ? "-"
-              : `${Number(r.tara).toFixed(2)} Kg`,
+              : `${Number(r.tara).toFixed(2)}`,
 
             c.netto.toFixed(2),
             c.prezzoKg.toFixed(2),
@@ -2167,7 +2167,7 @@ const handleStampa = async () => {
 
             Number(r.tara ?? 0) === 0
               ? "-"
-              : `${Number(r.tara).toFixed(2)} Kg`,
+              : `${Number(r.tara).toFixed(2)}`,
 
             c.netto.toFixed(2),
             c.prezzoKg.toFixed(2),
