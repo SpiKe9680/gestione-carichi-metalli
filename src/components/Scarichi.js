@@ -1769,92 +1769,88 @@ const materialiOptions = [...materialiFiltrati]
   }));
   return (
     <div className="scarichi-container">
-      <div className="scarichi-header" style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between"
-      }}>
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "8px",
-          marginBottom: "15px"
-        }}>
-          {configAzienda?.logoBase64 && (
-            <img
-              src={`data:image/png;base64,${configAzienda.logoBase64}`}
-              alt="logo"
-              style={{
-                height: "150px",
-                maxWidth: "300px",
-                objectFit: "contain"
-              }}
-            />
-          )}
+      
+<div className="scarichi-header">
+  <div className="scarichi-brand">
+    {configAzienda?.logoBase64 && (
+      <img
+        src={`data:image/png;base64,${configAzienda.logoBase64}`}
+        alt="logo"
+        className="scarichi-logo"
+      />
+    )}
 
-          <h2 style={{ margin: 0 }}>
-            {docIdOriginale
-              ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
-              : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
-            }
-          </h2>
-        </div>
+    <h2 className="scarichi-title">
+      {docIdOriginale
+        ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
+        : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
+      }
+    </h2>
+  </div>
 
-        <div>
-          {["admin", "manager"].includes(
-            (activeUserRole || role || "").toLowerCase().trim()
-          ) && (
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button style={headerBtnStyle} onClick={handleGoToDashboard}>
-                Torna alla Dashboard
-              </button>
-            </div>
-          )}
+  <div className="scarichi-header-actions">
+    {["admin", "manager"].includes(
+      (activeUserRole || role || "").toLowerCase().trim()
+    ) && (
+      <button
+        type="button"
+        className="scarichi-header-btn"
+        onClick={handleGoToDashboard}
+      >
+        Dashboard
+      </button>
+    )}
 
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button style={headerBtnStyle} onClick={logout}>
-              🚪Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
-            </button>
-          </div>
-{docIdOriginale ? (
-  /* MODALITÀ MODIFICA: Mostra un solo pulsante per il movimento corrente */
-  <div style={{ display: "flex", gap: "8px" }}>
     <button
-      style={headerBtnStyle}
-      onClick={() => handlePrint(docIdOriginale, tipoMovimento)}
+      type="button"
+      className="scarichi-header-btn"
+      onClick={logout}
     >
-      {tipoMovimento === "carico" ? "Stampa Carico" : "Stampa Scarico"}
+      Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
+    </button>
+
+    {docIdOriginale ? (
+      <button
+        type="button"
+        className="scarichi-header-btn"
+        onClick={() => handlePrint(docIdOriginale, tipoMovimento)}
+      >
+        {tipoMovimento === "carico" ? "Stampa Carico" : "Stampa Scarico"}
+      </button>
+    ) : (
+      <>
+        <button
+          type="button"
+          className="scarichi-header-btn"
+          onClick={() => stampaUltimoMovimento("scarico")}
+        >
+          Stampa Ultimo Scarico
+        </button>
+
+        <button
+          type="button"
+          className="scarichi-header-btn"
+          onClick={() => stampaUltimoMovimento("carico")}
+        >
+          Stampa Ultimo Carico
+        </button>
+      </>
+    )}
+
+    <button
+      type="button"
+      className="scarichi-header-btn scarichi-reset-btn"
+      onClick={handleReset}
+    >
+      {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
     </button>
   </div>
-) : (
-  /* MODALITÀ NUOVO MOVIMENTO: Comportamento standard con entrambi i pulsanti */
-  <div style={{ display: "flex", gap: "8px" }}>
-    <button
-      style={headerBtnStyle}
-      onClick={() => stampaUltimoMovimento("scarico")}
-    >
-      Stampa Ultimo Scarico
-    </button>
-    <button
-      style={headerBtnStyle}
-      onClick={() => stampaUltimoMovimento("carico")}
-    >
-      Stampa Ultimo Carico
-    </button>
-  </div>
-)}
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={handleReset} style={{ marginLeft: "15px" }}>
-              {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
-            </button>
-          </div>
-        </div>
-      </div>
+</div>
+
 
       {/* DATA / ORA */}
       <div>
-        <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
+        <div className="scarichi-data-ora">
           <label>
             Data:
             <DatePicker
@@ -1908,14 +1904,14 @@ const materialiOptions = [...materialiFiltrati]
             />
           </label>
 
-          <label style={{ marginLeft: "12px" }}>
+         <label className="scarichi-adesso">
             <input type="checkbox" checked={usaOra} onChange={handleUsaOraChange} /> Adesso
           </label>
         </div>
 
         {/* TIPO MOVIMENTO */}
-        <div style={{ marginTop: "12px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-          <label style={{ marginRight: "10px" }}>
+        <div className="scarichi-tipo-movimento">
+         <label className="scarichi-campo-label">
             Tipo Movimento:
             <select
               value={tipoMovimento}
@@ -1949,11 +1945,13 @@ const materialiOptions = [...materialiFiltrati]
           </label>
         </div>
 
+    
         {/* FORNITORE */}
-        <div>
-          <label style={{ marginRight: "6px" }}>
+        <div className="scarichi-fornitore">
+          <label>
             {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
           </label>
+
 
  <CreatableSelect
     options={fornitoriOptions}
@@ -2195,66 +2193,83 @@ const materialiOptions = [...materialiFiltrati]
         </>
       )}
 
+    
       {/* MATERIALE */}
       {selectedCer && (
-        <>
-          <label>Materiale:</label>
-          <Select
-            options={materialiOptions}
-            value={materialiOptions.find(o => o.value === selectedMateriale) || null}
-            onChange={(selected) => {
-              setSelectedMateriale(selected?.value || "");
-            }}
-            placeholder="Cerca materiale..."
-            isSearchable
-          />
+        <div className="scarichi-materiale">
+          <div className="scarichi-materiale-titolo">
+            Materiale e pesatura
+          </div>
 
-          <br />
+          <div className="scarichi-materiale-campo scarichi-materiale-selezione">
+            <label>Materiale:</label>
+            <Select
+              options={materialiOptions}
+              value={materialiOptions.find(o => o.value === selectedMateriale) || null}
+              onChange={(selected) => {
+                setSelectedMateriale(selected?.value || "");
+              }}
+              placeholder="Cerca materiale..."
+              isSearchable
+            />
+          </div>
 
-          <label>Peso (kg):</label>
-          <input
-            type="text"
-            value={peso}
-            onChange={(e) => {
-              let val = e.target.value.replace(/[^0-9.,-]/g, "");
-              if (parseFloat(val.replace(",", ".")) === 0) val = "";
-              setPeso(val);
-            }}
-          />
+          <div className="scarichi-materiale-griglia">
+            <div className="scarichi-materiale-campo">
+              <label>Peso (kg):</label>
+              <input
+                type="text"
+                value={peso}
+                onChange={(e) => {
+                  let val = e.target.value.replace(/[^0-9.,-]/g, "");
+                  if (parseFloat(val.replace(",", ".")) === 0) val = "";
+                  setPeso(val);
+                }}
+                placeholder="Peso in kg"
+              />
+            </div>
 
-          <label>Calo:</label>
-          <input
-            type="text"
-            value={calo}
-            onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))}
-          />
+            <div className="scarichi-materiale-campo">
+              <label>Calo:</label>
+              <input
+                type="text"
+                value={calo}
+                onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))}
+                placeholder="Valore calo"
+              />
+            </div>
 
-          {/* 🔥 SELECT CALO TIPO */}
-          <label>Tipo Calo:</label>
-          <select
-            value={caloTipo}
-            onChange={(e) => setCaloTipo(e.target.value)}
-          >
-            <option value="kg">kg</option>
-            <option value="perc">%</option>
-          </select>
+            <div className="scarichi-materiale-campo">
+              <label>Tipo Calo:</label>
+              <select
+                value={caloTipo}
+                onChange={(e) => setCaloTipo(e.target.value)}
+              >
+                <option value="kg">kg</option>
+                <option value="perc">%</option>
+              </select>
+            </div>
 
-          {/* 🔥 NUOVO: INPUT TARA */}
-          <label>Tara (kg):</label>
-          <input
-            type="text"
-            value={tara}
-            onChange={(e) => setTara(e.target.value.replace(/[^0-9.,]/g, ""))}
-            placeholder="Inserisci tara in kg"
-          />
+            <div className="scarichi-materiale-campo">
+              <label>Tara (kg):</label>
+              <input
+                type="text"
+                value={tara}
+                onChange={(e) => setTara(e.target.value.replace(/[^0-9.,]/g, ""))}
+                placeholder="Tara in kg"
+              />
+            </div>
+          </div>
 
-          <button
-            onClick={handleAdd}
-            disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
-          >
-            Aggiungi / Aggiorna
-          </button>
-        </>
+          <div className="scarichi-materiale-azioni">
+            <button
+              onClick={handleAdd}
+              disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
+            >
+              Aggiungi / Aggiorna
+            </button>
+          </div>
+        </div>
       )}
 
       <hr />

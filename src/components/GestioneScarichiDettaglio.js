@@ -876,7 +876,9 @@ const handleStampaScaricoRiga = async (r) => {
   // 🔥 NON convertiamo % → kg
   // Se DB dice 6% → stampiamo 6%
   // Se DB dice 2 kg → stampiamo 2 kg
-  const caloKg = tipo === "perc" ? caloVal : caloVal;
+const caloKg = tipo === "perc"
+  ? pesoLordo * caloVal / 100
+  : caloVal;
 
   // 🔥 Netto SEMPRE dal DB
   const netto = Number(r.netto ?? (pesoLordo - caloKg));

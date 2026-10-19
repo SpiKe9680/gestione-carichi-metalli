@@ -1,22 +1,25 @@
+
 /* ---------- CONTAINER GENERALE ---------- */
-.scarichi-container, 
-.admin-dashboard, 
-.gestione-utenti, 
+.scarichi-container,
+.admin-dashboard,
+.gestione-utenti,
 .gestione-scarichi {
   max-width: 1000px;
   margin: 20px auto;
   padding: 20px;
   background: #fdfdfd;
   border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   font-family: Arial, sans-serif;
 }
+
 .input-error {
   background-color: #fff3cd;
   border: 2px solid #ff9800;
 }
-/* ---------- HEADER ---------- */
-.scarichi-header, 
+
+/* ---------- HEADER GENERALE ---------- */
+.scarichi-header,
 .admin-dashboard header {
   display: flex;
   justify-content: space-between;
@@ -24,7 +27,7 @@
   margin-bottom: 20px;
 }
 
-.scarichi-header h2, 
+.scarichi-header h2,
 .admin-dashboard h2 {
   margin: 0;
 }
@@ -38,7 +41,7 @@ button {
   background-color: #0077cc;
   color: white;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background-color 0.2s;
 }
 
 button:hover {
@@ -51,7 +54,10 @@ button:disabled {
 }
 
 /* ---------- INPUT / SELECT ---------- */
-input[type="text"], input[type="number"], input[type="password"], select {
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select {
   padding: 6px;
   margin: 5px 10px 5px 0;
   border-radius: 4px;
@@ -65,7 +71,8 @@ table {
   margin-top: 10px;
 }
 
-table th, table td {
+table th,
+table td {
   padding: 8px 10px;
   border: 1px solid #ccc;
   text-align: left;
@@ -78,7 +85,7 @@ table th {
 
 /* ---------- PULSANTI AZIONI NELLA TABELLA ---------- */
 table td.actions {
-  white-space: nowrap; /* evita che i bottoni vadano a capo */
+  white-space: nowrap;
 }
 
 table td.actions button {
@@ -87,12 +94,12 @@ table td.actions button {
   margin-bottom: 2px;
   padding: 4px 8px;
   font-size: 0.9em;
-  min-width: 60px; 
+  min-width: 60px;
 }
 
 /* ---------- COLORI SPECIFICI PER AZIONI ---------- */
 table td.actions button.edit {
-  background-color: #ffa500; /* arancione per Modifica */
+  background-color: #ffa500;
 }
 
 table td.actions button.edit:hover {
@@ -100,7 +107,7 @@ table td.actions button.edit:hover {
 }
 
 table td.actions button.delete {
-  background-color: #cc0000; /* rosso per Elimina */
+  background-color: #cc0000;
 }
 
 table td.actions button.delete:hover {
@@ -122,13 +129,14 @@ hr {
 }
 
 /* ---------- FORMS ---------- */
-.gestione-utenti input, 
+.gestione-utenti input,
 .gestione-utenti select {
   margin-right: 10px;
 }
 
 /* ---------- STYLING CER SECTION ---------- */
-h3, h4 {
+h3,
+h4 {
   margin: 10px 0 5px;
 }
 
@@ -137,23 +145,28 @@ strong {
   margin-top: 5px;
 }
 
-/* ---------- RESPONSIVE ---------- */
+/* ---------- RESPONSIVE GENERALE ---------- */
 @media (max-width: 768px) {
-  .scarichi-container, .admin-dashboard, .gestione-utenti, .gestione-scarichi {
+  .scarichi-container,
+  .admin-dashboard,
+  .gestione-utenti,
+  .gestione-scarichi {
     padding: 10px;
     margin: 10px;
   }
 
-  input, select {
+  input,
+  select {
     width: 100%;
     margin: 5px 0;
+    box-sizing: border-box;
   }
 
   button {
-    width: auto; /* Non sovrascrive i bottoni della tabella */
+    width: auto;
     margin: 5px 0;
   }
-  
+
   .admin-actions {
     flex-direction: column;
     gap: 10px;
@@ -162,5 +175,332 @@ strong {
   table td.actions button {
     width: auto !important;
     display: inline-block;
+  }
+}
+
+/* ==================================================
+   HEADER SCARICHI
+   ================================================== */
+
+.scarichi-container .scarichi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px;
+  margin-bottom: 22px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
+}
+
+.scarichi-brand {
+  display: flex;
+  flex: 0 1 300px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scarichi-logo {
+  display: block;
+  height: 95px;
+  max-width: 220px;
+  width: auto;
+  object-fit: contain;
+}
+
+.scarichi-title {
+  margin: 0;
+  color: #1e293b;
+  font-size: 23px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- GRIGLIA PULSANTI HEADER ---------- */
+.scarichi-container .scarichi-header-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1 1 400px;
+  gap: 8px;
+  width: 100%;
+  max-width: 460px;
+  min-width: 0;
+}
+
+/* ---------- PULSANTI HEADER BLU ---------- */
+.scarichi-container .scarichi-header-actions .scarichi-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  min-height: 46px;
+  margin: 0;
+  padding: 8px 10px;
+  box-sizing: border-box;
+
+  background-color: #0077cc;
+  color: #ffffff;
+  border: 1px solid #0077cc;
+  border-radius: 6px;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.scarichi-container .scarichi-header-actions .scarichi-header-btn:hover {
+  background-color: #005fa3;
+  border-color: #005fa3;
+}
+
+.scarichi-container .scarichi-header-actions .scarichi-header-btn:active {
+  background-color: #004b82;
+  border-color: #004b82;
+}
+
+.scarichi-container .scarichi-header-actions .scarichi-header-btn:disabled {
+  background-color: #999999;
+  border-color: #999999;
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+/* Reset mantiene lo stesso blu degli altri pulsanti */
+.scarichi-container .scarichi-header-actions .scarichi-reset-btn {
+  background-color: #0077cc;
+  color: #ffffff;
+  border-color: #0077cc;
+}
+
+.scarichi-container .scarichi-header-actions .scarichi-reset-btn:hover {
+  background-color: #005fa3;
+  border-color: #005fa3;
+}
+
+/* ==================================================
+   TABLET E SMARTPHONE
+   ================================================== */
+
+@media (max-width: 768px) {
+  .scarichi-container .scarichi-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .scarichi-brand {
+    flex: none;
+    width: 100%;
+  }
+
+  .scarichi-logo {
+    height: 70px;
+    max-width: 180px;
+  }
+
+  .scarichi-title {
+    font-size: 20px;
+  }
+
+  .scarichi-container .scarichi-header-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+
+  .scarichi-container .scarichi-header-actions .scarichi-header-btn {
+    width: 100%;
+    height: 46px;
+    min-height: 46px;
+    padding: 8px;
+    font-size: 13px;
+  }
+}
+
+/* Smartphone molto stretti */
+@media (max-width: 360px) {
+  .scarichi-container .scarichi-header-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ==================================================
+   MATERIALE E PESATURA
+   ================================================== */
+
+.scarichi-materiale {
+  margin: 18px 0;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.scarichi-materiale-titolo {
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.scarichi-materiale-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.scarichi-materiale-campo label {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scarichi-materiale-selezione {
+  margin-bottom: 16px;
+}
+
+.scarichi-materiale-selezione > div {
+  width: 100%;
+}
+
+.scarichi-materiale-griglia {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scarichi-materiale-campo input,
+.scarichi-materiale-campo select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  margin: 0;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.scarichi-materiale-campo input:focus,
+.scarichi-materiale-campo select:focus {
+  outline: none;
+  border-color: #0077cc;
+  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.12);
+}
+
+.scarichi-materiale-azioni {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.scarichi-materiale-azioni button {
+  min-height: 42px;
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: #0077cc;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scarichi-materiale-azioni button:hover:not(:disabled) {
+  background: #005fa3;
+}
+
+.scarichi-materiale-azioni button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .scarichi-materiale {
+    padding: 14px;
+  }
+
+  .scarichi-materiale-griglia {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .scarichi-materiale-azioni button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  .scarichi-materiale-griglia {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* ---------- TIPO MOVIMENTO: STILE BLU ---------- */
+
+.scarichi-container .scarichi-tipo-movimento select {
+  width: 180px;
+  min-height: 46px;
+  margin: 0;
+  padding: 8px 12px;
+  box-sizing: border-box;
+
+  background-color: #0077cc;
+  color: #ffffff;
+  border: 1px solid #0077cc;
+  border-radius: 6px;
+
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scarichi-container .scarichi-tipo-movimento select:focus {
+  outline: none;
+  border-color: #005fa3;
+  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.2);
+}
+
+.scarichi-container .scarichi-tipo-movimento select option {
+  background-color: #ffffff;
+  color: #1e293b;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .scarichi-container .scarichi-tipo-movimento select {
+    width: 100%;
+    min-height: 46px;
+    font-size: 16px;
   }
 }
