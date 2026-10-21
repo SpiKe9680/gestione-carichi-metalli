@@ -18,6 +18,8 @@ import ConfigurazioniGenerali from "./components/ConfigurazioniGenerali";
 import MovimentiFinanziari from "./components/MovimentiFinanziari";
 import MovimentiGiorno from "./components/MovimentiGiorno";
 import AnaMovFin from "./components/AnagraficaMovimentoFinanziario"
+import MagazzinoMPS from "./components/MagazzinoMPS";
+
 
 const getUser = () => {
   try {
@@ -138,6 +140,16 @@ const App = () => {
           element={<PrivateRoute><MovimentiGiorno /></PrivateRoute>} />
 <Route path="/AnaMovFin"
           element={<PrivateRoute><AnaMovFin /></PrivateRoute>} />
+
+<Route
+  path="/magazzino-mps"
+  element={
+    <AdminRoute>
+      <MagazzinoMPS logout={logout} />
+    </AdminRoute>
+  }
+/>
+
 
         {/* FALLBACK */}
         <Route

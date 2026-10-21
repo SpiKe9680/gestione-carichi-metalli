@@ -12,13 +12,14 @@ import {
   FaClipboardList,
   FaCog,
   FaCalendarAlt,
-  FaMoneyBillWave
+  FaMoneyBillWave, FaWarehouse
 } from "react-icons/fa";
 
 const AdminDashboard = ({ logout }) => {
   const navigate = useNavigate();
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
 const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
+console.log("METALFLOW - ruolo dashboard:", role, currentUser);
   if (!currentUser) return null;
 
   return (
@@ -44,7 +45,7 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
         </button>
 
        
-
+        
         
 
         
@@ -107,8 +108,15 @@ const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
     <FaUsers style={{ marginRight: "8px" }} />
     Utenti
   </button>
-)}
 
+  
+)}
+{["MANAGER", "ADMIN"].includes(role) && (
+  <button onClick={() => navigate("/magazzino-mps")}>
+    <FaWarehouse style={{ marginRight: "8px" }} />
+    Magazzino MPS
+  </button>
+)}
       
       </div>
     </div>
