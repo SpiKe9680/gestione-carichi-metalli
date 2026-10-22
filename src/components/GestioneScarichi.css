@@ -1,98 +1,1324 @@
-/* GestioneScarichi.css */
+/* ==================================================
+   METALFLOW | GESTIONE CARICHI / SCARICHI
+   Stile allineato a Dashboard e pagina Scarichi.
+   Modifica solo la grafica: nessuna logica.
+   ================================================== */
 
-/* Contenitore principale */
-.gestione-scarichi-dettaglio {
+/* ---------- Token (stessi valori di theme.css) ---------- */
+
+.gestione-scarichi-container {
+  --mf-primary: #1e5a80;
+  --mf-primary-hover: #174664;
+  --mf-danger: #a83232;
+  --mf-danger-hover: #862727;
+  --mf-text: #263238;
+  --mf-muted: #5f6f7a;
+  --mf-border: #dce3e8;
+  --mf-surface: #ffffff;
+  --mf-surface-alt: #f6f8fa;
+  --mf-font: Arial, sans-serif;
+}
+
+/* ---------- Contenitore: card bianca come Dashboard e Scarichi ---------- */
+
+.gestione-scarichi-container {
+  box-sizing: border-box;
+  width: calc(100% - 32px);
+  max-width: 1400px;
+  margin: 16px auto;
   padding: 20px;
-  font-family: Arial, sans-serif;
-  background-color: #f7f7f7;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(38, 50, 56, 0.07);
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
-/* Titoli */
-.gestione-scarichi-dettaglio h2,
-.gestione-scarichi-dettaglio h3 {
-  margin-bottom: 15px;
-  color: #333;
+.gestione-scarichi-container *,
+.gestione-scarichi-container *::before,
+.gestione-scarichi-container *::after {
+  box-sizing: border-box;
 }
 
-/* Tabella */
-.tabella-scarichi {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 20px;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.gestione-scarichi-container h2,
+.gestione-scarichi-container h3,
+.gestione-scarichi-container h4 {
+  color: var(--mf-text);
 }
 
-.tabella-scarichi th,
-.tabella-scarichi td {
-  padding: 10px;
-  text-align: left;
-  border-bottom: 1px solid #ddd;
+.gestione-scarichi-container button,
+.gestione-scarichi-container input,
+.gestione-scarichi-container select,
+.gestione-scarichi-container textarea {
+  font-family: inherit;
 }
 
-.tabella-scarichi th {
-  background-color: #007bff;
-  color: white;
-  font-weight: bold;
+.gestione-scarichi-container button:focus-visible,
+.gestione-scarichi-container input:focus-visible,
+.gestione-scarichi-container select:focus-visible,
+.gestione-scarichi-container textarea:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
 }
 
-.tabella-scarichi tr:hover {
-  background-color: #f1f1f1;
-  cursor: pointer;
+/* ---------- Header: brand + barra comandi ---------- */
+
+.gestione-scarichi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  margin-bottom: 22px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
 }
 
-/* Riga selezionata */
-.tabella-scarichi tr.selected {
-  background-color: #d1ecf1;
+.gestione-scarichi-container .scarichi-brand {
+  display: flex;
+  flex: 0 1 300px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
 }
 
-/* Form di modifica riga */
-.modifica-riga {
-  padding: 15px;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  margin-bottom: 20px;
-}
-
-.modifica-riga label {
+.gestione-scarichi-container .scarichi-logo {
   display: block;
-  margin-bottom: 10px;
-  font-weight: bold;
+  width: auto;
+  max-width: 220px;
+  max-height: 75px;
+  object-fit: contain;
 }
 
-.modifica-riga input,
-.modifica-riga select {
-  padding: 5px;
-  margin-left: 10px;
-  width: 150px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+.gestione-scarichi-container .scarichi-title {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
 }
 
-.modifica-riga button {
+.gestione-scarichi-container .gestione-scarichi-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1 1 400px;
+  gap: 8px;
+  width: 100%;
+  max-width: 500px;
+  min-width: 0;
+  margin: 0;
+}
+
+.gestione-scarichi-container .gestione-scarichi-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 10px;
+  background: var(--mf-primary);
+  color: #ffffff;
+  border: 1px solid var(--mf-primary);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gestione-scarichi-container .gestione-scarichi-toolbar button:hover:not(:disabled) {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
+  box-shadow: 0 3px 8px rgba(30, 90, 128, 0.16);
+}
+
+.gestione-scarichi-container .gestione-scarichi-toolbar button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gestione-scarichi-container .gestione-scarichi-toolbar button.toolbar-logout {
+  background: var(--mf-danger);
+  border-color: var(--mf-danger);
+}
+
+.gestione-scarichi-container .gestione-scarichi-toolbar button.toolbar-logout:hover:not(:disabled) {
+  background: var(--mf-danger-hover);
+  border-color: var(--mf-danger-hover);
+  box-shadow: none;
+}
+
+/* ---------- Legenda ---------- */
+
+.gestione-scarichi-container .scarichi-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  margin: 0 0 16px;
+  padding: 12px 15px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+  color: #4a5a66;
+  font-size: 13px;
+}
+
+.gestione-scarichi-container .scarichi-legend > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* ---------- Pulsante filtri (apertura/chiusura) ---------- */
+
+.gestione-scarichi-container > button.filter-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  background: var(--mf-primary);
+  color: #ffffff;
+  border: 1px solid var(--mf-primary);
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gestione-scarichi-container > button.filter-item:hover {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
+}
+
+/* ---------- Riepilogo filtri attivi ---------- */
+
+.gestione-scarichi-container .filtri-attivi-card {
+  display: block;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  background: #e6f3fa;
+  border: 1px solid #bcd9ea;
+  border-radius: 8px;
+  color: var(--mf-text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gestione-scarichi-container .filtri-attivi-card:hover {
+  border-color: var(--mf-primary);
+  box-shadow: 0 3px 8px rgba(30, 90, 128, 0.12);
+}
+
+.gestione-scarichi-container .filtri-attivi-titolo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--mf-primary);
+  font-weight: 700;
+}
+
+.gestione-scarichi-container .filtri-attivi-titolo span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gestione-scarichi-container .filtri-attivi-valori {
+  color: var(--mf-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Pannello filtri ----------
+   Griglia a 3 colonne, ordine logico:
+   riga 1: Reset | Disabilita date | FIR/DDT
+   riga 2: Dal/Al (2 colonne) | CER
+   riga 3: Fornitore | Listino | Utente
+   riga 4: Tipo
+   Gli spaziatori <div><br/></div> vengono nascosti. */
+
+.gestione-scarichi-container .filtri {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  align-items: stretch;
+  gap: 16px 20px;
+  width: 100%;
+  margin: 0 0 20px;
+  padding: 20px;
+  background: #e6f3fa;
+  border: 1px solid #bcd9ea;
+  border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(38, 50, 56, 0.05);
+}
+
+.gestione-scarichi-container .filtri > div:has(> br),
+.gestione-scarichi-container .filtri-group > div:has(> br) {
+  display: none;
+}
+
+.gestione-scarichi-container .filtri > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Ogni campo: etichetta sopra, controllo sotto, stessa struttura */
+
+.gestione-scarichi-container .filtri label.filter-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: #2c4456;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Checkbox "Disabilita filtro date": riga con il testo accanto */
+
+.gestione-scarichi-container .filtri label.filter-item:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 40px;
+  padding-top: 26px;
+  font-size: 14px;
+}
+
+.gestione-scarichi-container .filtri input[type="checkbox"] {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--mf-primary);
+}
+
+/* Campi di testo e select */
+
+.gestione-scarichi-container .filtri input[type="text"],
+.gestione-scarichi-container .filtri select,
+.gestione-scarichi-container .filtri .react-datepicker-wrapper input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.gestione-scarichi-container .filtri input:focus,
+.gestione-scarichi-container .filtri select:focus,
+.gestione-scarichi-container .filtri .react-datepicker-wrapper input:focus {
+  outline: none;
+  border-color: var(--mf-primary);
+  box-shadow: 0 0 0 3px rgba(30, 90, 128, 0.12);
+}
+
+/* Select react con altezza uniforme */
+
+.gestione-scarichi-container .filtri label.filter-item > div {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gestione-scarichi-container .filtri label.filter-item > div [class$="-control"] {
+  min-height: 40px;
+  border-color: #cbd5df;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.gestione-scarichi-container .filtri label.filter-item > div [class$="-value-container"] {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gestione-scarichi-container .filtri label.filter-item > div [class$="-singleValue"] {
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gestione-scarichi-container .filtri .react-datepicker-wrapper,
+.gestione-scarichi-container .filtri .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Gruppo date: occupa due colonne, Dal e Al affiancati senza box interno */
+
+.gestione-scarichi-container .filtri-group {
+  grid-column: span 2;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.gestione-scarichi-container .filtri-group > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.gestione-scarichi-container .filtri-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  color: #2c4456;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gestione-scarichi-container .filtri-group .react-select__control {
+  min-height: 40px;
+  border-color: #cbd5e1;
+  border-radius: 6px;
+}
+
+.gestione-scarichi-container .filtri-group .react-select__control:hover {
+  border-color: var(--mf-primary);
+}
+
+/* Reset filtri: secondario, grigio come il Reset della pagina Scarichi */
+
+.gestione-scarichi-container .filtri > button.filter-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  width: 100%;
+  min-height: 40px;
+  margin: 26px 0 0;
+  padding: 10px 14px;
+  background: #e8edf1;
+  color: var(--mf-text);
+  border: 1px solid #c7d0d8;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gestione-scarichi-container .filtri > button.filter-reset:hover {
+  background: #d9e1e7;
+  border-color: #bcc7d1;
+}
+
+/* ---------- Riepilogo movimenti ---------- */
+
+.movimenti-riepilogo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 14px 0 8px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+  color: #4a5a66;
+}
+
+.movimenti-semaforo {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ---------- Tabella movimenti ---------- */
+
+.gestione-scarichi-container .tabella-scarichi {
+  width: 100%;
+  min-width: 1120px;
+  margin: 16px 0 22px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.gestione-scarichi-container .tabella-scarichi th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 10px;
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  border-bottom: 1px solid var(--mf-border);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.gestione-scarichi-container .tabella-scarichi th:first-child {
+  text-align: left;
+}
+
+.gestione-scarichi-container .tabella-scarichi th {
+  cursor: pointer;
+}
+
+.gestione-scarichi-container .tabella-scarichi td {
+  padding: 10px;
+  border-bottom: 1px solid #e8edf2;
+  color: #3d4b55;
+  vertical-align: middle;
+}
+
+.gestione-scarichi-container .tabella-scarichi tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.gestione-scarichi-container .tabella-scarichi tbody tr {
+  cursor: pointer;
+}
+
+.gestione-scarichi-container .tabella-scarichi tbody tr:hover {
+  background: #f3f8fb;
+}
+
+.gestione-scarichi-container .tabella-scarichi tr.selected {
+  background: #dceef7;
+}
+
+/* Tabelle dentro prospetti e fatture */
+
+.gestione-scarichi-container .scarichi-tabella-documento {
+  width: 100%;
   margin-top: 10px;
-  padding: 8px 15px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  border-collapse: collapse;
+  background: var(--mf-surface);
+  color: #3d4b55;
+  font-size: 13px;
+}
+
+.gestione-scarichi-container .scarichi-tabella-documento th {
+  padding: 10px;
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  border: 1px solid var(--mf-border);
+  text-align: left;
+}
+
+.gestione-scarichi-container .scarichi-tabella-documento td {
+  padding: 9px 10px;
+  border: 1px solid var(--mf-border);
+}
+
+.gestione-scarichi-container .scarichi-tabella-documento tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+/* ---------- Campi fattura elettronica ---------- */
+
+.stile-label-fattura {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: #3d4b55;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stile-campo-fattura {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.stile-campo-fattura:focus {
+  outline: none;
+  border-color: var(--mf-primary);
+  box-shadow: 0 0 0 3px rgba(30, 90, 128, 0.12);
+}
+
+.stile-campo-fattura:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+/* ---------- Modali (classi predisposte) ---------- */
+
+.scarichi-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+  background: rgba(38, 50, 56, 0.55);
+}
+
+.scarichi-modal {
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: clamp(16px, 2.2vw, 28px);
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.scarichi-modal h2,
+.scarichi-modal h3 {
+  color: var(--mf-text);
+  margin-top: 0;
+}
+
+.scarichi-modal input,
+.scarichi-modal select,
+.scarichi-modal textarea {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.scarichi-modal input:focus,
+.scarichi-modal select:focus {
+  outline: none;
+  border-color: var(--mf-primary);
+}
+
+/* ---------- Responsive: tablet ---------- */
+
+@media (max-width: 1100px) {
+  .gestione-scarichi-container .filtri {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gestione-scarichi-container .tabella-scarichi {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .gestione-scarichi-container {
+    width: calc(100% - 24px);
+    padding: 16px;
+  }
+
+  .gestione-scarichi-header {
+    gap: 16px;
+  }
+
+  .gestione-scarichi-container .scarichi-brand {
+    flex-basis: 220px;
+  }
+
+  .gestione-scarichi-container .scarichi-logo {
+    max-width: 180px;
+    max-height: 65px;
+  }
+
+  .gestione-scarichi-container .scarichi-title {
+    font-size: 21px;
+  }
+}
+
+/* ---------- Responsive: smartphone ---------- */
+
+@media (max-width: 760px) {
+  .gestione-scarichi-container .filtri {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .gestione-scarichi-container .filtri-group {
+    padding: 10px;
+  }
+
+  .gestione-scarichi-container .scarichi-legend {
+    gap: 9px 14px;
+    padding: 10px;
+  }
+
+  .scarichi-modal-overlay {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .scarichi-modal {
+    max-height: calc(100vh - 20px);
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .gestione-scarichi-container {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 10px;
+    border-radius: 7px;
+    box-shadow: 0 2px 7px rgba(38, 50, 56, 0.06);
+  }
+
+  .gestione-scarichi-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+
+  .gestione-scarichi-container .scarichi-brand {
+    flex: none;
+    width: 100%;
+  }
+
+  .gestione-scarichi-container .scarichi-logo {
+    max-width: 160px;
+    max-height: 60px;
+  }
+
+  .gestione-scarichi-container .scarichi-title {
+    font-size: 20px;
+  }
+
+  .gestione-scarichi-container .gestione-scarichi-toolbar {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    gap: 7px;
+  }
+
+  .gestione-scarichi-container .gestione-scarichi-toolbar button {
+    min-height: 44px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .gestione-scarichi-container .tabella-scarichi {
+    font-size: 12px;
+  }
+
+  .gestione-scarichi-container .tabella-scarichi th,
+  .gestione-scarichi-container .tabella-scarichi td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .gestione-scarichi-container {
+    width: calc(100% - 10px);
+    padding: 8px;
+  }
+
+  .gestione-scarichi-header {
+    padding: 10px;
+  }
+
+  .gestione-scarichi-container .gestione-scarichi-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ==================================================
+   CLASSI SOSTITUTIVE DEGLI STILI INLINE
+   Overlay, modali, campi, tabelle di dettaglio
+   ================================================== */
+
+/* Overlay e modali */
+
+.gs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(38, 50, 56, 0.6);
+}
+
+.gs-overlay--busy {
+  z-index: 100000;
+  background: rgba(38, 50, 56, 0.45);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: wait;
+}
+
+.gs-busy-box {
+  padding: 24px 32px;
+  background: rgba(38, 50, 56, 0.8);
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.gs-busy-icon {
+  margin-bottom: 12px;
+  font-size: 36px;
+}
+
+.gs-busy-sub {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.gs-modal {
+  width: 80%;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 20px;
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  border: 1px solid var(--mf-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.gs-modal.is-busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.gs-modal h2,
+.gs-modal h3 {
+  color: var(--mf-text);
+}
+
+.gs-modal button {
+  min-height: 38px;
+  padding: 8px 14px;
+  background: var(--mf-primary);
+  color: #ffffff;
+  border: 1px solid var(--mf-primary);
+  border-radius: 6px;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.modifica-riga button:hover {
-  background-color: #218838;
+.gs-modal button:hover:not(:disabled) {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
 }
 
-/* Pulsante aggiungi nuovo listino */
-.nuovo-listino {
-  padding: 10px 20px;
-  background-color: #ffc107;
-  color: #333;
-  border: none;
-  border-radius: 4px;
+.gs-modal button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gs-btn-gap {
+  margin-left: 10px;
+}
+
+.gs-modal-actions,
+.gs-modal-footer {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gs-modal-footer {
+  display: block;
+}
+
+.gs-listino-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gs-fattura-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 15px 0 20px;
+  padding: 15px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gs-fattura-title {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.gs-span-full {
+  grid-column: 1 / -1;
+}
+
+/* Campi di input dentro i modali */
+
+.gs-modal label {
+  color: #3d4b55;
+  font-weight: 600;
+}
+
+.gs-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.gs-field:focus {
+  outline: none;
+  border-color: var(--mf-primary);
+  box-shadow: 0 0 0 3px rgba(30, 90, 128, 0.12);
+}
+
+.gs-field:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.gs-total-title {
+  margin-top: 20px;
+}
+
+.gs-date-block {
+  margin: 10px 0;
+}
+
+.gs-date-label {
+  margin-bottom: 5px;
+  font-weight: 700;
+}
+
+/* Tabelle semplici dei modali */
+
+.gs-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  background: var(--mf-surface);
+  color: #3d4b55;
+  font-size: 13px;
+}
+
+.gs-table th,
+.gs-table td {
+  padding: 6px 8px;
+  border: 1px solid var(--mf-border);
+  text-align: left;
+}
+
+.gs-table th {
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  font-weight: 700;
+}
+
+.gs-group-row td {
+  background: #eef3f7;
+  font-weight: 700;
+}
+
+/* Barra colori legenda e semaforo */
+
+.gs-swatch {
+  width: 15px;
+  height: 15px;
+  border: 1px solid #cbd5df;
+  border-radius: 3px;
+  flex: 0 0 15px;
+}
+
+.gs-swatch--scarichi { background: #ffecb3; }
+.gs-swatch--carichi { background: #c8e6c9; }
+.gs-swatch--misti { background: #326c9f; }
+.gs-swatch--fatturati { background: #40ef46; }
+
+.gs-traffic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--mf-text);
+}
+
+.movimenti-semaforo.traffic-green { background: green; }
+.movimenti-semaforo.traffic-yellow { background: orange; }
+.movimenti-semaforo.traffic-red { background: red; }
+
+/* Righe della tabella: colori dinamici dai dati via variabili CSS */
+
+.gestione-scarichi-container .tabella-scarichi tbody tr:hover {
+  filter: brightness(0.97);
+}
+
+.gestione-scarichi-container .tabella-scarichi tr.selected {
+  background: #dceef7;
+}
+
+/* Pulsanti dei modali: primario, come la barra comandi */
+
+@media (max-width: 760px) {
+  .gs-modal {
+    width: 94%;
+    padding: 14px;
+  }
+
+  .gs-fattura-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Righe con sfondo scuro: testo bianco */
+
+.gestione-scarichi-container .tabella-scarichi tbody tr.riga-scura,
+.gestione-scarichi-container .tabella-scarichi tbody tr.riga-scura td {
+  color: #ffffff !important;
+}
+
+/* ==================================================
+   ORDINE E LARGHEZZE DEI FILTRI (griglia a 6 colonne)
+   Riga 1: Dal/Al (4 col) | FIR/DDT (2 col)
+   Riga 2: Fornitore | Listino | Utente (2 col ciascuno)
+   Riga 3: Tipo | Codice CER (2 col) | Reset | Disabilita date (1 col)
+   Ordine visivo fisso con order; i figli sono
+   numerati in base alla struttura del JSX.
+   ================================================== */
+
+.gestione-scarichi-container .filtri > :nth-child(2) { order: 8; grid-column: span 1; }  /* Reset filtri */
+.gestione-scarichi-container .filtri > :nth-child(3) { order: 9; grid-column: span 1; }  /* Disabilita date */
+.gestione-scarichi-container .filtri > :nth-child(4) { order: 1; grid-column: span 4; }  /* Dal / Al */
+.gestione-scarichi-container .filtri > :nth-child(6) { order: 2; grid-column: span 2; }  /* FIR/DDT */
+.gestione-scarichi-container .filtri > :nth-child(8) { order: 7; grid-column: span 2; }  /* Codice CER */
+.gestione-scarichi-container .filtri > :nth-child(10) { order: 3; grid-column: span 2; } /* Fornitore */
+.gestione-scarichi-container .filtri > :nth-child(12) { order: 4; grid-column: span 2; } /* Listino */
+.gestione-scarichi-container .filtri > :nth-child(14) { order: 5; grid-column: span 2; } /* Utente */
+.gestione-scarichi-container .filtri > :nth-child(16) { order: 6; grid-column: span 2; } /* Tipo */
+
+/* Tablet: 2 colonne */
+@media (max-width: 1100px) {
+  .gestione-scarichi-container .filtri {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gestione-scarichi-container .filtri > * {
+    grid-column: span 1 !important;
+  }
+  .gestione-scarichi-container .filtri > :nth-child(4) {
+    grid-column: span 2 !important;
+  }
+}
+
+/* Smartphone: 1 colonna */
+@media (max-width: 760px) {
+  .gestione-scarichi-container .filtri {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gestione-scarichi-container .filtri > * {
+    grid-column: span 1 !important;
+  }
+}
+
+/* ==================================================
+   PAGINA DETTAGLIO GIORNALIERO (gd-dettaglio)
+   Stessi colori e pulsanti della Gestione Carichi/Scarichi.
+   ================================================== */
+
+.gestione-scarichi-container.gd-dettaglio button {
+  min-height: 40px;
+  padding: 9px 14px;
+  background: var(--mf-primary);
+  color: #ffffff;
+  border: 1px solid var(--mf-primary);
+  border-radius: 6px;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.nuovo-listino:hover {
-  background-color: #e0a800;
+.gestione-scarichi-container.gd-dettaglio button:hover:not(:disabled) {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
+  box-shadow: 0 3px 8px rgba(30, 90, 128, 0.16);
+}
+
+.gestione-scarichi-container.gd-dettaglio button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Paginazione: pulsante secondario, attivo in blu */
+
+.gestione-scarichi-container.gd-dettaglio .gd-page-btn {
+  min-width: 40px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #c7d0d8;
+  font-weight: 400;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-page-btn:hover:not(:disabled) {
+  background: #edf5fb;
+  border-color: #8eabc2;
+  box-shadow: none;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-page-btn.is-active {
+  background: var(--mf-primary);
+  color: #ffffff;
+  border-color: var(--mf-primary);
+  font-weight: 700;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-btn-gap5 {
+  margin-left: 5px;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gs-btn-gap {
+  margin-left: 10px;
+}
+
+/* Barra superiore e titoli */
+
+.gd-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.gd-head {
+  margin-bottom: 10px;
+}
+
+.gd-section {
+  margin: 10px 0;
+}
+
+.gd-bold {
+  font-weight: 700;
+}
+
+.gd-mt10 {
+  margin-top: 10px;
+}
+
+.gd-error {
+  margin-top: 10px;
+  color: var(--mf-danger);
+  font-weight: 600;
+}
+
+.gd-empty {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--mf-muted);
+}
+
+.gd-utile {
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--mf-text);
+}
+
+/* Filtri della pagina dettaglio: stesso celestino della gestione */
+
+.gs-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #e6f3fa;
+  border: 1px solid #bcd9ea;
+  border-radius: 8px;
+}
+
+.gs-filter-panel label {
+  color: #2c4456;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Editor della riga */
+
+.gd-editor {
+  margin-top: 20px;
+  padding: 14px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gd-editor-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--mf-muted);
+}
+
+.gd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.gd-grid6 {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+  align-items: end;
+}
+
+.gd-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gd-upper {
+  text-transform: uppercase;
+}
+
+.gd-readonly {
+  background: #eef2f5;
+  color: var(--mf-muted);
+}
+
+@media (max-width: 1100px) {
+  .gd-grid6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .gd-grid6,
+  .gd-grid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Barra comandi della lista giornaliera: una riga sola */
+
+.gestione-scarichi-container.gd-dettaglio .gd-title {
+  margin: 0 0 12px;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mf-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gestione-scarichi-container.gd-dettaglio .gd-toolbar select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--mf-text);
+  font: inherit;
+}
+
+/* Pulsanti azione nella tabella: una riga, senza andare a capo */
+
+.gestione-scarichi-container.gd-dettaglio .tabella-scarichi td:has(> button) {
+  white-space: nowrap;
+}
+
+.gestione-scarichi-container.gd-dettaglio .tabella-scarichi td > button {
+  display: inline-block;
+  min-height: 34px;
+  margin: 2px 4px 2px 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
 }

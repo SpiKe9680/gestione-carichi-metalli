@@ -1,0 +1,437 @@
+/* ==================================================
+   METALFLOW | GESTIONE CODICI CER
+   Stessi colori e pulsanti di Dashboard e Gestione Carichi/Scarichi.
+   ================================================== */
+
+.gestione-cer-page {
+  --mf-primary: #1e5a80;
+  --mf-primary-hover: #174664;
+  --mf-danger: #a83232;
+  --mf-danger-hover: #862727;
+  --mf-text: #263238;
+  --mf-muted: #5f6f7a;
+  --mf-border: #dce3e8;
+  --mf-surface: #ffffff;
+  --mf-surface-alt: #f6f8fa;
+  --mf-celeste: #e6f3fa;
+  --mf-celeste-border: #bcd9ea;
+
+  box-sizing: border-box;
+  width: calc(100% - 32px);
+  max-width: 1400px;
+  margin: 16px auto;
+  padding: 20px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(38, 50, 56, 0.07);
+  color: var(--mf-text);
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.gestione-cer-page *,
+.gestione-cer-page *::before,
+.gestione-cer-page *::after {
+  box-sizing: border-box;
+}
+
+.gestione-cer-page h2 {
+  margin: 0 0 16px;
+  color: var(--mf-text);
+  font-size: 23px;
+  font-weight: 700;
+}
+
+.gestione-cer-page h4 {
+  margin: 14px 0 6px;
+  color: var(--mf-text);
+}
+
+/* Pulsanti */
+
+.gestione-cer-page button {
+  min-height: 40px;
+  padding: 9px 14px;
+  background: var(--mf-primary);
+  color: #ffffff;
+  border: 1px solid var(--mf-primary);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gestione-cer-page button:hover:not(:disabled) {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
+  box-shadow: 0 3px 8px rgba(30, 90, 128, 0.16);
+}
+
+.gestione-cer-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gestione-cer-page button:focus-visible,
+.gestione-cer-page input:focus-visible,
+.gestione-cer-page select:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
+}
+
+.gestione-cer-page .gc-btn-danger {
+  background: var(--mf-danger);
+  border-color: var(--mf-danger);
+}
+
+.gestione-cer-page .gc-btn-danger:hover:not(:disabled) {
+  background: var(--mf-danger-hover);
+  border-color: var(--mf-danger-hover);
+}
+
+.gestione-cer-page .gc-btn-gap {
+  margin-left: 10px;
+}
+
+.gestione-cer-page .gc-btn-gap5 {
+  margin-left: 5px;
+}
+
+/* Barre e sezioni */
+
+.gc-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gc-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.gc-message {
+  margin: 0 0 12px;
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+/* Form inserimento / modifica materiale */
+
+.gc-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+  padding: 16px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.gc-form .gc-input,
+.gestione-cer-page .gc-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.gc-cer-select {
+  min-width: 0;
+}
+
+/* Merge materiali */
+
+.gc-merge-box {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--mf-celeste);
+  border: 1px solid var(--mf-celeste-border);
+  border-radius: 8px;
+}
+
+.gc-field-row {
+  margin-bottom: 10px;
+}
+
+.gc-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #2c4456;
+  font-weight: 700;
+}
+
+/* Pannello filtri */
+
+.gestione-cer-page .filtri {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px 18px;
+  margin-bottom: 18px;
+  padding: 16px;
+  background: var(--mf-celeste);
+  border: 1px solid var(--mf-celeste-border);
+  border-radius: 8px;
+}
+
+.gestione-cer-page .filtri > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gestione-cer-page .filtri label.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: #2c4456;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gestione-cer-page .filtri label.filter-item:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+}
+
+.gestione-cer-page .filtri input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--mf-primary);
+}
+
+.gestione-cer-page .filtri select,
+.gestione-cer-page .filtri input[type="text"],
+.gestione-cer-page .filtri .react-datepicker-wrapper input {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: var(--mf-text);
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.gestione-cer-page .filtri .react-datepicker-wrapper,
+.gestione-cer-page .filtri .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+/* Tabella principale */
+
+.gestione-cer-page > table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.gestione-cer-page > table th {
+  padding: 12px 10px;
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  border-bottom: 1px solid var(--mf-border);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.gestione-cer-page > table th:first-child {
+  text-align: left;
+}
+
+.gestione-cer-page > table td {
+  padding: 10px;
+  border-bottom: 1px solid #e8edf2;
+  color: #3d4b55;
+  vertical-align: middle;
+}
+
+.gestione-cer-page > table tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+.gestione-cer-page > table tbody tr:hover > td {
+  background: #f3f8fb;
+}
+
+.gestione-cer-page td > button {
+  margin: 2px 4px 2px 0;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.gestione-cer-page td:has(> button) {
+  white-space: nowrap;
+}
+
+/* Tabelle di dettaglio dentro la riga espansa */
+
+.gc-sub-table {
+  width: 100%;
+  margin-top: 5px;
+  margin-bottom: 10px;
+  border-collapse: collapse;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  font-size: 13px;
+}
+
+.gc-sub-table th,
+.gc-sub-table td {
+  padding: 6px 8px;
+  border: 1px solid #e8edf2;
+  text-align: left;
+}
+
+.gc-sub-table th {
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  font-weight: 700;
+}
+
+.gc-total-row,
+.gc-total-row td {
+  background: #eef3f7;
+  font-weight: 700;
+}
+
+/* Responsive */
+
+@media (max-width: 1100px) {
+  .gc-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gestione-cer-page .filtri {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gestione-cer-page > table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .gestione-cer-page {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 12px;
+  }
+
+  .gc-form,
+  .gestione-cer-page .filtri {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ==================================================
+   LAYOUT AREA MATERIALE (form + pulsanti)
+   Riga 1: Nome | Categoria | Codice CER
+   Riga 2: Descrizione | Prezzo | Annulla / Merge
+   ================================================== */
+
+.gestione-cer-page .gc-workspace {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 15px;
+  padding: 16px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+/* Senza form aperto restano solo i pulsanti, senza sfondo */
+.gestione-cer-page .gc-workspace:not(:has(.gc-form)) {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.gestione-cer-page .gc-workspace .gc-form {
+  display: contents;
+}
+
+.gestione-cer-page .gc-workspace > .gc-section {
+  grid-column: 3;
+  margin: 0;
+  align-items: center;
+}
+
+.gestione-cer-page .gc-workspace:not(:has(.gc-form)) > .gc-section {
+  grid-column: 1 / -1;
+}
+
+/* Pannello filtri: Materiale | Codice CER | Tipo, poi Dal | Al | Disabilita date */
+
+.gestione-cer-page .filtri > div:last-child {
+  display: contents;
+}
+
+.gestione-cer-page .filtri > div:last-child > label.filter-item:not(:has(input[type="checkbox"])) {
+  order: 1;
+}
+
+.gestione-cer-page .filtri > div:last-child > label.filter-item:has(input[type="checkbox"]) {
+  order: 2;
+  align-self: end;
+}
+
+@media (max-width: 1100px) {
+  .gestione-cer-page .gc-workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gestione-cer-page .gc-workspace > .gc-section {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .gestione-cer-page .gc-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,150 @@
+
+ // src/components/AdminDashboard.js
+import React, { useState, useEffect }  from "react";
+import { loadConfigAzienda } from "../utils/dateUtils";
+import { useNavigate } from "react-router-dom";
+import {
+  FaSignOutAlt,
+  FaExchangeAlt,
+  FaList,
+  FaUsers,
+  FaTags,
+  FaTruck,
+  FaRecycle,
+  FaClipboardList,
+  FaCog,
+  FaCalendarAlt,
+  FaMoneyBillWave,
+  FaWarehouse
+} from "react-icons/fa";
+
+const AdminDashboard = ({ logout }) => {
+  const navigate = useNavigate();
+
+const [configAzienda, setConfigAzienda] = useState(null);
+
+useEffect(() => {
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+
+  load();
+}, []);
+
+  const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
+  const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
+
+  console.log("METALFLOW - ruolo dashboard:", role, currentUser);
+
+  if (!currentUser) return null;
+
+  return (
+    <div className="admin-dashboard-container">
+     <div className="admin-header">
+ <div className="scarichi-brand">
+  {configAzienda?.logoBase64 && (
+    <img
+      src={`data:image/png;base64,${configAzienda.logoBase64}`}
+      alt="Logo METALFLOW"
+      className="scarichi-logo"
+    />
+  )}
+
+  <h2 className="scarichi-title">
+    METALFLOW - Menù
+  </h2>
+</div>
+
+  <button onClick={logout}>
+    <FaSignOutAlt style={{ marginRight: "8px" }} />
+    Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+  </button>
+</div>
+
+      <div className="admin-actions">
+        {/* FUNZIONI OPERATIVE: BLU */}
+
+        <button onClick={() => navigate("/scarichi")}>
+          <FaExchangeAlt />
+          <span>Inserisci Scarico/Carico</span>
+        </button>
+
+        <button onClick={() => navigate("/gestione-scarichi")}>
+          <FaList />
+          <span>Gestione Scarichi/Carichi</span>
+        </button>
+
+        <button onClick={() => navigate("/gestione-cer")}>
+          <FaRecycle />
+          <span>Materiali</span>
+        </button>
+
+        <button onClick={() => navigate("/gestione-listini")}>
+          <FaTags />
+          <span>Definizione Listini</span>
+        </button>
+
+        <button onClick={() => navigate("/fornitori")}>
+          <FaTruck />
+          <span>Controparti</span>
+        </button>
+
+        {["MANAGER", "ADMIN"].includes(role) && (
+          <button onClick={() => navigate("/magazzino-mps")}>
+            <FaWarehouse />
+            <span>Magazzino MPS</span>
+          </button>
+        )}
+
+        {/* FUNZIONI AMMINISTRATIVE: GRIGIO ANTRACITE */}
+
+        {role === "ADMIN" && (
+          <>
+            <button
+              className="admin-button"
+              onClick={() => navigate("/MovimentiFinanziari")}
+            >
+              <FaCalendarAlt />
+              <span>Calendario Movimenti Finanziari</span>
+            </button>
+
+            <button
+              className="admin-button"
+              onClick={() => navigate("/AnaMovFin")}
+            >
+              <FaMoneyBillWave />
+              <span>Definizione Movimenti Finanziari</span>
+            </button>
+
+            <button
+              className="admin-button"
+              onClick={() => navigate("/gestione-log")}
+            >
+              <FaClipboardList />
+              <span>Log Operazioni</span>
+            </button>
+
+            <button
+              className="admin-button"
+              onClick={() => navigate("/configurazioni-generali")}
+            >
+              <FaCog />
+              <span>Configurazione Generale</span>
+            </button>
+
+            <button
+              className="admin-button"
+              onClick={() => navigate("/gestione-utenti")}
+            >
+              <FaUsers />
+              <span>Utenti</span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;

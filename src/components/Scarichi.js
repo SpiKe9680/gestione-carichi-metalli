@@ -1,6 +1,32 @@
 // src/components/Scarichi.js
 
 import React, { useEffect, useState } from "react";
+import {
+  FaSignOutAlt,
+  FaHome,FaPrint,
+  FaUndoAlt,
+  FaCalendarAlt,
+  FaClock,
+  FaBolt,
+  FaExchangeAlt,
+  FaTruck,
+  FaTags,
+  FaCamera,
+  FaStickyNote,
+  FaSave,
+  FaRecycle,
+  FaFileAlt,
+  FaCubes,
+  FaWeightHanging,
+  FaPercent,
+  FaBalanceScale,
+  FaPlusCircle,
+  FaBox,
+  FaCalculator,
+  FaTools,
+  FaEdit,
+  FaTrash
+} from "react-icons/fa";
 import { db, auth } from "../firebase";
 import {  collection,  getDocs,  addDoc,  serverTimestamp,  doc,  getDoc,  setDoc,  deleteDoc,  arrayUnion,  query,  where,updateDoc} from "firebase/firestore";
 import autoTable from "jspdf-autotable";
@@ -62,7 +88,7 @@ const returnToDettaglio = location.state?.returnToDettaglio || false;
   const [selectedListino, setSelectedListino] = useState("");
   const [selectedCer, setSelectedCer] = useState("");
   const [selectedMateriale, setSelectedMateriale] = useState("");
-
+const [rigaInModifica, setRigaInModifica] = useState(null);
   const [peso, setPeso] = useState("");
   const [calo, setCalo] = useState("");
   // 🔥 NUOVO: stato per TARA (sempre in KG)
@@ -912,7 +938,8 @@ setPreviewFoto(foto);
   const isFornitorePrivato =
     (selectedFornitore || "").trim() === "FORNITORE PRIVATO";
 
- const handleAdd = () => {
+const handleAdd = () => {
+  
   if (!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0) {
     return;
   }
@@ -934,27 +961,13 @@ setPreviewFoto(foto);
   );
 
   if (key) {
-    prezzoVendita = Number(
-      listinoObj.prezzi[key].vendita || 0
-    );
-
-    prezzoAcquisto = Number(
-      listinoObj.prezzi[key].acquisto || 0
-    );
+    prezzoVendita = Number(listinoObj.prezzi[key].vendita || 0);
+    prezzoAcquisto = Number(listinoObj.prezzi[key].acquisto || 0);
   }
 
-  const pesoNum = Number(
-    peso.replace(",", ".")
-  );
-
-  const caloNum = Number(
-    calo?.replace(",", ".") || 0
-  );
-
-  // 🔥 NUOVO: Parsing TARA
-  const taraNum = Number(
-    tara?.replace(",", ".") || 0
-  );
+  const pesoNum = Number(peso.replace(",", "."));
+  const caloNum = Number(calo?.replace(",", ".") || 0);
+  const taraNum = Number(tara?.replace(",", ".") || 0);
 
   if (pesoNum <= 0) {
     alert("Il peso deve essere maggiore di zero");
@@ -981,18 +994,16 @@ setPreviewFoto(foto);
     return;
   }
 
-  // 🔥 NUOVO: Validazione tara vs peso
   if (taraNum > pesoNum) {
     alert("La tara non può superare il peso");
     return;
   }
 
-  let caloKg =
+  const caloKg =
     caloTipo === "perc"
       ? (pesoNum * caloNum) / 100
       : caloNum;
 
-  // 🔥 MODIFICATO: Netto = Peso - Calo - Tara
   const nettoCalc = pesoNum - caloKg - taraNum;
 
   const nettoRounded =
@@ -1005,25 +1016,90 @@ setPreviewFoto(foto);
     peso: pesoNum,
     calo: caloNum,
     caloTipo,
-    tara: taraNum,  // 🔥 NUOVO: Aggiunto TARA
+    tara: taraNum,
     netto: nettoRounded,
     prezzoVendita,
     prezzoAcquisto
   };
 
   setScarico(prev => {
+    let updated = [...prev];
 
-    const updated = [...prev];
+    if (rigaInModifica) {
+      const { cer: vecchioCer, fir: vecchioFir, materiale: vecchioMateriale } = rigaInModifica;
 
-    // ✅ FIX: CER + FIR identificano il blocco
+      const vecchioIdx = updated.findIndex(
+        c => c.cer === vecchioCer && (c.fir || "") === (vecchioFir || "")
+      );
+
+      if (vecchioIdx === -1) {
+        return prev;
+      }
+
+      const vecchioBlocco = updated[vecchioIdx];
+      const righeVecchie = [...(vecchioBlocco.righe || [])];
+
+      const rigaIdx = righeVecchie.findIndex(
+        r => r.materiale === vecchioMateriale
+      );
+
+      if (rigaIdx === -1) {
+        return prev;
+      }
+
+      righeVecchie.splice(rigaIdx, 1);
+
+      if (righeVecchie.length === 0) {
+        updated.splice(vecchioIdx, 1);
+      } else {
+        updated[vecchioIdx] = {
+          ...vecchioBlocco,
+          righe: righeVecchie,
+          totaleCer: righeVecchie.reduce((s, r) => s + r.netto, 0)
+        };
+      }
+
+      const nuovoIdx = updated.findIndex(
+        c => c.cer === cer && (c.fir || "") === (fir || "")
+      );
+
+      if (nuovoIdx === -1) {
+        updated.push({
+          cer,
+          fir,
+          righe: [nuovoRigo],
+          totaleCer: nuovoRigo.netto
+        });
+      } else {
+        const blocco = updated[nuovoIdx];
+        const righe = [...(blocco.righe || [])];
+
+        const stessoMaterialeIdx = righe.findIndex(
+          r => r.materiale === selectedMateriale
+        );
+
+        if (stessoMaterialeIdx !== -1) {
+          righe[stessoMaterialeIdx] = nuovoRigo;
+        } else {
+          righe.push(nuovoRigo);
+        }
+
+        updated[nuovoIdx] = {
+          ...blocco,
+          fir,
+          righe,
+          totaleCer: righe.reduce((s, r) => s + r.netto, 0)
+        };
+      }
+
+      return updated;
+    }
+
     const cerIdx = updated.findIndex(
-      c =>
-        c.cer === cer &&
-        (c.fir || "") === (fir || "")
+      c => c.cer === cer && (c.fir || "") === (fir || "")
     );
 
     if (cerIdx === -1) {
-
       updated.push({
         cer,
         fir,
@@ -1035,7 +1111,6 @@ setPreviewFoto(foto);
     }
 
     const existing = updated[cerIdx];
-
     const righe = [...(existing.righe || [])];
 
     const rigaIdx = righe.findIndex(
@@ -1052,39 +1127,43 @@ setPreviewFoto(foto);
       ...existing,
       fir,
       righe,
-      totaleCer: righe.reduce(
-        (s, r) => s + r.netto,
-        0
-      )
+      totaleCer: righe.reduce((s, r) => s + r.netto, 0)
     };
 
     return updated;
   });
 
+  setRigaInModifica(null);
   setSelectedMateriale("");
   setPeso("");
   setCalo("");
-  setTara("");  // 🔥 NUOVO: Reset TARA
+  setTara("");
   setDirty(true);
 };
   const stampaUltimoMovimento = (tipo) => {
   handlePrint(null, tipo);
 };
-  const handleEdit = (cer, fir, materiale) => {
-    const cerObj = scarico.find(c => c.cer === cer && c.fir === fir);
-    if (!cerObj) return;
+const handleEdit = (cer, fir, materiale) => {
+  const cerObj = scarico.find(
+    c => c.cer === cer && c.fir === fir
+  );
+  if (!cerObj) return;
 
-    const riga = cerObj.righe.find(r => r.materiale === materiale);
-    if (!riga) return;
+  const riga = cerObj.righe.find(
+    r => r.materiale === materiale
+  );
+  if (!riga) return;
 
-    setSelectedCer(cer);
-    setFirCer(fir);
-    setSelectedMateriale(materiale);
-    setPeso(riga.peso.toString().replace(".", ","));
-    setCalo(riga.calo.toString().replace(".", ","));
-    setTara(riga.tara?.toString().replace(".", ",") || "");  // 🔥 NUOVO: Carica TARA
-    setCaloTipo(riga.caloTipo || "kg");   // 🔥 NUOVO
-  };
+  setRigaInModifica({ cer, fir, materiale });
+
+  setSelectedCer(cer);
+  setFirCer(fir);
+  setSelectedMateriale(materiale);
+  setPeso(riga.peso.toString().replace(".", ","));
+  setCalo(riga.calo.toString().replace(".", ","));
+  setTara(riga.tara?.toString().replace(".", ",") || "");
+  setCaloTipo(riga.caloTipo || "kg");
+};
 
   const handleDelete = (cer, fir, materiale) => {
     setScarico(prev =>
@@ -1767,564 +1846,663 @@ const materialiOptions = [...materialiFiltrati]
     value: m.nome,
     label: m.nome
   }));
-  return (
-    <div className="scarichi-container">
-      
-<div className="scarichi-header">
-  <div className="scarichi-brand">
-    {configAzienda?.logoBase64 && (
-      <img
-        src={`data:image/png;base64,${configAzienda.logoBase64}`}
-        alt="logo"
-        className="scarichi-logo"
-      />
-    )}
 
-    <h2 className="scarichi-title">
-      {docIdOriginale
-        ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
-        : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
-      }
-    </h2>
-  </div>
+return (
+  <div className="scarichi-container">
 
-  <div className="scarichi-header-actions">
-    {["admin", "manager"].includes(
-      (activeUserRole || role || "").toLowerCase().trim()
-    ) && (
-      <button
-        type="button"
-        className="scarichi-header-btn"
-        onClick={handleGoToDashboard}
-      >
-        Dashboard
-      </button>
-    )}
+    {/* HEADER */}
+    <div className="scarichi-header">
+      <div className="scarichi-brand">
+        {configAzienda?.logoBase64 && (
+          <img
+            src={`data:image/png;base64,${configAzienda.logoBase64}`}
+            alt="logo"
+            className="scarichi-logo"
+          />
+        )}
 
-    <button
-      type="button"
-      className="scarichi-header-btn"
-      onClick={logout}
-    >
-      Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
-    </button>
+        <h2 className="scarichi-title">
+          {docIdOriginale
+            ? (tipoMovimento === "carico" ? "Modifica Carico" : "Modifica Scarico")
+            : (tipoMovimento === "carico" ? "Nuovo Carico" : "Nuovo Scarico")
+          }
+        </h2>
+      </div>
 
-    {docIdOriginale ? (
-      <button
-        type="button"
-        className="scarichi-header-btn"
-        onClick={() => handlePrint(docIdOriginale, tipoMovimento)}
-      >
-        {tipoMovimento === "carico" ? "Stampa Carico" : "Stampa Scarico"}
-      </button>
-    ) : (
-      <>
-        <button
-          type="button"
-          className="scarichi-header-btn"
-          onClick={() => stampaUltimoMovimento("scarico")}
-        >
-          Stampa Ultimo Scarico
-        </button>
+      <div className="scarichi-header-actions">
+        {["admin", "manager"].includes(
+          (activeUserRole || role || "").toLowerCase().trim()
+        ) && (
+          <button
+            type="button"
+            className="scarichi-header-btn"
+            onClick={handleGoToDashboard}
+          >
+            <FaHome style={{ marginRight: 6 }} />
+            Dashboard
+          </button>
+        )}
 
         <button
           type="button"
-          className="scarichi-header-btn"
-          onClick={() => stampaUltimoMovimento("carico")}
+          className="scarichi-header-btn scarichi-logout-btn"
+          onClick={logout}
         >
-          Stampa Ultimo Carico
+          <FaSignOutAlt style={{ marginRight: 6 }} />
+          Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
         </button>
-      </>
-    )}
 
-    <button
-      type="button"
-      className="scarichi-header-btn scarichi-reset-btn"
-      onClick={handleReset}
-    >
-      {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
-    </button>
-  </div>
-</div>
-
-
-      {/* DATA / ORA */}
-      <div>
-        <div className="scarichi-data-ora">
-          <label>
-            Data:
-            <DatePicker
-              selected={dataScaricoStr ? parseDataOra(dataScaricoStr, oraStr) : new Date()}
-              onChange={(date) => {
-                setDirty(true);
-                setDataScaricoStr(formattaDataItaliana(date));
-
-                if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {
-                  const now = new Date();
-                  const [hh, mm] = oraStr.split(":").map(Number);
-                  if (hh > now.getHours() || (hh === now.getHours() && mm > now.getMinutes())) {
-                    setOraStr(formattaOra24(now));
-                  }
-                } else {
-                  setOraStr("08:00");
-                }
-              }}
-              dateFormat="dd MMM yyyy"
-              locale="it"
-              disabled={usaOra && !isEditing}
-              placeholderText="DD MMM YYYY"
-            />
-          </label>
-
-          <label>
-            Ora:
-            <DatePicker
-              selected={
-                oraStr
-                  ? new Date(0, 0, 0, ...oraStr.split(":").map(Number))
-                  : new Date()
-              }
-              onChange={(time) => {
-                setOraStr(formattaOra24(time));
-                setDirty(true);
-              }}
-              showTimeSelect
-              showTimeSelectOnly
-              timeIntervals={15}
-              timeFormat="HH:mm"
-              dateFormat="HH:mm"
-              disabled={usaOra && !isEditing}
-              placeholderText="HH:mm"
-              minTime={new Date(0, 0, 0, 0, 0)}
-              maxTime={
-                dataScaricoStr === formattaDataItaliana(new Date())
-                  ? new Date(0, 0, 0, new Date().getHours(), new Date().getMinutes())
-                  : new Date(0, 0, 0, 23, 59)
-              }
-            />
-          </label>
-
-         <label className="scarichi-adesso">
-            <input type="checkbox" checked={usaOra} onChange={handleUsaOraChange} /> Adesso
-          </label>
-        </div>
-
-        {/* TIPO MOVIMENTO */}
-        <div className="scarichi-tipo-movimento">
-         <label className="scarichi-campo-label">
-            Tipo Movimento:
-            <select
-              value={tipoMovimento}
-              onChange={(e) => {
-                const nuovoTipo = e.target.value;
-
-                setLockDraftSync(true);
-                setTimeout(() => setLockDraftSync(false), 500);
-
-                setTipoMovimento(nuovoTipo);
-
-                if (!isEditing && !docIdOriginale) {
-                  setSelectedFornitore("");
-                  setSelectedListino("");
-                  setScarico([]);
-                  setSelectedCer("");
-                  setSelectedMateriale("");
-                  setPeso("");
-                  setCalo("");
-                  setCaloTipo("kg");
-                  setFirCer("");
-                  setFotoFile([]);
-                }
-
-                setSalvataggioInCorso(false);
-              }}
-            >
-              <option value="scarico">Scarico</option>
-              <option value="carico">Carico</option>
-            </select>
-          </label>
-        </div>
-
-    
-        {/* FORNITORE */}
-        <div className="scarichi-fornitore">
-          <label>
-            {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
-          </label>
-
-
- <CreatableSelect
-    options={fornitoriOptions}
-    value={
-      fornitoriOptions.find(
-        (o) =>
-          String(o.value).trim().toLowerCase() ===
-          String(selectedFornitore || "").trim().toLowerCase()
-      ) ||
-      (selectedFornitore
-        ? { label: selectedFornitore, value: selectedFornitore }
-        : null)
-    }
-    onChange={async (selected) => {
-      const nome = selected?.value || "";
-      setSelectedFornitore(nome);
-      setDirty(true);
-
-      if (!nome) return;
-
-      const forn = fornitori.find(
-        (f) => String(f.nome).trim().toLowerCase() === nome.trim().toLowerCase()
-      );
-
-      if (!forn) return;
-
-      const primoCompatibile = listini.find(
-        (l) => (l.tipoListino || "").trim() === tipoMovimento
-      );
-
-      if (primoCompatibile) {
-        setSelectedListino(primoCompatibile.nome);
-      }
-
-      await suggerisciFir(nome);
-    }}
-    onCreateOption={(inputValue) => {
-      const nuovoNome = inputValue.trim();
-      if (!nuovoNome) return;
-      setSelectedFornitore(nuovoNome);
-      setDirty(true);
-    }}
-    placeholder="Inserisci nome controparte"
-    isSearchable
-    isClearable
-  />
-
-        </div>
-
-      {/* LISTINO — visibile SOLO per admin/manager */}
-{["admin", "manager"].includes((activeUserRole || "").toLowerCase()) && (
-  <>
-    <label>Listino:</label>
-    <Select
-      options={listiniOptions}
-      value={listiniOptions.find(o => o.value === selectedListino) || null}
-      onChange={(selected) => {
-        setSelectedListino(selected?.value || "");
-      }}
-      placeholder="Cerca listino..."
-      isSearchable
-      isClearable
-      menuPortalTarget={document.body}
-      styles={{
-        menuPortal: base => ({ ...base, zIndex: 9999 })
-      }}
-    />
-  </>
-)}
-
-
-
-
-        {/* FOTO */}
-        {listinoBloccato && (
+        {docIdOriginale ? (
+          <button
+            type="button"
+            className="scarichi-header-btn"
+            onClick={() => handlePrint(docIdOriginale, tipoMovimento)}
+          >
+            <FaPrint style={{ marginRight: 6 }} />
+            {tipoMovimento === "carico" ? "Stampa Carico" : "Stampa Scarico"}
+          </button>
+        ) : (
           <>
-            <label>Foto scarico:</label>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              onChange={async (e) => {
-                const files = Array.from(e.target.files);
-                if (!files.length) return;
+            <button
+              type="button"
+              className="scarichi-header-btn"
+              onClick={() => stampaUltimoMovimento("scarico")}
+            >
+              <FaPrint style={{ marginRight: 6 }} />
+              Stampa Ultimo Scarico
+            </button>
 
-                setUploadingImages(true);
-                setFotoFile(prev => [...prev, ...files]);
-
-                const previews = files.map(file => URL.createObjectURL(file));
-                setPreviewFoto(prev => [...prev, ...previews]);
-
-                setTimeout(() => {
-                  setUploadingImages(false);
-                  setDirty(true);
-                }, 300);
-              }}
-            />
-
-            {previewFoto.length > 0 && (
-              <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                {previewFoto.map((src, i) => (
-                  <div key={i} style={{ position: "relative" }}>
-                    <img
-                      src={src}
-                      alt="preview"
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                        objectFit: "cover",
-                        borderRadius: "6px",
-                        border: "1px solid #ccc"
-                      }}
-                    />
-
-                    <button
-                      onClick={() => removeFoto(i)}
-                      style={{
-                        position: "absolute",
-                        top: "-6px",
-                        right: "-6px",
-                        width: "22px",
-                        height: "22px",
-                        borderRadius: "50%",
-                        border: "none",
-                        background: "red",
-                        color: "white",
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        lineHeight: "22px"
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <button
+              type="button"
+              className="scarichi-header-btn"
+              onClick={() => stampaUltimoMovimento("carico")}
+            >
+              <FaPrint style={{ marginRight: 6 }} />
+              Stampa Ultimo Carico
+            </button>
           </>
         )}
 
-        {/* NOTE */}
-        <div style={{ marginTop: "12px" }}>
-          <label>Note:</label>
-          <textarea
-            value={note}
-            onChange={(e) => {
-              setNote(e.target.value);
-              setDirty(true);
-            }}
-            rows={3}
-            style={{ width: "100%" }}
-          />
-        </div>
-
-        {/* SALVA */}
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <button
-            onClick={handleSave}
-            disabled={
-              salvataggioInCorso ||
-              firExists ||
-              !listinoValid ||
-              !dirty
-            }
-            style={{
-              padding: "10px 20px",
-              fontSize: "16px",
-              backgroundColor: "#4CAF50",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              cursor: firExists ? "not-allowed" : "pointer"
-            }}
-          >
-            {salvataggioInCorso ? "Salvataggio..." : tipoMovimento === "carico" ? "Salva Carico" : "Salva Scarico"}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="scarichi-header-btn scarichi-reset-btn"
+          onClick={handleReset}
+        >
+          <FaUndoAlt style={{ marginRight: 6 }} />
+          {tipoMovimento === "carico" ? "Reset Carico" : "Reset Scarico"}
+        </button>
       </div>
+    </div>
 
-      <hr />
-
-      {/* CER */}
-      {listinoBloccato && (
-        <>
-          <label>Codice CER:</label>
-          <Select
-            options={cerOptions}
-            value={cerOptions.find(o => o.value === selectedCer) || null}
-            onChange={(selected) => {
-              setSelectedCer(selected?.value || "");
-            }}
-            placeholder="Cerca CER..."
-            isSearchable
-          />
-
-          <label>F.I.R (CER)/DDT:</label>
-          <input
-            id="fir-input"
-            className={firError ? "input-error" : ""}
-            type="text"
-            value={firCer}
-            disabled={isFornitorePrivato}
-            onChange={(e) => {
-              setFirCer(e.target.value.toUpperCase());
-              setFirError(false);
+    {/* DATA / ORA */}
+    <div>
+      <div className="scarichi-data-ora">
+        <label>
+          <FaCalendarAlt style={{ marginRight: 6, color: "#1e5a80" }} />
+          Data:
+          <DatePicker
+            selected={dataScaricoStr ? parseDataOra(dataScaricoStr, oraStr) : new Date()}
+            onChange={(date) => {
               setDirty(true);
-            }}
-            onBlur={() => {
-              if (!isFornitorePrivato) {
-                setFirError(!firCer);
-                checkFirExists(firCer);
+              setDataScaricoStr(formattaDataItaliana(date));
+
+              if (formattaDataItaliana(date) === formattaDataItaliana(new Date())) {
+                const now = new Date();
+                const [hh, mm] = oraStr.split(":").map(Number);
+                if (hh > now.getHours() || (hh === now.getHours() && mm > now.getMinutes())) {
+                  setOraStr(formattaOra24(now));
+                }
+              } else {
+                setOraStr("08:00");
               }
             }}
-            placeholder={
-              isFornitorePrivato
-                ? "FIR non richiesto per fornitore privato"
-                : firError
-                  ? "FIR obbligatorio"
-                  : "Numero formulario (FIR)"
+            dateFormat="dd MMM yyyy"
+            locale="it"
+            disabled={usaOra && !isEditing}
+            placeholderText="DD MMM YYYY"
+          />
+        </label>
+
+        <label>
+          <FaClock style={{ marginRight: 6, color: "#1e5a80" }} />
+          Ora:
+          <DatePicker
+            selected={
+              oraStr
+                ? new Date(0, 0, 0, ...oraStr.split(":").map(Number))
+                : new Date()
             }
-            style={{
-              textTransform: "uppercase",
-              backgroundColor: isFornitorePrivato ? "#eee" : "white"
+            onChange={(time) => {
+              setOraStr(formattaOra24(time));
+              setDirty(true);
+            }}
+            showTimeSelect
+            showTimeSelectOnly
+            timeIntervals={15}
+            timeFormat="HH:mm"
+            dateFormat="HH:mm"
+            disabled={usaOra && !isEditing}
+            placeholderText="HH:mm"
+            minTime={new Date(0, 0, 0, 0, 0)}
+            maxTime={
+              dataScaricoStr === formattaDataItaliana(new Date())
+                ? new Date(0, 0, 0, new Date().getHours(), new Date().getMinutes())
+                : new Date(0, 0, 0, 23, 59)
+            }
+          />
+        </label>
+
+        <label className="scarichi-adesso">
+          <input
+            type="checkbox"
+            checked={usaOra}
+            onChange={handleUsaOraChange}
+          />
+          <FaBolt style={{ marginRight: 5, color: "#1e5a80" }} />
+          Adesso
+        </label>
+      </div>
+
+      {/* TIPO MOVIMENTO */}
+      <div className="scarichi-tipo-movimento">
+        <label className="scarichi-campo-label">
+          <span>
+            <FaExchangeAlt style={{ marginRight: 6, color: "#1e5a80" }} />
+            Tipo Movimento:
+          </span>
+
+          <select
+            value={tipoMovimento}
+            onChange={(e) => {
+              const nuovoTipo = e.target.value;
+
+              setLockDraftSync(true);
+              setTimeout(() => setLockDraftSync(false), 500);
+
+              setTipoMovimento(nuovoTipo);
+
+              if (!isEditing && !docIdOriginale) {
+                setSelectedFornitore("");
+                setSelectedListino("");
+                setScarico([]);
+                setSelectedCer("");
+                setSelectedMateriale("");
+                setPeso("");
+                setCalo("");
+                setCaloTipo("kg");
+                setFirCer("");
+                setFotoFile([]);
+              }
+
+              setSalvataggioInCorso(false);
+            }}
+          >
+            <option value="scarico">Scarico</option>
+            <option value="carico">Carico</option>
+          </select>
+        </label>
+      </div>
+
+      {/* FORNITORE / DESTINATARIO */}
+      <div className="scarichi-fornitore">
+        <label>
+          <FaTruck style={{ marginRight: 6, color: "#1e5a80" }} />
+          {tipoMovimento === "carico" ? "Destinatario:" : "Fornitore:"}
+        </label>
+
+        <CreatableSelect
+          options={fornitoriOptions}
+          value={
+            fornitoriOptions.find(
+              (o) =>
+                String(o.value).trim().toLowerCase() ===
+                String(selectedFornitore || "").trim().toLowerCase()
+            ) ||
+            (selectedFornitore
+              ? { label: selectedFornitore, value: selectedFornitore }
+              : null)
+          }
+          onChange={async (selected) => {
+            const nome = selected?.value || "";
+            setSelectedFornitore(nome);
+            setDirty(true);
+
+            if (!nome) return;
+
+            const forn = fornitori.find(
+              (f) => String(f.nome).trim().toLowerCase() === nome.trim().toLowerCase()
+            );
+
+            if (!forn) return;
+
+            const primoCompatibile = listini.find(
+              (l) => (l.tipoListino || "").trim() === tipoMovimento
+            );
+
+            if (primoCompatibile) {
+              setSelectedListino(primoCompatibile.nome);
+            }
+
+            await suggerisciFir(nome);
+          }}
+          onCreateOption={(inputValue) => {
+            const nuovoNome = inputValue.trim();
+            if (!nuovoNome) return;
+            setSelectedFornitore(nuovoNome);
+            setDirty(true);
+          }}
+          placeholder="Inserisci nome controparte"
+          isSearchable
+          isClearable
+        />
+      </div>
+
+      {/* LISTINO: SOLO ADMIN / MANAGER */}
+      {["admin", "manager"].includes((activeUserRole || "").toLowerCase()) && (
+        <>
+          <label>
+            <FaTags style={{ marginRight: 6, color: "#1e5a80" }} />
+            Listino:
+          </label>
+
+          <Select
+            options={listiniOptions}
+            value={listiniOptions.find(o => o.value === selectedListino) || null}
+            onChange={(selected) => {
+              setSelectedListino(selected?.value || "");
+            }}
+            placeholder="Cerca listino..."
+            isSearchable
+            isClearable
+            menuPortalTarget={document.body}
+            styles={{
+              menuPortal: base => ({ ...base, zIndex: 9999 })
+            }}
+          />
+        </>
+      )}
+
+      {/* FOTO */}
+      {listinoBloccato && (
+        <>
+          <label>
+            <FaCamera style={{ marginRight: 6, color: "#1e5a80" }} />
+            Foto scarico:
+          </label>
+
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={async (e) => {
+              const files = Array.from(e.target.files);
+              if (!files.length) return;
+
+              setUploadingImages(true);
+              setFotoFile(prev => [...prev, ...files]);
+
+              const previews = files.map(file => URL.createObjectURL(file));
+              setPreviewFoto(prev => [...prev, ...previews]);
+
+              setTimeout(() => {
+                setUploadingImages(false);
+                setDirty(true);
+              }, 300);
             }}
           />
 
-          {firExists && (
-            <p style={{ color: "red", fontWeight: "bold" }}>
-              il FIR immesso {firCer} è già presente a sistema, impossibile continuare
-            </p>
-          )}
+          {previewFoto.length > 0 && (
+            <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+              {previewFoto.map((src, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  <img
+                    src={src}
+                    alt="preview"
+                    style={{
+                      width: "80px",
+                      height: "80px",
+                      objectFit: "cover",
+                      borderRadius: "6px",
+                      border: "1px solid #ccc"
+                    }}
+                  />
 
-          {firCheckLoading && (
-            <p style={{ color: "#999" }}>
-              Controllo FIR in corso...
-            </p>
+                  <button
+                    onClick={() => removeFoto(i)}
+                    style={{
+                      position: "absolute",
+                      top: "-6px",
+                      right: "-6px",
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      border: "none",
+                      background: "red",
+                      color: "white",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      lineHeight: "22px"
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}
 
-    
-      {/* MATERIALE */}
-      {selectedCer && (
-        <div className="scarichi-materiale">
-          <div className="scarichi-materiale-titolo">
-            Materiale e pesatura
-          </div>
+      {/* NOTE */}
+      <div style={{ marginTop: "12px" }}>
+        <label>
+          <FaStickyNote style={{ marginRight: 6, color: "#1e5a80" }} />
+          Note:
+        </label>
 
-          <div className="scarichi-materiale-campo scarichi-materiale-selezione">
-            <label>Materiale:</label>
-            <Select
-              options={materialiOptions}
-              value={materialiOptions.find(o => o.value === selectedMateriale) || null}
-              onChange={(selected) => {
-                setSelectedMateriale(selected?.value || "");
+        <textarea
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setDirty(true);
+          }}
+          rows={3}
+          style={{ width: "100%" }}
+        />
+      </div>
+
+      {/* SALVA */}
+      <div style={{ marginTop: "20px", textAlign: "center" }}>
+        <button
+          onClick={handleSave}
+          disabled={
+            salvataggioInCorso ||
+            firExists ||
+            !listinoValid ||
+            !dirty
+          }
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            backgroundColor: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: firExists ? "not-allowed" : "pointer"
+          }}
+        >
+          <FaSave style={{ marginRight: 7 }} />
+          {salvataggioInCorso
+            ? "Salvataggio..."
+            : tipoMovimento === "carico"
+              ? "Salva Carico"
+              : "Salva Scarico"}
+        </button>
+      </div>
+    </div>
+
+    <hr />
+
+    {/* CER E FIR */}
+    {listinoBloccato && (
+      <>
+        <label>
+          <FaRecycle style={{ marginRight: 6, color: "#1e5a80" }} />
+          Codice CER:
+        </label>
+
+        <Select
+          options={cerOptions}
+          value={cerOptions.find(o => o.value === selectedCer) || null}
+          onChange={(selected) => {
+            setSelectedCer(selected?.value || "");
+          }}
+          placeholder="Cerca CER..."
+          isSearchable
+        />
+
+        <br />
+
+        <label>
+          <FaFileAlt style={{ marginRight: 6, color: "#1e5a80" }} />
+          F.I.R (CER)/DDT:
+        </label>
+
+        <input
+          id="fir-input"
+          className={firError ? "input-error" : ""}
+          type="text"
+          value={firCer}
+          disabled={isFornitorePrivato}
+          onChange={(e) => {
+            setFirCer(e.target.value.toUpperCase());
+            setFirError(false);
+            setDirty(true);
+          }}
+          onBlur={() => {
+            if (!isFornitorePrivato) {
+              setFirError(!firCer);
+              checkFirExists(firCer);
+            }
+          }}
+          placeholder={
+            isFornitorePrivato
+              ? "FIR non richiesto per fornitore privato"
+              : firError
+                ? "FIR obbligatorio"
+                : "Numero formulario (FIR)"
+          }
+          style={{
+            textTransform: "uppercase",
+            backgroundColor: isFornitorePrivato ? "#eee" : "white"
+          }}
+        />
+
+        {firExists && (
+          <p style={{ color: "red", fontWeight: "bold" }}>
+            il FIR immesso {firCer} è già presente a sistema, impossibile continuare
+          </p>
+        )}
+
+        <p
+          style={{
+            color: "#999",
+            minHeight: "18px",
+            margin: "8px 0",
+            visibility: firCheckLoading ? "visible" : "hidden"
+          }}
+        >
+          Controllo FIR in corso...
+        </p>
+      </>
+    )}
+
+    {/* MATERIALE E PESATURA */}
+    {selectedCer && (
+      <div className="scarichi-materiale">
+        <div className="scarichi-materiale-titolo">
+          <FaCubes style={{ marginRight: 8, color: "#1e5a80" }} />
+          Materiale e pesatura
+        </div>
+
+        <div className="scarichi-materiale-campo scarichi-materiale-selezione">
+          <label>
+            <FaBox style={{ marginRight: 6, color: "#1e5a80" }} />
+            Materiale:
+          </label>
+
+          <Select
+            options={materialiOptions}
+            value={materialiOptions.find(o => o.value === selectedMateriale) || null}
+            onChange={(selected) => {
+              setSelectedMateriale(selected?.value || "");
+            }}
+            placeholder="Cerca materiale..."
+            isSearchable
+          />
+        </div>
+
+        <div className="scarichi-materiale-griglia">
+          <div className="scarichi-materiale-campo">
+            <label>
+              <FaWeightHanging style={{ marginRight: 6, color: "#1e5a80" }} />
+              Peso (kg):
+            </label>
+
+            <input
+              type="text"
+              value={peso}
+              onChange={(e) => {
+                let val = e.target.value.replace(/[^0-9.,-]/g, "");
+                if (parseFloat(val.replace(",", ".")) === 0) val = "";
+                setPeso(val);
               }}
-              placeholder="Cerca materiale..."
-              isSearchable
+              placeholder="Peso in kg"
             />
           </div>
 
-          <div className="scarichi-materiale-griglia">
-            <div className="scarichi-materiale-campo">
-              <label>Peso (kg):</label>
-              <input
-                type="text"
-                value={peso}
-                onChange={(e) => {
-                  let val = e.target.value.replace(/[^0-9.,-]/g, "");
-                  if (parseFloat(val.replace(",", ".")) === 0) val = "";
-                  setPeso(val);
-                }}
-                placeholder="Peso in kg"
-              />
-            </div>
+          <div className="scarichi-materiale-campo">
+            <label>
+              <FaPercent style={{ marginRight: 6, color: "#1e5a80" }} />
+              Calo:
+            </label>
 
-            <div className="scarichi-materiale-campo">
-              <label>Calo:</label>
-              <input
-                type="text"
-                value={calo}
-                onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))}
-                placeholder="Valore calo"
-              />
-            </div>
-
-            <div className="scarichi-materiale-campo">
-              <label>Tipo Calo:</label>
-              <select
-                value={caloTipo}
-                onChange={(e) => setCaloTipo(e.target.value)}
-              >
-                <option value="kg">kg</option>
-                <option value="perc">%</option>
-              </select>
-            </div>
-
-            <div className="scarichi-materiale-campo">
-              <label>Tara (kg):</label>
-              <input
-                type="text"
-                value={tara}
-                onChange={(e) => setTara(e.target.value.replace(/[^0-9.,]/g, ""))}
-                placeholder="Tara in kg"
-              />
-            </div>
+            <input
+              type="text"
+              value={calo}
+              onChange={(e) => setCalo(e.target.value.replace(/[^0-9.,]/g, ""))}
+              placeholder="Valore calo"
+            />
           </div>
 
-          <div className="scarichi-materiale-azioni">
-            <button
-              onClick={handleAdd}
-              disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
+          <div className="scarichi-materiale-campo">
+            <label>
+              <FaExchangeAlt style={{ marginRight: 6, color: "#1e5a80" }} />
+              Tipo Calo:
+            </label>
+
+            <select
+              value={caloTipo}
+              onChange={(e) => setCaloTipo(e.target.value)}
             >
-              Aggiungi / Aggiorna
-            </button>
+              <option value="kg">kg</option>
+              <option value="perc">%</option>
+            </select>
+          </div>
+
+          <div className="scarichi-materiale-campo">
+            <label>
+              <FaBalanceScale style={{ marginRight: 6, color: "#1e5a80" }} />
+              Tara (kg):
+            </label>
+
+            <input
+              type="text"
+              value={tara}
+              onChange={(e) => setTara(e.target.value.replace(/[^0-9.,]/g, ""))}
+              placeholder="Tara in kg"
+            />
           </div>
         </div>
-      )}
 
-      <hr />
-
-      {/* TABELLA CER */}
-      {scarico.map((c) => (
-        <div key={c.cer + c.fir} style={{ marginBottom: "20px" }}>
-          <h4>CER {c.cer} {c.fir && `- FIR: ${c.fir}`}</h4>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Materiale</th>
-                <th>Peso</th>
-                <th>Calo</th>
-                <th>Tara (kg)</th>  {/* 🔥 NUOVO: Colonna TARA */}
-                <th>Netto</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {c.righe.map((r) => (
-                <tr key={r.materiale}>
-                  <td>{r.materiale}</td>
-                  <td>{r.peso}</td>
-
-                  {/* 🔥 CALO CON UNITÀ */}
-                  <td>
-                    {r.caloTipo === "perc"
-                      ? `${r.calo}%`
-                      : r.calo}
-                  </td>
-
-                  {/* 🔥 NUOVO: VISUALIZZAZIONE TARA */}
-                  <td>{r.tara || 0}</td>
-
-                  <td>{r.netto}</td>
-
-                  <td>
-                    <button onClick={() => handleEdit(c.cer, c.fir, r.materiale)}>✏️</button>
-                    <button onClick={() => handleDelete(c.cer, c.fir, r.materiale)}>🗑️</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <p style={{ fontWeight: "bold", marginTop: "6px" }}>
-            Totale CER: {c.totaleCer} kg
-          </p>
+        <div className="scarichi-materiale-azioni">
+          <button
+            onClick={handleAdd}
+            disabled={!selectedMateriale || !peso || parseFloat(peso.replace(",", ".")) === 0}
+          >
+            <FaPlusCircle style={{ marginRight: 7 }} />
+            Aggiungi / Aggiorna
+          </button>
         </div>
-      ))}
-    </div>
-  );
+      </div>
+    )}
+
+    <hr />
+
+    {/* TABELLA CER */}
+    {scarico.map((c) => (
+      <div key={c.cer + c.fir} style={{ marginBottom: "20px" }}>
+        <h4>
+          <FaRecycle style={{ marginRight: 6, color: "#1e5a80" }} />
+          CER {c.cer} {c.fir && `- FIR: ${c.fir}`}
+        </h4>
+
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <FaCubes style={{ marginRight: 5, color: "#1e5a80" }} />
+                Materiale
+              </th>
+              <th>
+                <FaWeightHanging style={{ marginRight: 5, color: "#1e5a80" }} />
+                Peso
+              </th>
+              <th>
+                <FaPercent style={{ marginRight: 5, color: "#1e5a80" }} />
+                Calo
+              </th>
+              <th>
+                <FaBalanceScale style={{ marginRight: 5, color: "#1e5a80" }} />
+                Tara (kg)
+              </th>
+              <th>
+                <FaCalculator style={{ marginRight: 5, color: "#1e5a80" }} />
+                Netto
+              </th>
+              <th>
+                <FaTools style={{ marginRight: 5, color: "#1e5a80" }} />
+                Azioni
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {c.righe.map((r) => (
+              <tr key={r.materiale}>
+                <td>{r.materiale}</td>
+                <td>{r.peso}</td>
+
+                <td>
+                  {r.caloTipo === "perc"
+                    ? `${r.calo}%`
+                    : r.calo}
+                </td>
+
+                <td>{r.tara || 0}</td>
+
+                <td>{r.netto}</td>
+
+                <td>
+                  <button
+                    onClick={() => handleEdit(c.cer, c.fir, r.materiale)}
+                    title="Modifica materiale"
+                  >
+                    <FaEdit />
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(c.cer, c.fir, r.materiale)}
+                    title="Elimina materiale"
+                  >
+                    <FaTrash />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <p style={{ fontWeight: "bold", marginTop: "6px" }}>
+          <FaCalculator style={{ marginRight: 6, color: "#1e5a80" }} />
+          Totale CER: {c.totaleCer} kg
+        </p>
+      </div>
+    ))}
+  </div>
+);
+
 };
 
 export default Scarichi;

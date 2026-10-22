@@ -7,6 +7,7 @@ import { scriviLog } from "../utils/log";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
+import "./GestioneScarichi.css";
 registerLocale("it", it);
 const getUtenteReact = () => {  const u = JSON.parse(sessionStorage.getItem("utenteLoggato"));
   return (    u?.username ||    u?.email ||    auth.currentUser?.displayName ||    auth.currentUser?.email ||    "sconosciuto"  );};
@@ -2266,43 +2267,49 @@ const nessunMovimento =
 
   // ---------- RENDER ----------
   return (
-    <div className="gestione-scarichi-container">
-      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+    <div className="gestione-scarichi-container gd-dettaglio">
+      <div className="gd-topbar">
         <button onClick={goHome}>🏠 Dashboard</button>
         <button onClick={handleLogout}>🚪Logout ({getUtenteReact()})</button>
       </div>
 
-      <div style={{marginBottom:10}}>
-  <h3>Lista movimenti giorno {dataLabel}</h3>  {/* ← nuova intestazione */}
+      <h3 className="gd-title">Lista movimenti giorno {dataLabel}</h3>
+
+      {/* ===== BARRA COMANDI ===== */}
+      <div className="gd-toolbar">
   <button onClick={goBack}>
     ← Torna ai Carichi / Scarichi
   </button>
-  <button onClick={vaiGestioneListini} style={{marginLeft:10}}>⚙ Gestione Listini</button>
-</div>
+  <button onClick={vaiGestioneListini}>⚙ Gestione Listini</button>
 
-     {/* ===== FILTRI HEADER ===== */}
-<div style={{ margin: "10px 0" }}>
+  <label>Mostra:
+      <select
+        value={rowsPerPage}
+        onChange={e=>{
+          setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value));
+          setCurrentPageCarichi(1);
+          setCurrentPageScarichi(1);
+        }}
+      >
+        <option value={6}>6</option>
+        <option value={12}>12</option>
+        <option value={24}>24</option>
+        <option value="tutte">Tutte</option>
+      </select> righe
+    </label>
+
   <button onClick={() => setShowFiltri(p => !p)}>
     {showFiltri ? "🔽 Nascondi Filtri" : "🔎  Filtra"}
   </button>
 
-  <button onClick={handleStampa} style={{ marginLeft: 10 }}>
+  <button onClick={handleStampa}>
     🖨 Stampa
   </button>
 </div>
 
 {/* ===== FILTRI PANEL ===== */}
 {showFiltri && (
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "10px",
-      padding: "10px",
-      border: "1px solid #ccc",
-      borderRadius: 8,
-      background: "#f9f9f9"
-    }}
+  <div className="gs-filter-panel"
   >
 
     <label>Utente:
@@ -2390,23 +2397,9 @@ const nessunMovimento =
   </div>
 )}
 
- <label>Mostra:
-      <select
-        value={rowsPerPage}
-        onChange={e=>{
-          setRowsPerPage(e.target.value==="tutte"?"tutte":Number(e.target.value));
-          setCurrentPageCarichi(1);
-          setCurrentPageScarichi(1);
-        }}
-      >
-        <option value={6}>6</option>
-        <option value={12}>12</option>
-        <option value={24}>24</option>
-        <option value="tutte">Tutte</option>
-      </select> righe
-    </label>
+ 
 {nessunMovimento && (
-  <div style={{ marginTop: 40, textAlign: "center", fontSize: 18 }}>
+  <div className="gd-empty">
     Nessun movimento per questo giorno
   </div>
 )}
@@ -2425,7 +2418,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Ora{iconaSort(sortConfigCarichi, "ora")}
 </th>
@@ -2439,7 +2431,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Destinatario{iconaSort(sortConfigCarichi, "fornitore")}
 </th>
@@ -2453,7 +2444,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   FIR{iconaSort(sortConfigCarichi, "fir")}
 </th>
@@ -2467,7 +2457,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   CER{iconaSort(sortConfigCarichi, "cer")}
 </th>
@@ -2481,7 +2470,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Materiale{iconaSort(sortConfigCarichi, "materiale")}
 </th>
@@ -2495,7 +2483,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Peso (Kg){iconaSort(sortConfigCarichi, "peso")}
 </th>
@@ -2509,7 +2496,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Calo{iconaSort(sortConfigCarichi, "calo")}
 </th>
@@ -2523,7 +2509,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Tara (Kg){iconaSort(sortConfigCarichi, "tara")}
 </th>
@@ -2537,7 +2522,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Netto (Kg){iconaSort(sortConfigCarichi, "netto")}
 </th>
@@ -2551,7 +2535,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   €/Kg{iconaSort(sortConfigCarichi, "prezzoKg")}
 </th>
@@ -2565,7 +2548,6 @@ const nessunMovimento =
       setCurrentPageCarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Ricavo Totale (€){iconaSort(sortConfigCarichi, "totale")}
 </th>
@@ -2610,7 +2592,7 @@ const nessunMovimento =
   </tbody>
 </table>
 
-<div style={{ margin: "10px 0" }}>
+<div className="gd-section">
   {currentPageCarichi > 1 && (
     <button onClick={() => setCurrentPageCarichi(p => p - 1)}>◀</button>
   )}
@@ -2618,7 +2600,7 @@ const nessunMovimento =
   {Array.from({ length: totalPagesCarichi }, (_, i) => (
     <button
       key={i}
-      style={{ fontWeight: i + 1 === currentPageCarichi ? "bold" : "normal" }}
+      className={i + 1 === currentPageCarichi ? "gd-page-btn is-active" : "gd-page-btn"}
       onClick={() => setCurrentPageCarichi(i + 1)}
     >
       {i + 1}
@@ -2629,10 +2611,10 @@ const nessunMovimento =
     <button onClick={() => setCurrentPageCarichi(p => p + 1)}>▶</button>
   )}
 </div>
-<div style={{ margin: "10px 0", fontWeight: "bold" }}>
-  Peso Netto Totale: {totCarichiNetto.toFixed(2)} |
-  €/Kg medio: {mediaCarichi.toFixed(2)} |
-  Ricavi Totali: {totCarichiRicavi.toFixed(2)}
+<div className="gd-section gd-bold">
+  Peso Netto Totale (kg): {totCarichiNetto.toFixed(2)} |
+  prezzo medio €/Kg: {mediaCarichi.toFixed(2)} |
+  Ricavi Totali (€): {totCarichiRicavi.toFixed(2)}
 </div>
 </>
 )}
@@ -2651,7 +2633,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Ora{iconaSort(sortConfigScarichi, "ora")}
 </th>
@@ -2665,7 +2646,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Fornitore{iconaSort(sortConfigScarichi, "fornitore")}
 </th>
@@ -2679,7 +2659,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   FIR{iconaSort(sortConfigScarichi, "fir")}
 </th>
@@ -2693,7 +2672,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   CER{iconaSort(sortConfigScarichi, "cer")}
 </th>
@@ -2707,7 +2685,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Materiale{iconaSort(sortConfigScarichi, "materiale")}
 </th>
@@ -2721,7 +2698,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Peso (Kg){iconaSort(sortConfigScarichi, "peso")}
 </th>
@@ -2735,7 +2711,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Calo{iconaSort(sortConfigScarichi, "calo")}
 </th>
@@ -2749,7 +2724,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Tara (Kg){iconaSort(sortConfigScarichi, "tara")}
 </th>
@@ -2763,7 +2737,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Netto (Kg){iconaSort(sortConfigScarichi, "netto")}
 </th>
@@ -2777,7 +2750,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   €/Kg{iconaSort(sortConfigScarichi, "prezzoKg")}
 </th>
@@ -2791,7 +2763,6 @@ const nessunMovimento =
       setCurrentPageScarichi
     )
   }
-  style={{ cursor: "pointer" }}
 >
   Costo Totale (€){iconaSort(sortConfigScarichi, "totale")}
 </th>
@@ -2827,7 +2798,7 @@ const nessunMovimento =
   ))}
 </tbody>
 </table>
-<div style={{ margin: "10px 0" }}>
+<div className="gd-section">
   {currentPageScarichi > 1 && (
     <button onClick={() => setCurrentPageScarichi(p => p - 1)}>◀</button>
   )}
@@ -2835,7 +2806,7 @@ const nessunMovimento =
   {Array.from({ length: totalPagesScarichi }, (_, i) => (
     <button
       key={i}
-      style={{ fontWeight: i + 1 === currentPageScarichi ? "bold" : "normal" }}
+      className={i + 1 === currentPageScarichi ? "gd-page-btn is-active" : "gd-page-btn"}
       onClick={() => setCurrentPageScarichi(i + 1)}
     >
       {i + 1}
@@ -2846,29 +2817,29 @@ const nessunMovimento =
     <button onClick={() => setCurrentPageScarichi(p => p + 1)}>▶</button>
   )}
 </div>
-<div style={{ margin: "10px 0", fontWeight: "bold" }}>
-  Peso Netto Totale: {totScarichiNetto.toFixed(2)} |
-  €/Kg medio: {mediaScarichi.toFixed(2)} |
-  Costi Totali: {totScarichiCosti.toFixed(2)}
+<div className="gd-section gd-bold">
+  Peso Netto Totale (kg): {totScarichiNetto.toFixed(2)} |
+  prezzo medio €/Kg: {mediaScarichi.toFixed(2)} |
+  Costi Totali (€): {totScarichiCosti.toFixed(2)}
 </div>
 </>
 )}
 {/* ===================== UTILE ===================== */}
-<div style={{ marginTop: 20, fontSize: 18, fontWeight: "bold" }}>
+<div className="gd-utile">
   UTILE: {utile.toFixed(2)}
 </div>
 
    
 
       {editor && (
-        <div ref={editorRef} style={{marginTop:20, border:"1px solid #ccc", padding:10, background:"#f9f9f9"}}>
+        <div ref={editorRef} className="gd-editor">
          <h3>
    Modifica riga{" "}
-  <span style={{ fontWeight: "normal", fontSize: 14, color: "#666" }}>
+  <span className="gd-editor-sub">
     ({editor?.tipo?.toUpperCase() || "MOVIMENTO"} - {editor?.cer || "CER"} - {editor?.materiale || "Materiale"})
   </span>
 </h3>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <div className="gd-row">
  <label> Data:
   <DatePicker
     selected={editor.data}
@@ -2915,15 +2886,7 @@ const nessunMovimento =
 />
 </label>
 </div>
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(6, minmax(120px, 1fr))",
-    gap: "12px",
-    marginTop: 15,
-    alignItems: "end"
-  }}
+<div className="gd-grid6"
 >
   <label>
     Peso Lordo (Kg):
@@ -2935,11 +2898,7 @@ const nessunMovimento =
           "peso",
           e.target.value
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box"
-      }}
+      } className="gs-field"
     />
   </label>
 
@@ -2957,11 +2916,7 @@ const nessunMovimento =
           "calo",
           e.target.value
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box"
-      }}
+      } className="gs-field"
     />
   </label>
 <label>
@@ -2973,11 +2928,7 @@ const nessunMovimento =
         "caloTipo",
         e.target.value
       )
-    }
-    style={{
-      width: "100%",
-      boxSizing: "border-box"
-    }}
+    } className="gs-field"
   >
     <option value="kg">Kg</option>
     <option value="perc">%</option>
@@ -2993,11 +2944,7 @@ const nessunMovimento =
           "tara",
           e.target.value
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box"
-      }}
+      } className="gs-field"
     />
   </label>
 
@@ -3008,13 +2955,7 @@ const nessunMovimento =
       value={Number(
         editor.netto ?? 0
       ).toFixed(2)}
-      readOnly
-      style={{
-        width: "100%",
-        boxSizing: "border-box",
-        background: "#eee",
-        fontWeight: "bold"
-      }}
+      readOnly className="gs-field gd-readonly"
     />
   </label>
 
@@ -3028,23 +2969,12 @@ const nessunMovimento =
           "prezzoKg",
           e.target.value
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box"
-      }}
+      } className="gs-field"
     />
   </label>
 </div>
 
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(2, minmax(200px, 1fr))",
-    gap: "12px",
-    marginTop: 12
-  }}
+<div className="gd-grid2"
 >
   <label>
     FIR:
@@ -3056,12 +2986,7 @@ const nessunMovimento =
           "fir",
           e.target.value.toUpperCase()
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box",
-        textTransform: "uppercase"
-      }}
+      } className="gs-field gd-upper"
     />
   </label>
 
@@ -3074,11 +2999,7 @@ const nessunMovimento =
           "listino",
           e.target.value
         )
-      }
-      style={{
-        width: "100%",
-        boxSizing: "border-box"
-      }}
+      } className="gs-field"
     >
       {Object.keys(listini).map(l => (
         <option
@@ -3091,7 +3012,7 @@ const nessunMovimento =
     </select>
   </label>
 </div>      
-          <div style={{marginTop:10}}>
+          <div className="gd-mt10">
 
 
 <button
@@ -3154,7 +3075,7 @@ disabled={
 >
   💾 Salva modifiche
 </button>
- <button onClick={annullaModifiche} style={{marginLeft:5}}>✖ Annulla</button>
+ <button onClick={annullaModifiche} className="gd-btn-gap5">✖ Annulla</button>
             <button
   onClick={() =>
     eliminaRiga(
@@ -3162,8 +3083,7 @@ disabled={
       editor.cerIndex,
       editor.rIndex
     )
-  }
-  style={{ marginLeft: 5 }}
+  } className="gd-btn-gap5"
 >
   🗑 Elimina
 </button>
@@ -3172,7 +3092,7 @@ disabled={
       )}
 
       {errori.length>0 && (
-        <div style={{marginTop:10, color:"red"}}>
+        <div className="gd-error">
           <h4>Errore/i:</h4>
           <ul>{errori.map((e,i)=><li key={i}>{e}</li>)}</ul>
         </div>

@@ -138,7 +138,9 @@ const [mostraImportazioneODS, setMostraImportazioneODS] = useState(false);
   }, [magazzinoSelezionato?.id]);
 
 
-
+ const [activeUser, setactiveUser] = useState(() => {
+    return JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
+  });
 
   const caricaMovimenti = useCallback(async (magazzinoId) => {
     if (!magazzinoId) {
@@ -1189,7 +1191,7 @@ const numeroDocumentoPulito = String(numeroDocumento || "").trim();
             style={stili.pulsanteLogout}
             onClick={handleLogout}
           >
-            <FaSignOutAlt /> Logout
+            <FaSignOutAlt /> Logout ({activeUser.username || activeUser.email || "Sconosciuto"})
           </button>
         </div>
       </header>

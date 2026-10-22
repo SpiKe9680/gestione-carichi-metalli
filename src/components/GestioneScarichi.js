@@ -7,11 +7,12 @@ import GestioneScarichiDettaglio from "./GestioneScarichiDettaglio";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { it } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
+import "./GestioneScarichi.css";
 import { scriviLog } from "../utils/log";
 import Select from "react-select";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 
-
+import { loadConfigAzienda } from "../utils/dateUtils";
 import { stampaFattura } from "./GestioneScarichi/stampa/stampaFattura";
 import {  salvaProspettoUnificato as salvaProspettoUnificatoService,getConfigAzienda,caricaAnagraficaCliente,caricaBancheAttive} from "./GestioneScarichi/services/documentiService";
 import {  calcolaRighePerGiorno,  ordinaRighePerGiorno} from "./GestioneScarichi/utils/riepilogoGiornaliero";
@@ -23,6 +24,24 @@ import { getUtenteReact,caricaMovimenti,applyListino,caricaListini } from "./Ges
 import {  formatEuro,getLabelFornDest,  normalizzaCER,formatDataIT,  calcolaRiga, round2, normalizeDate} from "./GestioneScarichi/utils/calcoli";
 import {  generaXmlFatturaPa,  scaricaXmlFatturaPa,} from "./GestioneScarichi/services/fatturaPaService";
 
+// Sfondo scuro (es. blu dei misti): il testo della riga va in bianco per leggibilità
+const isSfondoScuro = (colore) => {
+  if (typeof colore !== "string") return false;
+  let r, g, b;
+  const hex = colore.trim().match(/^#([0-9a-f]{6})$/i);
+  const rgb = colore.trim().match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+  } else if (rgb) {
+    r = +rgb[1]; g = +rgb[2]; b = +rgb[3];
+  } else {
+    return false;
+  }
+  const luminanza = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminanza < 0.55;
+};
+
 
 registerLocale("it", it);
 const GestioneScarichi = () => {
@@ -32,8 +51,17 @@ const [filtroFIR, setFiltroFIR] = useState(""); // filtro dropdown FIR
 const [firDisponibili, setFirDisponibili] = useState([]); // lista FIR disponibili per il filtro
 const [firSearch, setFirSearch] = useState(""); // testo digitato per FIR
 const [filtriVisibili, setFiltriVisibili] = useState(true);
+
+
+const [configAzienda, setConfigAzienda] = useState(null);
 useEffect(() => {
   setFiltriVisibili(false);
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+
+  load();
 }, []);
 const [dataSalvataggio, setDataSalvataggio] = useState(new Date());
 const [minDataSalvataggio, setMinDataSalvataggio] = useState(null);
@@ -1522,67 +1550,64 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     <div className="gestione-scarichi-container">
 
 {salvataggioInCorso && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      background: "rgba(0,0,0,0.4)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 100000,
-      color: "white",
-      fontSize: 20,
-      fontWeight: "bold",
-      cursor: "wait",
-    }}
+  <div className="gs-overlay gs-overlay--busy"
   >
-    <div
-      style={{
-        background: "rgba(0,0,0,0.65)",
-        padding: "24px 32px",
-        borderRadius: 12,
-        textAlign: "center",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-      }}
+    <div className="gs-busy-box"
     >
-      <div style={{ fontSize: 36, marginBottom: 12 }}>
+      <div className="gs-busy-icon">
         ⏳
       </div>
       Operazione in corso...
-      <div style={{ fontSize: 14, marginTop: 10, fontWeight: "normal" }}>
+      <div className="gs-busy-sub">
         Attendere il completamento del salvataggio
       </div>
     </div>
   </div>
 )}
+    <header className="gestione-scarichi-header">
+    <div className="scarichi-brand">
+  {configAzienda?.logoBase64 && (
+    <img
+      src={`data:image/png;base64,${configAzienda.logoBase64}`}
+      alt="Logo METALFLOW"
+      className="scarichi-logo"
+    />
+  )}
 
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
-        <button onClick={goHome}>🏠 Dashboard</button>
-        <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>
-        <button onClick={handleStampa} style={{marginLeft:10}}>🖨️ Stampa</button>
-<button
-  onClick={handleApriDocumento}
-  disabled={isDocumentoDisabled()}
-  title={
-    isDocumentoDisabled()
-      ? "Selezionare il Tipo di documento e la controparte per cui creare la contabile"
-      : "Crea documento"
-  }
-  style={{
-    opacity: isDocumentoDisabled() ? 0.5 : 1,
-    cursor: isDocumentoDisabled() ? "not-allowed" : "pointer"
-  }}
->
-  {getDocumentoLabel()}
-</button>
-      </div>
-      <h2>Gestione Carichi / Scarichi</h2>
+  <h2 className="scarichi-title">
+    Gestione Carichi / Scarichi
+  </h2>
+</div>
+
+<div className="gestione-scarichi-toolbar">
+  <button onClick={goHome}>
+    🏠 Dashboard
+  </button>
+
+  <button onClick={handleLogout} className="toolbar-logout">
+    🚪 Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+  </button>
+
+  <button onClick={handleStampa}>
+    🖨️ Stampa
+  </button>
+
+  <button
+    onClick={handleApriDocumento}
+    className="toolbar-primary"
+    disabled={isDocumentoDisabled()}
+    title={
+      isDocumentoDisabled()
+        ? "Selezionare il Tipo di documento e la controparte per cui creare la contabile"
+        : "Crea documento"
+    }
+  >
+    {getDocumentoLabel()}
+  </button>
+</div>
+</header>
+
+  
 <div style={{
   display: "flex",
   gap: "20px",
@@ -1610,101 +1635,125 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 <button
   onClick={() => setFiltriVisibili(v => !v)}
   className="filter-item"
-  style={{ marginBottom: "10px" }}
 >
   {filtriVisibili ? "Raggruppa Filtri" : "Modifica Filtri"}
 </button>
+
 {!filtriVisibili && (
   <div
+    className="filtri-attivi-card"
     onClick={() => setFiltriVisibili(true)}
-    style={{
-      padding: "10px",
-      background: "#eee",
-      border: "1px solid #ccc",
-      borderRadius: "8px",
-      cursor: "pointer",
-      marginBottom: "10px"
+    role="button"
+    tabIndex={0}
+    onKeyDown={e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setFiltriVisibili(true);
+      }
     }}
   >
-    <strong>Filtri attivi:</strong>
-    {[
-      filtroFIR && filtroFIR.trim() !== "" ? `FIR: ${filtroFIR}` : null,
-      filtroCER !== "tutti" ? `CER: ${filtroCER}` : null,
-      filtroFornitore !== "tutti" ? `Fornitore: ${filtroFornitore}` : null,
-      filtroListino !== "tutti" ? `Listino: ${filtroListino}` : null,
-      filtroUtente !== "tutti" ? `Utente: ${filtroUtente}` : null,
-      tipoMovimento !== "tutti" ? `Tipo: ${tipoMovimento}` : null,
-      !tutti ? `Dal: ${dal.toLocaleDateString("it-IT")} • Al: ${al.toLocaleDateString("it-IT")}` : null
-    ]
-      .filter(Boolean)
-      .join(" • ") || "Nessuno"}
+    <div className="filtri-attivi-titolo">
+      <strong>Filtri attivi</strong>
+      <span>✏️ Modifica</span>
+    </div>
+
+    <div className="filtri-attivi-valori">
+      {[
+        filtroFIR && filtroFIR.trim() !== "" ? `FIR: ${filtroFIR}` : null,
+        filtroCER !== "tutti" ? `CER: ${filtroCER}` : null,
+        filtroFornitore !== "tutti" ? `Fornitore: ${filtroFornitore}` : null,
+        filtroListino !== "tutti" ? `Listino: ${filtroListino}` : null,
+        filtroUtente !== "tutti" ? `Utente: ${filtroUtente}` : null,
+        tipoMovimento !== "tutti" ? `Tipo: ${tipoMovimento}` : null,
+        !tutti
+          ? `Dal: ${dal.toLocaleDateString("it-IT")} • Al: ${al.toLocaleDateString("it-IT")}`
+          : null
+      ]
+        .filter(Boolean)
+        .join(" • ") || "Nessun filtro aggiuntivo"}
+    </div>
   </div>
 )}
+
 {filtriVisibili && (
-<div className="filtri">
+  <div className="filtri">
+<div><br/></div>
+    <button onClick={resetFiltri} className="filter-item filter-reset">
+      🔄 Reset filtri
+    </button>
 
-  <button onClick={resetFiltri} className="filter-item">🔄 Reset filtri</button>
+    <label className="filter-item">
+      <input
+        type="checkbox"
+        checked={tutti}
+        onChange={(e) => {
+          const checked = e.target.checked;
+          const estimated = estimateResults();
 
-  <label className="filter-item">
-    <input
-      type="checkbox"
-      checked={tutti}
-      onChange={(e) => {
-        const checked = e.target.checked;
-        const estimated = estimateResults();
-        if (checked && estimated > 2000) {
-          const ok = window.confirm(
-            "⚠️ Attenzione: questa ricerca restituirà circa " +
-            estimated +
-            " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
-          );
-          if (!ok) return;
-        }
-        setTutti(checked);
-      }}
-    />
-    Disabilita filtro date
-  </label>
+          if (checked && estimated > 2000) {
+            const ok = window.confirm(
+              "⚠️ Attenzione: questa ricerca restituirà circa " +
+              estimated +
+              " record.\n\nPotrebbe rallentare il sistema.\n\nVuoi continuare?"
+            );
 
-  {!tutti && (
-    <div className="filtri-group">
-<div>
-      <label className="filter-item">
-        Dal:
-        <DatePicker
-          selected={dal}
-          onChange={(date) => setDal(date)}
-          minDate={minDataDB || new Date(2000, 0, 1)}
-          maxDate={maxDataDB || new Date()}
-          dateFormat="dd/MM/yyyy"
-          placeholderText="gg/mm/yyyy"
-        />
-      </label>
-</div><div>
-      <label className="filter-item">
-        Al:
-        <DatePicker
-          selected={al}
-          onChange={(date) => setAl(date)}
-          minDate={dal instanceof Date ? dal : minDataDB || new Date(2000, 0, 1)}
-          maxDate={maxDataDB || new Date()}
-          dateFormat="dd/MM/yyyy"
-          placeholderText="gg/mm/yyyy"
-        />
-      </label></div>
+            if (!ok) return;
+          }
 
-    </div>
-  )}
-<div>
+          setTutti(checked);
+        }}
+      />
+      Disabilita filtro date
+    </label>
+
+    {!tutti && (
+      
+      <div className="filtri-group">
+        <div><br/></div>
+        <div>
+          <label className="filter-item">
+            Dal:
+            <DatePicker
+              selected={dal}
+              onChange={(date) => setDal(date)}
+              minDate={minDataDB || new Date(2000, 0, 1)}
+              maxDate={maxDataDB || new Date()}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="gg/mm/yyyy"
+            />
+          </label>
+         <label className="filter-item">
+            Al:
+            <DatePicker
+              selected={al}
+              onChange={(date) => setAl(date)}
+              minDate={
+                dal instanceof Date
+                  ? dal
+                  : minDataDB || new Date(2000, 0, 1)
+              }
+              maxDate={maxDataDB || new Date()}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="gg/mm/yyyy"
+            />
+          </label>
+        </div>
+      </div>
+    )}
+<div><br/></div>
+    <div>
       <label className="filter-item">
         FIR/DDT:
         <input
           type="text"
           placeholder="Scrivi per filtrare..."
-          value={filtroFIR} width="100%"
+          value={filtroFIR}
           onChange={e => setFiltroFIR(e.target.value)}
         />
-      </label></div><div>
+      </label>
+    </div>
+<div><br/></div>
+    <div>
       <label className="filter-item">
         Codice CER:
         <Select
@@ -1721,139 +1770,135 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
           isClearable
           placeholder="CER"
         />
-      </label></div>
-  <label className="filter-item">
-    {getLabelFornDest(tipoMovimento)}:
-    <Select
-      value={
-        filtroFornitore === "tutti"
-          ? null
-          : { value: filtroFornitore, label: filtroFornitore }
-      }
-      onChange={(opt) => setFiltroFornitore(opt ? opt.value : "tutti")}
-      options={[
-        { value: "tutti", label: "Tutti" },
-        ...toOptions(fornitoriDisponibili)
-      ]}
-      isClearable
-      placeholder="Fornitore / Smaltitore"
-    />
-  </label>
-
-  <label className="filter-item">
-    Listino:
-    <Select
-      value={
-        filtroListino === "tutti"
-          ? null
-          : { value: filtroListino, label: filtroListino }
-      }
-      onChange={(opt) => setFiltroListino(opt ? opt.value : "tutti")}
-      options={[
-        { value: "tutti", label: "Tutti" },
-        ...toOptions(listiniDisponibili)
-      ]}
-      isClearable
-      placeholder="Listino"
-    />
-  </label>
-
-  <label className="filter-item">
-    Utente:
-    <Select
-      value={
-        filtroUtente === "tutti"
-          ? null
-          : { value: filtroUtente, label: filtroUtente }
-      }
-      onChange={(opt) => setFiltroUtente(opt ? opt.value : "tutti")}
-      options={[
-        { value: "tutti", label: "Tutti" },
-        ...toOptions(utentiDisponibili)
-      ]}
-      isClearable
-      placeholder="Utente"
-    />
-  </label>
-
-  <label className="filter-item">
-    Tipo:
-    <select value={tipoMovimento} onChange={e => setTipoMovimento(e.target.value)}>
-      <option value="tutti">Tutti</option>
-      <option value="scarico">Scarico</option>
-      <option value="carico">Carico</option>
-    </select>
-  </label>
-
-</div>
+      </label>
+    </div>
+<div><br/></div>
+    <label className="filter-item">
+      {getLabelFornDest(tipoMovimento)}:
+      <Select
+        value={
+          filtroFornitore === "tutti"
+            ? null
+            : { value: filtroFornitore, label: filtroFornitore }
+        }
+        onChange={(opt) => setFiltroFornitore(opt ? opt.value : "tutti")}
+        options={[
+          { value: "tutti", label: "Tutti" },
+          ...toOptions(fornitoriDisponibili)
+        ]}
+        isClearable
+        placeholder="Fornitore / Smaltitore"
+      />
+    </label>
+<div><br/></div>
+    <label className="filter-item">
+      Listino:
+      <Select
+        value={
+          filtroListino === "tutti"
+            ? null
+            : { value: filtroListino, label: filtroListino }
+        }
+        onChange={(opt) => setFiltroListino(opt ? opt.value : "tutti")}
+        options={[
+          { value: "tutti", label: "Tutti" },
+          ...toOptions(listiniDisponibili)
+        ]}
+        isClearable
+        placeholder="Listino"
+      />
+    </label>
+<div><br/></div>
+    <label className="filter-item">
+      Utente:
+      <Select
+        value={
+          filtroUtente === "tutti"
+            ? null
+            : { value: filtroUtente, label: filtroUtente }
+        }
+        onChange={(opt) => setFiltroUtente(opt ? opt.value : "tutti")}
+        options={[
+          { value: "tutti", label: "Tutti" },
+          ...toOptions(utentiDisponibili)
+        ]}
+        isClearable
+        placeholder="Utente"
+      />
+    </label>
+<div><br/></div>
+    <label className="filter-item">
+      Tipo:
+      <select
+        value={tipoMovimento}
+        onChange={e => setTipoMovimento(e.target.value)}
+      >
+        <option value="tutti">Tutti</option>
+        <option value="scarico">Scarico</option>
+        <option value="carico">Carico</option>
+      </select>
+    </label>
+<div><br/></div>
+  </div>
 )}
 
-<div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+
+<div className="gs-traffic">
   <span>Movimenti:</span>
-  <span style={{
-    width: 12,
-    height: 12,
-    borderRadius: "50%",
-    backgroundColor:
-      traffic === "green"
-        ? "green"
-        : traffic === "yellow"
-        ? "orange"
-        : "red"
-  }} />
+  <span className={`movimenti-semaforo traffic-${traffic === "green" ? "green" : traffic === "yellow" ? "yellow" : "red"}`} />
   <strong>{estimated}</strong>
 </div>
       {/* TABELLA */}
-<table className="tabella-scarichi" style={{marginTop:"16px"}}>
+<table className="tabella-scarichi">
   <thead>
     <tr>
-      <th onClick={() => requestSort("data")} style={{ cursor: "pointer" }}>
+      <th onClick={() => requestSort("data")}>
         Data {sortConfig.key === "data" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
-      <th onClick={() => requestSort("movimenti")} style={{ cursor: "pointer" }}>
+      <th onClick={() => requestSort("movimenti")}>
         Movimenti (scarico / carico) {sortConfig.key === "movimenti" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
-      <th onClick={() => requestSort("nrFIR")} style={{ cursor: "pointer" }}>
+      <th onClick={() => requestSort("nrFIR")}>
         Nr FIR {sortConfig.key === "nrFIR" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
-     <th onClick={() => requestSort("pesoLordoScarichi")} style={{ cursor: "pointer" }}>
+     <th onClick={() => requestSort("pesoLordoScarichi")}>
   Peso Lordo Scarichi {sortConfig.key === "pesoLordoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-<th onClick={() => requestSort("caloScarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("caloScarichi")}>
   Calo Scarichi (Kg) {sortConfig.key === "caloScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
 {/* 🔥 NUOVO: Colonna Tara Scarichi */}
-<th onClick={() => requestSort("taraScarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("taraScarichi")}>
   Tara Scarichi (Kg) {sortConfig.key === "taraScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-<th onClick={() => requestSort("pesoNettoScarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("pesoNettoScarichi")}>
   Peso Netto Scarichi {sortConfig.key === "pesoNettoScarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-<th onClick={() => requestSort("pesoLordoCarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("pesoLordoCarichi")}>
   Peso Lordo Carichi {sortConfig.key === "pesoLordoCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-<th onClick={() => requestSort("caloCarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("caloCarichi")}>
   Calo Carichi (Kg) {sortConfig.key === "caloCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
 {/* 🔥 NUOVO: Colonna Tara Carichi */}
-<th onClick={() => requestSort("taraCarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("taraCarichi")}>
   Tara Carichi (Kg) {sortConfig.key === "taraCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-<th onClick={() => requestSort("pesoNettoCarichi")} style={{ cursor: "pointer" }}>
+<th onClick={() => requestSort("pesoNettoCarichi")}>
   Peso Netto Carichi {sortConfig.key === "pesoNettoCarichi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
 </th>
 
-      <th onClick={() => requestSort("costi")} style={{ cursor: "pointer" }}>
+      <th onClick={() => requestSort("costi")}>
         Costi € {sortConfig.key === "costi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
-      <th onClick={() => requestSort("ricavi")} style={{ cursor: "pointer" }}>
+      <th onClick={() => requestSort("ricavi")}>
         Ricavi € {sortConfig.key === "ricavi" ? (sortConfig.direction === "asc" ? "⬆️" : "⬇️") : ""}
       </th>
       {filtroUtente === "tutti" && (
@@ -1868,6 +1913,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
       <tr
         key={r.giornoIT}
         onClick={() => setGiornoSelezionato({ giorno: r.giornoIT })}
+        className={isSfondoScuro(r.backgroundColor) ? "riga-scura" : undefined}
         style={{
   cursor: "pointer",
   backgroundColor: r.backgroundColor,
@@ -1895,33 +1941,11 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 </table>
 
 {modalProspetto && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 99999,
-      pointerEvents: salvataggioInCorso ? "auto" : "auto"
-    }}
+  <div className="gs-overlay"
   >
     <div
       onClick={(e) => e.stopPropagation()}
-      style={{
-        background: "white",
-        padding: 20,
-        borderRadius: 10,
-        width: "80%",
-        maxHeight: "80vh",
-        overflow: "auto",
-        opacity: salvataggioInCorso ? 0.7 : 1,
-        pointerEvents: salvataggioInCorso ? "none" : "auto"
-      }}
+      className={`gs-modal${salvataggioInCorso ? " is-busy" : ""}`}
     >
       <h3>
         {salvataggioInCorso
@@ -1929,7 +1953,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
           : "Prospetto Fattura"}
       </h3>
 
-      <table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
+      <table className="gs-table">
         <thead>
           <tr>
             <th>FIR</th>
@@ -1967,7 +1991,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         </tbody>
       </table>
 
-      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+      <div className="gs-modal-actions">
         <button
           onClick={stampaSoloProspetto}
           disabled={salvataggioInCorso}
@@ -1996,9 +2020,8 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 
 
 {modalData && (
-  <div key={reloadKey} style={{
-      position: "fixed",      top: 0,      left: 0,      width: "100vw",      height: "100vh",      background: "rgba(0,0,0,0.6)",      display: "flex",      justifyContent: "center",      alignItems: "center",      zIndex: 99999    }}  >
-    <div      onClick={(e) => e.stopPropagation()}      style={{        background: "white",        padding: 20,        borderRadius: 10,        width: "80%",        maxHeight: "80vh",        overflowY: "auto",        boxShadow: "0 10px 30px rgba(0,0,0,0.3)"      }}    >
+  <div key={reloadKey} className="gs-overlay"  >
+    <div      onClick={(e) => e.stopPropagation()} className="gs-modal"    >
       <h2>
   {modalTipo === "prospetto"
     ? (
@@ -2013,16 +2036,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
       )}
 </h2>
 {!modalData.documentoEsistente && !documentoConsuntivato && (
-  <div style={{
-    marginBottom: "15px",
-    display: "flex",
-    gap: "10px",
-    alignItems: "center",
-    border: "1px solid #ddd",
-    padding: "10px",
-    borderRadius: "6px",
-    background: "#f9f9f9"
-  }}>
+  <div className="gs-listino-box">
     <label>
       📊 Applica listino:
       <select
@@ -2127,17 +2141,8 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 <p><b>Cliente:</b> {modalData.cliente}</p>
 
 {modalTipo === "fattura" && (
-  <div style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 12,
-    marginTop: 15,
-    marginBottom: 20,
-    padding: 15,
-    border: "1px solid #ccc",
-    borderRadius: 6
-  }}>
-    <h3 style={{ gridColumn: "1 / -1", margin: 0 }}>
+  <div className="gs-fattura-grid">
+    <h3 className="gs-fattura-title">
       Dati fattura elettronica
     </h3>
 
@@ -2150,8 +2155,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         onChange={e => setModalData(prev => ({
           ...prev,
           numeroFattura: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+        }))} className="gs-field"
       />
     </label>
 
@@ -2215,8 +2219,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
           dataFatturaInput: undefined
         }));
       }
-    }}
-    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+    }} className="gs-field"
   />
 </label>
 
@@ -2230,8 +2233,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     onChange={e => setModalData(prev => ({
       ...prev,
       tipoDocumento: e.target.value
-    }))}
-    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+    }))} className="gs-field"
   >
     <option value="TD01">TD01 - Fattura</option>
     <option value="TD02">TD02 - Acconto/anticipo su fattura</option>
@@ -2271,8 +2273,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         naturaIva: e.target.value,
         riferimentoNormativo: natura?.riferimento || ""
       }));
-    }}
-    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+    }} className="gs-field"
   >
     {natureIvaOptions.map(opzione => (
       <option key={opzione.value} value={opzione.value}>
@@ -2282,7 +2283,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
   </select>
 </label>
 
-<label style={{ gridColumn: "1 / -1" }}>
+<label className="gs-span-full">
   Riferimento normativo IVA
   <input
   disabled={documentoConsuntivato}
@@ -2291,8 +2292,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     onChange={e => setModalData(prev => ({
       ...prev,
       riferimentoNormativo: e.target.value
-    }))}
-    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+    }))} className="gs-field"
   />
 </label>
 
@@ -2305,8 +2305,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         onChange={e => setModalData(prev => ({
           ...prev,
           condizioniPagamento: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+        }))} className="gs-field"
       >
         <option value="TP01">TP01 - Pagamento a rate</option>
         <option value="TP02">TP02 - Pagamento completo</option>
@@ -2322,8 +2321,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         onChange={e => setModalData(prev => ({
           ...prev,
           modalitaPagamento: e.target.value
-        }))}
-        style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+        }))} className="gs-field"
       >
         <option value="MP01">MP01 - Contanti</option>
         <option value="MP02">MP02 - Assegno</option>
@@ -2350,12 +2348,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         ...prev,
         banca: bancaSelezionata
       }));
-    }}
-    style={{
-      display: "block",
-      width: "100%",
-      boxSizing: "border-box"
-    }}
+    }} className="gs-field"
   >
     <option value="">Seleziona banca</option>
 
@@ -2428,15 +2421,14 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
           dataScadenzaPagamentoInput: undefined
         }));
       }
-    }}
-    style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+    }} className="gs-field"
   />
 </label>
 
   </div>
 )}
 
-<table border="1" cellPadding="5" style={{ width: "100%", marginTop: 10 }}>
+<table className="gs-table">
   <thead>
     <tr>
       <th>Materiale</th>
@@ -2494,8 +2486,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
         <React.Fragment key={i}>
           <tr>
             <td
-              colSpan="7"
-              style={{ background: "#eee", fontWeight: "bold" }}
+              colSpan="7" className="gs-group-row"
             >
               FIR: {b.fir} | CER: {b.cer}
             </td>
@@ -2528,7 +2519,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 </table>
 
 
-<h3 style={{ marginTop: 20 }}>
+<h3 className="gs-total-title">
   Totale: {(() => {
     const movs = scarichi
       .filter(m => modalData.movimentiIds.includes(m.id))
@@ -2557,8 +2548,8 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     ? !documentoConsuntivato
     : !modalData.documentoEsistente
 ) && (
-  <div style={{ marginTop: 10, marginBottom: 10 }}>
-    <div style={{ fontWeight: "bold", marginBottom: 5 }}>
+  <div className="gs-date-block">
+    <div className="gs-date-label">
       Salva il movimento pagabile dal:
     </div>
     <DatePicker
@@ -2570,7 +2561,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     />
   </div>
 )}
-      <div style={{ marginTop: 20 }}>
+      <div className="gs-modal-footer">
 
 
 
@@ -2583,10 +2574,6 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
     <button
       onClick={handleSalvaDocumento}
       disabled={salvataggioInCorso}
-      style={{
-        opacity: salvataggioInCorso ? 0.5 : 1,
-        cursor: salvataggioInCorso ? "not-allowed" : "pointer",
-      }}
     >
       {salvataggioInCorso
         ? "Salvataggio in corso..."
@@ -2597,8 +2584,7 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
 
     {modalTipo === "fattura" && (
       <button
-        onClick={handleGeneraXmlFattura}
-        style={{ marginLeft: 10 }}
+        onClick={handleGeneraXmlFattura} className="gs-btn-gap"
       >
         Genera XML FatturaPA
       </button>
@@ -2606,8 +2592,8 @@ const documentoConsuntivato = (modalData?.movimentiIds || []).some(id =>
   </>
 )}
 
-        <button onClick={handleStampaDocumento} style={{ marginLeft: 10 }}>          🖨️ Stampa        </button>
-        <button          onClick={() => setModalData(null)}          style={{ marginLeft: 10 }}        >          ❌ Chiudi        </button>
+        <button onClick={handleStampaDocumento} className="gs-btn-gap">          🖨️ Stampa        </button>
+        <button          onClick={() => setModalData(null)} className="gs-btn-gap"        >          ❌ Chiudi        </button>
       </div>
     </div>
   </div>

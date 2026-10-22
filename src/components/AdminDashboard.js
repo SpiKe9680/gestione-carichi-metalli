@@ -1,5 +1,6 @@
 // src/components/AdminDashboard.js
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { loadConfigAzienda } from "../utils/dateUtils";
 import { useNavigate } from "react-router-dom";
 import {
   FaSignOutAlt,
@@ -12,114 +13,111 @@ import {
   FaClipboardList,
   FaCog,
   FaCalendarAlt,
-  FaMoneyBillWave, FaWarehouse
+  FaMoneyBillWave,
+  FaWarehouse
 } from "react-icons/fa";
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
 
 const AdminDashboard = ({ logout }) => {
   const navigate = useNavigate();
+
+  const [configAzienda, setConfigAzienda] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      const config = await loadConfigAzienda();
+      setConfigAzienda(config);
+    };
+
+    load();
+  }, []);
+
   const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato"));
-const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
-console.log("METALFLOW - ruolo dashboard:", role, currentUser);
+  const role = currentUser?.ruolo?.toUpperCase() || "OPERATORE";
+
+  console.log("METALFLOW - ruolo dashboard:", role, currentUser);
+
   if (!currentUser) return null;
 
   return (
-    <div className="admin-dashboard-container">
-      <div className="admin-header">
-        <h2>Movimentazione Metalli</h2>
-
-        <button onClick={logout}>
-          <FaSignOutAlt style={{ marginRight: "8px" }} />
+    <PageLayout
+      title="METALFLOW - Menù"
+      logoBase64={configAzienda?.logoBase64}
+      headerActions={
+        <ActionButton variant="danger" compact onClick={logout}>
+          <FaSignOutAlt />
           Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-        </button>
-      </div>
+        </ActionButton>
+      }
+    >
+      <div className="mf-actions">
+        {/* FUNZIONI OPERATIVE: BLU */}
 
-      <div className="admin-actions">
-        <button onClick={() => navigate("/scarichi")}>
-          <FaExchangeAlt style={{ marginRight: "8px" }} />
-          Inserisci Scarico/Carico
-        </button>
+        <ActionButton onClick={() => navigate("/scarichi")}>
+          <FaExchangeAlt />
+          <span>Inserisci Scarico/Carico</span>
+        </ActionButton>
 
-        <button onClick={() => navigate("/gestione-scarichi")}>
-          <FaList style={{ marginRight: "8px" }} />
-          Gestione Scarichi/Carichi
-        </button>
+        <ActionButton onClick={() => navigate("/gestione-scarichi")}>
+          <FaList />
+          <span>Gestione Scarichi/Carichi</span>
+        </ActionButton>
 
-       
-        
-        
+        <ActionButton onClick={() => navigate("/gestione-cer")}>
+          <FaRecycle />
+          <span>Materiali</span>
+        </ActionButton>
 
-        
-        <button onClick={() => navigate("/gestione-cer")}>
-          <FaRecycle style={{ marginRight: "8px" }} />
-          Materiali
-        </button>
+        <ActionButton onClick={() => navigate("/gestione-listini")}>
+          <FaTags />
+          <span>Definizione Listini</span>
+        </ActionButton>
 
-        <button onClick={() => navigate("/gestione-listini")}>
-          <FaTags style={{ marginRight: "8px" }} />
-          Definizione Listini
-        </button>
+        <ActionButton onClick={() => navigate("/fornitori")}>
+          <FaTruck />
+          <span>Controparti</span>
+        </ActionButton>
+
+        {["MANAGER", "ADMIN"].includes(role) && (
+          <ActionButton onClick={() => navigate("/magazzino-mps")}>
+            <FaWarehouse />
+            <span>Magazzino MPS</span>
+          </ActionButton>
+        )}
+
+        {/* FUNZIONI AMMINISTRATIVE: GRIGIO ANTRACITE */}
 
         {role === "ADMIN" && (
-  <button
-    onClick={() => navigate("/MovimentiFinanziari")}
-    style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
-  >
-    <FaCalendarAlt style={{ marginRight: "8px" }} />
-    Calendario Movimenti Finanziari
-  </button>
-)}
+          <>
+            <ActionButton variant="admin" onClick={() => navigate("/MovimentiFinanziari")}>
+              <FaCalendarAlt />
+              <span>Calendario Movimenti Finanziari</span>
+            </ActionButton>
 
-       {role === "ADMIN" && (
-  <button onClick={() => navigate("/AnaMovFin")}
-    style={{ backgroundColor: "#fff703", color: "#4d12ff", marginTop: "10px" }}
-  >
-    <FaMoneyBillWave style={{ marginRight: "8px" }} />
-    Definizione Movimenti Finanziari
-  </button>
-)}
+            <ActionButton variant="admin" onClick={() => navigate("/AnaMovFin")}>
+              <FaMoneyBillWave />
+              <span>Definizione Movimenti Finanziari</span>
+            </ActionButton>
 
-    {role === "ADMIN" && (
-  <button onClick={() => navigate("/gestione-log")}
-    style={{ backgroundColor: "#f36c19", color: "#11ffdb", marginTop: "10px" }}
-  >
-    <FaClipboardList style={{ marginRight: "8px" }} />
-    Log Operazioni
-  </button>
-)}
+            <ActionButton variant="admin" onClick={() => navigate("/gestione-log")}>
+              <FaClipboardList />
+              <span>Log Operazioni</span>
+            </ActionButton>
 
-       {role === "ADMIN" && (
-  <button
-    onClick={() => navigate("/configurazioni-generali")}
-    style={{ backgroundColor: "#4CAF50", color: "#fff", marginTop: "10px" }}
-  >
-    <FaCog style={{ marginRight: "8px" }} />
-    Configurazione Generale
-  </button>
-)}
+            <ActionButton variant="admin" onClick={() => navigate("/configurazioni-generali")}>
+              <FaCog />
+              <span>Configurazione Generale</span>
+            </ActionButton>
 
-        <button onClick={() => navigate("/fornitori")}>
-          <FaTruck style={{ marginRight: "8px" }} />
-          Controparti
-        </button>
-
-
-    {role === "ADMIN" && (
-  <button onClick={() => navigate("/gestione-utenti")}>
-    <FaUsers style={{ marginRight: "8px" }} />
-    Utenti
-  </button>
-
-  
-)}
-{["MANAGER", "ADMIN"].includes(role) && (
-  <button onClick={() => navigate("/magazzino-mps")}>
-    <FaWarehouse style={{ marginRight: "8px" }} />
-    Magazzino MPS
-  </button>
-)}
-      
+            <ActionButton variant="admin" onClick={() => navigate("/gestione-utenti")}>
+              <FaUsers />
+              <span>Utenti</span>
+            </ActionButton>
+          </>
+        )}
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

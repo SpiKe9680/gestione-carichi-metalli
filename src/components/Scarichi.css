@@ -1,199 +1,66 @@
 
-/* ---------- CONTAINER GENERALE ---------- */
-.scarichi-container,
-.admin-dashboard,
-.gestione-utenti,
-.gestione-scarichi {
-  max-width: 1000px;
-  margin: 20px auto;
+/* ==================================================
+   SCARICHI - STILE METALFLOW / MPS
+   Responsive smartphone, tablet e PC
+   ================================================== */
+
+.scarichi-container {
+  width: calc(100% - 32px);
+  max-width: 1400px;
+  margin: 16px auto;
   padding: 20px;
-  background: #fdfdfd;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #dce3e8;
   border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 12px rgba(38, 50, 56, 0.07);
   font-family: Arial, sans-serif;
+  color: #263238;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
-.input-error {
-  background-color: #fff3cd;
-  border: 2px solid #ff9800;
+.scarichi-container *,
+.scarichi-container *::before,
+.scarichi-container *::after {
+  box-sizing: border-box;
 }
 
-/* ---------- HEADER GENERALE ---------- */
-.scarichi-header,
-.admin-dashboard header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+.scarichi-container h2,
+.scarichi-container h3,
+.scarichi-container h4 {
+  color: #263238;
 }
 
-.scarichi-header h2,
-.admin-dashboard h2 {
-  margin: 0;
+.scarichi-container h3,
+.scarichi-container h4 {
+  margin: 12px 0 8px;
 }
 
-/* ---------- BUTTON GENERICI ---------- */
-button {
-  padding: 6px 12px;
-  margin: 5px;
-  border: none;
-  border-radius: 5px;
-  background-color: #0077cc;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.2s;
+.scarichi-container p {
+  line-height: 1.5;
 }
 
-button:hover {
-  background-color: #005fa3;
-}
-
-button:disabled {
-  background-color: #999;
-  cursor: not-allowed;
-}
-
-/* ---------- INPUT / SELECT ---------- */
-input[type="text"],
-input[type="number"],
-input[type="password"],
-select {
-  padding: 6px;
-  margin: 5px 10px 5px 0;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-/* ---------- TABLE ---------- */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-table th,
-table td {
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  text-align: left;
-  vertical-align: middle;
-}
-
-table th {
-  background-color: #eee;
-}
-
-/* ---------- PULSANTI AZIONI NELLA TABELLA ---------- */
-table td.actions {
-  white-space: nowrap;
-}
-
-table td.actions button {
-  display: inline-block;
-  margin-right: 5px;
-  margin-bottom: 2px;
-  padding: 4px 8px;
-  font-size: 0.9em;
-  min-width: 60px;
-}
-
-/* ---------- COLORI SPECIFICI PER AZIONI ---------- */
-table td.actions button.edit {
-  background-color: #ffa500;
-}
-
-table td.actions button.edit:hover {
-  background-color: #cc8400;
-}
-
-table td.actions button.delete {
-  background-color: #cc0000;
-}
-
-table td.actions button.delete:hover {
-  background-color: #990000;
-}
-
-/* ---------- SECTIONS ---------- */
-hr {
-  margin: 15px 0;
+.scarichi-container hr {
+  margin: 20px 0;
   border: 0;
-  border-top: 1px solid #ccc;
-}
-
-/* ---------- DASHBOARD LINKS ---------- */
-.admin-actions {
-  display: flex;
-  gap: 15px;
-  margin-top: 20px;
-}
-
-/* ---------- FORMS ---------- */
-.gestione-utenti input,
-.gestione-utenti select {
-  margin-right: 10px;
-}
-
-/* ---------- STYLING CER SECTION ---------- */
-h3,
-h4 {
-  margin: 10px 0 5px;
-}
-
-strong {
-  display: block;
-  margin-top: 5px;
-}
-
-/* ---------- RESPONSIVE GENERALE ---------- */
-@media (max-width: 768px) {
-  .scarichi-container,
-  .admin-dashboard,
-  .gestione-utenti,
-  .gestione-scarichi {
-    padding: 10px;
-    margin: 10px;
-  }
-
-  input,
-  select {
-    width: 100%;
-    margin: 5px 0;
-    box-sizing: border-box;
-  }
-
-  button {
-    width: auto;
-    margin: 5px 0;
-  }
-
-  .admin-actions {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  table td.actions button {
-    width: auto !important;
-    display: inline-block;
-  }
+  border-top: 1px solid #dce3e8;
 }
 
 /* ==================================================
-   HEADER SCARICHI
+   HEADER
    ================================================== */
 
 .scarichi-container .scarichi-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 18px 22px;
+  gap: 20px;
+  padding: 16px;
   margin-bottom: 22px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-  box-sizing: border-box;
+  background: #f6f8fa;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
 }
 
 .scarichi-brand {
@@ -208,102 +75,613 @@ strong {
 
 .scarichi-logo {
   display: block;
-  height: 95px;
-  max-width: 220px;
   width: auto;
+  max-width: 220px;
+  max-height: 75px;
   object-fit: contain;
 }
 
 .scarichi-title {
   margin: 0;
-  color: #1e293b;
+  color: #263238;
   font-size: 23px;
   font-weight: 700;
   text-align: center;
+  line-height: 1.25;
 }
 
-/* ---------- GRIGLIA PULSANTI HEADER ---------- */
 .scarichi-container .scarichi-header-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   flex: 1 1 400px;
   gap: 8px;
   width: 100%;
-  max-width: 460px;
+  max-width: 500px;
   min-width: 0;
 }
 
-/* ---------- PULSANTI HEADER BLU ---------- */
+/* ==================================================
+   PULSANTI
+   ================================================== */
+
+.scarichi-container button {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scarichi-container button:focus-visible,
+.scarichi-container input:focus-visible,
+.scarichi-container select:focus-visible,
+.scarichi-container textarea:focus-visible {
+  outline: 2px solid #1e5a80;
+  outline-offset: 2px;
+}
+
+.scarichi-container button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .scarichi-container .scarichi-header-actions .scarichi-header-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-
   width: 100%;
   min-width: 0;
-  height: 46px;
-  min-height: 46px;
+  min-height: 44px;
   margin: 0;
-  padding: 8px 10px;
-  box-sizing: border-box;
-
-  background-color: #0077cc;
+  padding: 9px 10px;
+  background: #1e5a80;
   color: #ffffff;
-  border: 1px solid #0077cc;
-  border-radius: 6px;
-
-  font-family: inherit;
-  font-size: 14px;
+  border: 1px solid #1e5a80;
+  border-radius: 5px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.2;
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
-
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.scarichi-container .scarichi-header-actions .scarichi-header-btn:hover {
-  background-color: #005fa3;
-  border-color: #005fa3;
+.scarichi-container .scarichi-header-actions .scarichi-header-btn:hover:not(:disabled) {
+  background: #174664;
+  border-color: #174664;
 }
 
-.scarichi-container .scarichi-header-actions .scarichi-header-btn:active {
-  background-color: #004b82;
-  border-color: #004b82;
-}
-
-.scarichi-container .scarichi-header-actions .scarichi-header-btn:disabled {
-  background-color: #999999;
-  border-color: #999999;
-  color: #ffffff;
-  cursor: not-allowed;
-}
-
-/* Reset mantiene lo stesso blu degli altri pulsanti */
 .scarichi-container .scarichi-header-actions .scarichi-reset-btn {
-  background-color: #0077cc;
-  color: #ffffff;
-  border-color: #0077cc;
+  background: #e8edf1;
+  color: #263238;
+  border-color: #c7d0d8;
 }
 
-.scarichi-container .scarichi-header-actions .scarichi-reset-btn:hover {
-  background-color: #005fa3;
-  border-color: #005fa3;
+.scarichi-container .scarichi-header-actions .scarichi-reset-btn:hover:not(:disabled) {
+  background: #d9e1e7;
+  border-color: #bcc7d1;
 }
 
 /* ==================================================
-   TABLET E SMARTPHONE
+   ETICHETTE E CAMPI GENERALI
    ================================================== */
 
-@media (max-width: 768px) {
+.scarichi-container > div > label,
+.scarichi-container .scarichi-container-label {
+  display: block;
+  margin: 12px 0 6px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scarichi-container input[type="text"],
+.scarichi-container input[type="number"],
+.scarichi-container input[type="password"],
+.scarichi-container input[type="file"],
+.scarichi-container select,
+.scarichi-container textarea {
+  max-width: 100%;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.scarichi-container input[type="text"],
+.scarichi-container input[type="number"],
+.scarichi-container input[type="password"],
+.scarichi-container input[type="file"],
+.scarichi-container select,
+.scarichi-container textarea {
+  padding: 10px 12px;
+  margin: 5px 0;
+  color: #263238;
+  background: #ffffff;
+  border: 1px solid #bcc7d1;
+  border-radius: 5px;
+}
+
+.scarichi-container input[type="text"],
+.scarichi-container input[type="number"],
+.scarichi-container input[type="password"],
+.scarichi-container textarea {
+  width: 100%;
+}
+
+.scarichi-container input:disabled,
+.scarichi-container select:disabled,
+.scarichi-container textarea:disabled {
+  background: #edf0f2;
+  color: #657782;
+  cursor: not-allowed;
+}
+
+.scarichi-container textarea {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.scarichi-container input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #1e5a80;
+  vertical-align: middle;
+}
+
+.scarichi-container .input-error {
+  background: #fff3cd !important;
+  border: 2px solid #c0392b !important;
+}
+
+/* ==================================================
+   DATA, ORA E OPZIONE ADESSO
+   ================================================== */
+
+.scarichi-container .scarichi-data-ora {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #f6f8fa;
+  border: 1px solid #dce3e8;
+  border-radius: 7px;
+}
+
+.scarichi-container .scarichi-data-ora > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 130px;
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.scarichi-container .scarichi-data-ora > label .react-datepicker-wrapper {
+  width: 100%;
+}
+
+.scarichi-container .scarichi-data-ora > label .react-datepicker__input-container {
+  width: 100%;
+}
+
+.scarichi-container .scarichi-data-ora > label input {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 9px 10px;
+  background: #ffffff;
+  border: 1px solid #bcc7d1;
+  border-radius: 5px;
+}
+
+.scarichi-container .scarichi-data-ora .scarichi-adesso {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* ==================================================
+   TIPO MOVIMENTO
+   ================================================== */
+
+.scarichi-container .scarichi-tipo-movimento {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: #e8f3f8;
+  border: 1px solid #b6d6e5;
+  border-radius: 7px;
+}
+
+.scarichi-container .scarichi-tipo-movimento .scarichi-campo-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: #263238;
+  font-weight: 700;
+}
+
+.scarichi-container .scarichi-tipo-movimento select {
+  width: 220px;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 12px;
+  background: #1e5a80;
+  color: #ffffff;
+  border: 1px solid #1e5a80;
+  border-radius: 5px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.scarichi-container .scarichi-tipo-movimento select option {
+  background: #ffffff;
+  color: #263238;
+}
+
+/* ==================================================
+   FORNITORE / DESTINATARIO
+   ================================================== */
+
+.scarichi-container .scarichi-fornitore {
+  margin: 0 0 16px;
+}
+
+.scarichi-container .scarichi-fornitore > label {
+  display: block;
+  margin: 0 0 6px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.scarichi-container .scarichi-fornitore > div {
+  width: 100%;
+}
+
+.scarichi-container .scarichi-fornitore [class*="-control"] {
+  min-height: 44px;
+  border-color: #bcc7d1;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.scarichi-container .scarichi-fornitore [class*="-control"]:hover {
+  border-color: #1e5a80;
+}
+
+.scarichi-container .scarichi-fornitore [class*="-menu"] {
+  z-index: 100;
+}
+
+/* ==================================================
+   SELECT REACT-SELECT GENERALI
+   ================================================== */
+
+.scarichi-container [class*="-container"] {
+  min-width: 0;
+}
+
+.scarichi-container [class*="-control"] {
+  min-height: 42px;
+  border-color: #bcc7d1;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.scarichi-container [class*="-control"]:hover {
+  border-color: #1e5a80;
+}
+
+.scarichi-container [class*="-control--is-focused"] {
+  border-color: #1e5a80 !important;
+  box-shadow: 0 0 0 2px rgba(30, 90, 128, 0.12) !important;
+}
+
+/* ==================================================
+   LISTINO E FOTO
+   ================================================== */
+
+.scarichi-container input[type="file"] {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  background: #f6f8fa;
+}
+
+.scarichi-container img {
+  max-width: 100%;
+}
+
+.scarichi-container button[style*="position: absolute"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+/* ==================================================
+   NOTE
+   ================================================== */
+
+.scarichi-container textarea {
+  line-height: 1.5;
+}
+
+.scarichi-container textarea:focus {
+  border-color: #1e5a80;
+  box-shadow: 0 0 0 2px rgba(30, 90, 128, 0.12);
+  outline: none;
+}
+
+/* ==================================================
+   SALVATAGGIO
+   ================================================== */
+
+.scarichi-container button[style*="76px"],
+.scarichi-container button[style*="76px"] {
+  max-width: 100%;
+}
+
+.scarichi-container button[style*="4CAF50"] {
+  min-height: 46px;
+  padding: 11px 22px !important;
+  background: #1e5a80 !important;
+  border: 1px solid #1e5a80 !important;
+  border-radius: 5px !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 600;
+}
+
+.scarichi-container button[style*="4CAF50"]:hover:not(:disabled) {
+  background: #174664 !important;
+  border-color: #174664 !important;
+}
+
+.scarichi-container button[style*="4CAF50"]:disabled {
+  opacity: 0.55;
+}
+
+/* ==================================================
+   ERRORI E MESSAGGI
+   ================================================== */
+
+.scarichi-container p[style*="red"] {
+  padding: 10px 12px;
+  background: #fdecea;
+  border-radius: 5px;
+  color: #9b2424 !important;
+  overflow-wrap: anywhere;
+}
+
+.scarichi-container p[style*="999"] {
+  min-height: 18px;
+}
+
+/* ==================================================
+   MATERIALE E PESATURA
+   ================================================== */
+
+.scarichi-container .scarichi-materiale {
+  margin: 18px 0;
+  padding: 18px;
+  background: #f6f8fa;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+}
+
+.scarichi-container .scarichi-materiale-titolo {
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dce3e8;
+  color: #1e5a80;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.scarichi-container .scarichi-materiale-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scarichi-container .scarichi-materiale-campo label {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scarichi-container .scarichi-materiale-selezione {
+  margin-bottom: 14px;
+}
+
+.scarichi-container .scarichi-materiale-selezione > div {
+  width: 100%;
+}
+
+.scarichi-container .scarichi-materiale-griglia {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scarichi-container .scarichi-materiale-campo input,
+.scarichi-container .scarichi-materiale-campo select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #bcc7d1;
+  border-radius: 5px;
+  color: #263238;
+  font-size: 15px;
+}
+
+.scarichi-container .scarichi-materiale-campo input:focus,
+.scarichi-container .scarichi-materiale-campo select:focus {
+  outline: none;
+  border-color: #1e5a80;
+  box-shadow: 0 0 0 2px rgba(30, 90, 128, 0.12);
+}
+
+.scarichi-container .scarichi-materiale-azioni {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.scarichi-container .scarichi-materiale-azioni button {
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 18px;
+  background: #1e5a80;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.scarichi-container .scarichi-materiale-azioni button:hover:not(:disabled) {
+  background: #174664;
+}
+
+/* ==================================================
+   TABELLE CER
+   ================================================== */
+
+.scarichi-container table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.scarichi-container table th,
+.scarichi-container table td {
+  padding: 10px 12px;
+  border: 1px solid #dce3e8;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.scarichi-container table th {
+  background: #e8edf1;
+  color: #263238;
+  font-weight: 700;
+}
+
+.scarichi-container table tbody tr:nth-child(even) {
+  background: #f8fafb;
+}
+
+.scarichi-container table tbody tr:hover {
+  background: #eef5f8;
+}
+
+.scarichi-container table td:last-child {
+  white-space: nowrap;
+}
+
+.scarichi-container table td button {
+  min-width: 38px;
+  min-height: 36px;
+  margin: 2px;
+  padding: 6px 9px;
+  background: #e8edf1;
+  color: #263238;
+  border: 1px solid #c7d0d8;
+  border-radius: 4px;
+}
+
+.scarichi-container table td button:hover {
+  background: #d9e1e7;
+}
+
+/* Riepilogo totale CER */
+.scarichi-container > div > p[style*="bold"] {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: #e8f3f8;
+  border: 1px solid #b6d6e5;
+  border-radius: 5px;
+  color: #263238;
+  font-weight: 700;
+}
+
+/* ==================================================
+   TABLET
+   ================================================== */
+
+@media (max-width: 900px) {
+  .scarichi-container {
+    width: calc(100% - 24px);
+    padding: 16px;
+  }
+
+  .scarichi-container .scarichi-header {
+    gap: 16px;
+  }
+
+  .scarichi-brand {
+    flex-basis: 220px;
+  }
+
+  .scarichi-logo {
+    max-width: 180px;
+    max-height: 65px;
+  }
+
+  .scarichi-title {
+    font-size: 21px;
+  }
+
+  .scarichi-container .scarichi-materiale-griglia {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scarichi-container .scarichi-data-ora {
+    gap: 12px;
+  }
+}
+
+/* ==================================================
+   SMARTPHONE
+   ================================================== */
+
+@media (max-width: 600px) {
+  .scarichi-container {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 10px;
+    border-radius: 7px;
+    box-shadow: 0 2px 7px rgba(38, 50, 56, 0.06);
+    font-size: 14px;
+  }
+
   .scarichi-container .scarichi-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 16px;
-    padding: 14px;
-    margin-bottom: 16px;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
   }
 
   .scarichi-brand {
@@ -312,8 +690,8 @@ strong {
   }
 
   .scarichi-logo {
-    height: 70px;
-    max-width: 180px;
+    max-width: 160px;
+    max-height: 60px;
   }
 
   .scarichi-title {
@@ -325,182 +703,457 @@ strong {
     flex: none;
     width: 100%;
     max-width: none;
+    gap: 7px;
   }
 
   .scarichi-container .scarichi-header-actions .scarichi-header-btn {
+    min-height: 44px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .scarichi-container .scarichi-data-ora {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 11px;
+    margin-bottom: 12px;
+  }
+
+  .scarichi-container .scarichi-data-ora > label {
+    min-width: 0;
     width: 100%;
-    height: 46px;
-    min-height: 46px;
-    padding: 8px;
     font-size: 13px;
   }
-}
 
-/* Smartphone molto stretti */
-@media (max-width: 360px) {
-  .scarichi-container .scarichi-header-actions {
-    grid-template-columns: minmax(0, 1fr);
+  .scarichi-container .scarichi-data-ora .scarichi-adesso {
+    grid-column: 1 / -1;
+    min-height: 36px;
+    justify-content: flex-start;
+    padding: 2px 0;
+    font-size: 14px;
+  }
+
+  .scarichi-container .scarichi-tipo-movimento {
+    padding: 11px;
+    margin-bottom: 12px;
+  }
+
+  .scarichi-container .scarichi-tipo-movimento select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .scarichi-container .scarichi-fornitore {
+    margin-bottom: 14px;
+  }
+
+  .scarichi-container .scarichi-fornitore [class*="-control"] {
+    min-height: 44px;
+  }
+
+  .scarichi-container .scarichi-materiale {
+    padding: 12px;
+    margin: 14px 0;
+  }
+
+  .scarichi-container .scarichi-materiale-titolo {
+    margin-bottom: 12px;
+    font-size: 17px;
+  }
+
+  .scarichi-container .scarichi-materiale-griglia {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+  }
+
+  .scarichi-container .scarichi-materiale-campo label {
+    font-size: 13px;
+  }
+
+  .scarichi-container .scarichi-materiale-campo input,
+  .scarichi-container .scarichi-materiale-campo select {
+    min-height: 44px;
+    padding: 9px 8px;
+    font-size: 16px;
+  }
+
+  .scarichi-container .scarichi-materiale-azioni {
+    margin-top: 14px;
+  }
+
+  .scarichi-container .scarichi-materiale-azioni button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .scarichi-container button[style*="4CAF50"] {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .scarichi-container > div > div[style*="text-align: center"] {
+    margin-top: 14px !important;
+  }
+
+  .scarichi-container hr {
+    margin: 15px 0;
+  }
+
+  /* Tabella leggibile tramite scorrimento orizzontale */
+  .scarichi-container table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 13px;
+  }
+
+  .scarichi-container table thead,
+  .scarichi-container table tbody {
+    width: 100%;
+  }
+
+  .scarichi-container table th,
+  .scarichi-container table td {
+    padding: 9px 10px;
+    white-space: nowrap;
+  }
+
+  .scarichi-container table td button {
+    min-width: 36px;
+    min-height: 36px;
+    margin: 2px;
+    padding: 6px;
+  }
+
+  .scarichi-container h4 {
+    overflow-wrap: anywhere;
+    font-size: 15px;
   }
 }
 
 /* ==================================================
-   MATERIALE E PESATURA
+   SMARTPHONE MOLTO STRETTI
    ================================================== */
 
-.scarichi-materiale {
-  margin: 18px 0;
-  padding: 18px;
-  background: #ffffff;
-  border: 1px solid #dbe3ec;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-}
-
-.scarichi-materiale-titolo {
-  margin-bottom: 18px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e2e8f0;
-  color: #1e293b;
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.scarichi-materiale-campo {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-
-.scarichi-materiale-campo label {
-  margin: 0;
-  color: #334155;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.scarichi-materiale-selezione {
-  margin-bottom: 16px;
-}
-
-.scarichi-materiale-selezione > div {
-  width: 100%;
-}
-
-.scarichi-materiale-griglia {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.scarichi-materiale-campo input,
-.scarichi-materiale-campo select {
-  width: 100%;
-  min-width: 0;
-  min-height: 42px;
-  margin: 0;
-  padding: 9px 10px;
-  box-sizing: border-box;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1e293b;
-  font-family: inherit;
-  font-size: 14px;
-}
-
-.scarichi-materiale-campo input:focus,
-.scarichi-materiale-campo select:focus {
-  outline: none;
-  border-color: #0077cc;
-  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.12);
-}
-
-.scarichi-materiale-azioni {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
-.scarichi-materiale-azioni button {
-  min-height: 42px;
-  margin: 0;
-  padding: 10px 18px;
-  border-radius: 6px;
-  background: #0077cc;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.scarichi-materiale-azioni button:hover:not(:disabled) {
-  background: #005fa3;
-}
-
-.scarichi-materiale-azioni button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-@media (max-width: 768px) {
-  .scarichi-materiale {
-    padding: 14px;
-  }
-
-  .scarichi-materiale-griglia {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .scarichi-materiale-azioni button {
-    width: 100%;
-    min-height: 44px;
-  }
-}
-
 @media (max-width: 360px) {
-  .scarichi-materiale-griglia {
+  .scarichi-container {
+    width: calc(100% - 10px);
+    padding: 7px;
+  }
+
+  .scarichi-container .scarichi-header {
+    padding: 9px;
+  }
+
+  .scarichi-container .scarichi-header-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scarichi-container .scarichi-header-actions .scarichi-header-btn {
+    min-height: 42px;
+    font-size: 13px;
+  }
+
+  .scarichi-container .scarichi-data-ora {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scarichi-container .scarichi-data-ora .scarichi-adesso {
+    grid-column: auto;
+  }
+
+  .scarichi-container .scarichi-materiale-griglia {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
+/* Pulsante Logout rosso, stile Magazzino MPS */
 
-/* ---------- TIPO MOVIMENTO: STILE BLU ---------- */
-
-.scarichi-container .scarichi-tipo-movimento select {
-  width: 180px;
-  min-height: 46px;
-  margin: 0;
-  padding: 8px 12px;
-  box-sizing: border-box;
-
-  background-color: #0077cc;
+.scarichi-container .scarichi-header-actions .scarichi-logout-btn {
+  background-color: #a83232;
   color: #ffffff;
-  border: 1px solid #0077cc;
-  border-radius: 6px;
+  border-color: #a83232;
+}
 
-  font-family: inherit;
-  font-size: 16px;
+.scarichi-container .scarichi-header-actions .scarichi-logout-btn:hover:not(:disabled) {
+  background-color: #862727;
+  border-color: #862727;
+}
+
+.scarichi-container .scarichi-header-actions .scarichi-logout-btn:active {
+  background-color: #702020;
+  border-color: #702020;
+}
+
+/* ==================================================
+   DASHBOARD - STILE METALFLOW / MPS
+   Menu verticale uniforme per smartphone e PC
+   ================================================== */
+
+.admin-dashboard-container {
+  width: calc(100% - 32px);
+  max-width: 760px;
+  margin: 20px auto;
+  padding: 20px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #dce3e8;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(38, 50, 56, 0.07);
+  font-family: Arial, sans-serif;
+  color: #263238;
+}
+
+.admin-dashboard-container *,
+.admin-dashboard-container *::before,
+.admin-dashboard-container *::after {
+  box-sizing: border-box;
+}
+
+/* Intestazione */
+
+.admin-dashboard-container .admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  margin-bottom: 22px;
+  background: #f6f8fa;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+}
+
+.admin-dashboard-container .admin-header h2 {
+  margin: 0;
+  color: #263238;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Pulsanti generali della dashboard */
+
+.admin-dashboard-container .admin-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  margin: 0;
+  padding: 14px 18px;
+  background: #1e5a80 !important;
+  color: #ffffff !important;
+  border: 1px solid #1e5a80 !important;
+  border-radius: 7px;
+  font-family: Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.admin-dashboard-container .admin-actions button:hover {
+  background: #174664 !important;
+  border-color: #174664 !important;
+  box-shadow: 0 3px 8px rgba(30, 90, 128, 0.16);
+}
+
+.admin-dashboard-container .admin-actions button:active {
+  transform: scale(0.99);
+}
+
+.admin-dashboard-container .admin-actions button:focus-visible {
+  outline: 2px solid #1e5a80;
+  outline-offset: 3px;
+}
+
+/* Pulsanti amministrativi: GRIGIO ANTRACITE
+   La classe admin-button è presente in AdminDashboard.js */
+
+.admin-dashboard-container .admin-actions button.admin-button,
+.admin-dashboard-container .admin-actions button.admin-button:hover,
+.admin-dashboard-container .admin-actions button.admin-button:focus {
+  background: #46545e !important;
+  color: #ffffff !important;
+  border: 1px solid #46545e !important;
+}
+
+.admin-dashboard-container .admin-actions button.admin-button:hover {
+  background: #303c44 !important;
+  border-color: #303c44 !important;
+  box-shadow: 0 3px 8px rgba(38, 50, 56, 0.18);
+}
+
+.admin-dashboard-container .admin-actions button.admin-button:active {
+  background: #263238 !important;
+  border-color: #263238 !important;
+}
+
+/* Icone allineate e di dimensione uniforme */
+
+.admin-dashboard-container .admin-actions button svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+/* Contenitore menu: una sola colonna */
+
+.admin-dashboard-container .admin-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 11px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Logout */
+
+.admin-dashboard-container .admin-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 14px;
+  background: #a83232 !important;
+  color: #ffffff !important;
+  border: 1px solid #a83232 !important;
+  border-radius: 6px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.scarichi-container .scarichi-tipo-movimento select:focus {
-  outline: none;
-  border-color: #005fa3;
-  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.2);
+.admin-dashboard-container .admin-header button:hover {
+  background: #862727 !important;
+  border-color: #862727 !important;
 }
 
-.scarichi-container .scarichi-tipo-movimento select option {
-  background-color: #ffffff;
-  color: #1e293b;
-  font-size: 16px;
-}
+/* Smartphone */
 
-@media (max-width: 768px) {
-  .scarichi-container .scarichi-tipo-movimento select {
+@media (max-width: 600px) {
+  .admin-dashboard-container {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .admin-dashboard-container .admin-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .admin-dashboard-container .admin-header h2 {
+    font-size: 21px;
+    text-align: center;
+  }
+
+  .admin-dashboard-container .admin-header button {
+    justify-content: center;
     width: 100%;
     min-height: 46px;
-    font-size: 16px;
+    font-size: 14px;
   }
+
+  .admin-dashboard-container .admin-actions {
+    gap: 10px;
+  }
+
+  .admin-dashboard-container .admin-actions button {
+    min-height: 54px;
+    padding: 15px 14px;
+    font-size: 15px;
+    border-radius: 7px;
+  }
+}
+
+/* Smartphone molto stretti */
+
+@media (max-width: 360px) {
+  .admin-dashboard-container {
+    width: calc(100% - 10px);
+    padding: 8px;
+  }
+
+  .admin-dashboard-container .admin-header {
+    padding: 10px;
+  }
+
+  .admin-dashboard-container .admin-actions button {
+    padding: 13px 10px;
+    font-size: 14px;
+  }
+}
+
+
+/* Barra pulsanti Gestione Scarichi / Carichi */
+.gestione-scarichi-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.gestione-scarichi-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid #1e5a80;
+  border-radius: 8px;
+  background: #1e5a80;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gestione-scarichi-toolbar button:hover:not(:disabled) {
+  background: #174664;
+  border-color: #174664;
+}
+
+.gestione-scarichi-toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gestione-scarichi-toolbar button.toolbar-logout {
+  background: #a83232;
+  border-color: #a83232;
+}
+
+.gestione-scarichi-toolbar button.toolbar-logout:hover {
+  background: #862727;
+  border-color: #862727;
 }

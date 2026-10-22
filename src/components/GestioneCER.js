@@ -8,7 +8,7 @@ import {
   addDoc,
   updateDoc,
   doc,
-  getDoc 
+  getDoc
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
@@ -17,7 +17,9 @@ import { scriviLog } from "../utils/log";
 import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-    const formatDataSafe = (d) => {
+import "./GestioneCER.css";
+
+const formatDataSafe = (d) => {
   if (!d) return "";
   if (typeof d.toDate === "function") return d.toDate().toLocaleString("it-IT");
   if (d instanceof Date) return d.toLocaleString("it-IT");
@@ -26,45 +28,46 @@ import "react-datepicker/dist/react-datepicker.css";
 
 const GestioneCER = () => {
   const navigate = useNavigate();
-const [filtroTipoMovimento, setFiltroTipoMovimento] = useState("TUTTI"); // SCARICO | CARICO | TUTTI
+  const [filtroTipoMovimento, setFiltroTipoMovimento] = useState("TUTTI"); // SCARICO | CARICO | TUTTI
   const [materiali, setMateriali] = useState([]);
   const [scarichi, setScarichi] = useState([]);
   const [listini, setListini] = useState([]);
-const [mergeMode, setMergeMode] = useState(false);
-const [mergeCER, setMergeCER] = useState("");
-const [mergeMatSX, setMergeMatSX] = useState("");
-const [mergeMatDX, setMergeMatDX] = useState("");
-const [prezzoDefault, setPrezzoDefault] = useState("");
+  const [cerList, setCerList] = useState([]); // codici CER da cer_descrizioni
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeCER, setMergeCER] = useState("");
+  const [mergeMatSX, setMergeMatSX] = useState("");
+  const [mergeMatDX, setMergeMatDX] = useState("");
+  const [prezzoDefault, setPrezzoDefault] = useState("");
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
   const [codiceCER, setCodiceCER] = useState("");
   const [descrizione, setDescrizione] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState("");
-const [carichi, setCarichi] = useState([]);
-const canDeleteMateriale = (m) => {
-  return (
-    (m.nrMovimenti || 0) === 0 &&
-    (m.nrScarichi || 0) === 0 &&
-    (m.nrCarichi || 0) === 0
-  );
-};
+  const [carichi, setCarichi] = useState([]);
+  const canDeleteMateriale = (m) => {
+    return (
+      (m.nrMovimenti || 0) === 0 &&
+      (m.nrScarichi || 0) === 0 &&
+      (m.nrCarichi || 0) === 0
+    );
+  };
   const [filtroMateriale, setFiltroMateriale] = useState("Tutti");
   const [filtroCER, setFiltroCER] = useState("Tutti");
-const [buttonLabel, setButtonLabel] = useState("Aggiungi Materiale"); // testo del pulsante
-const [initialFormState, setInitialFormState] = useState({}); // stato iniziale per controllo modifiche
+  const [buttonLabel, setButtonLabel] = useState("Aggiungi Materiale"); // testo del pulsante
+  const [initialFormState, setInitialFormState] = useState({}); // stato iniziale per controllo modifiche
   const [dal, setDal] = useState(null);
   const [al, setAl] = useState(null);
   const [tutti, setTutti] = useState(false);
-const [formVisible, setFormVisible] = useState(false);
+  const [formVisible, setFormVisible] = useState(false);
   const [minDataDB, setMinDataDB] = useState(null);
   const [maxDataDB, setMaxDataDB] = useState(null);
-const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
-const getUtenteReact = () => {
-  return (
-    currentUser.username || currentUser.email 
-  );
-};
+  const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
+  const getUtenteReact = () => {
+    return (
+      currentUser.username || currentUser.email
+    );
+  };
   const [sortField, setSortField] = useState("nome");
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -81,14 +84,13 @@ const getUtenteReact = () => {
   const fetchScarichi = async () => {
     const snap = await getDocs(collection(db, "scarichi"));
     const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    dati.sort((a,b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
+    dati.sort((a, b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
     setScarichi(dati);
 
-    if(dati.length){
-
-const dates = dati
-  .map(s => safeDate(s.data))
-  .filter(d => d instanceof Date && !isNaN(d));
+    if (dati.length) {
+      const dates = dati
+        .map(s => safeDate(s.data))
+        .filter(d => d instanceof Date && !isNaN(d));
       setMinDataDB(new Date(Math.min(...dates)));
       setMaxDataDB(new Date(Math.max(...dates)));
       setDal(new Date(Math.min(...dates)));
@@ -97,11 +99,11 @@ const dates = dati
   };
 
   const fetchCarichi = async () => {
-  const snap = await getDocs(collection(db, "carichi"));
-  const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  dati.sort((a,b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
-  setCarichi(dati);
-};
+    const snap = await getDocs(collection(db, "carichi"));
+    const dati = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dati.sort((a, b) => (a.data?.seconds || 0) - (b.data?.seconds || 0));
+    setCarichi(dati);
+  };
 
   // ---------------- FETCH LISTINI ----------------
   const fetchListini = async () => {
@@ -110,15 +112,29 @@ const dates = dati
     setListini(dati);
   };
 
+  // ---------------- FETCH CODICI CER (normativa) ----------------
+  // Collection cer_descrizioni: id/campo "codice" (es. "170401"), campo "descrizione"
+  const fetchCerDescrizioni = async () => {
+    const snap = await getDocs(collection(db, "cer_descrizioni"));
+    const dati = snap.docs
+      .map(d => ({
+        codice: String(d.data().codice ?? d.id),
+        descrizione: d.data().descrizione || ""
+      }))
+      .sort((a, b) => a.codice.localeCompare(b.codice, "it"));
+    setCerList(dati);
+  };
+
   useEffect(() => {
     fetchMateriali();
     fetchScarichi();
     fetchCarichi();
     fetchListini();
+    fetchCerDescrizioni();
   }, []);
 
   // ---------------- DATE UTILS ----------------
-  const formatDataIT = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  const formatDataIT = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
   // ---------------- NAV / LOGOUT ----------------
   const goHome = () => navigate("/admin");
@@ -126,1077 +142,1095 @@ const dates = dati
 
   // ---------------- RESET FORM ----------------
   const resetForm = () => {
-  setNome("");
-  setCategoria("");
-  setCodiceCER("");
-  setDescrizione("");
-  setPrezzoDefault("");
-  setEditingId(null);  // importante, cosi il bottone torna ad Aggiungi
-};
+    setNome("");
+    setCategoria("");
+    setCodiceCER("");
+    setDescrizione("");
+    setPrezzoDefault("");
+    setEditingId(null);  // importante, cosi il bottone torna ad Aggiungi
+  };
 
-
-const handleSave = async () => {
-  if (!nome || !codiceCER) {
-    setMessage("Nome e CER obbligatori");
-    return;
-  }
-
-  try {
-    const acquisto = parseFloat(String(prezzoDefault || "").replace(",", ".")) || 0;
-
-    const configSnap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
-    const guadagnoMinKg = configSnap.exists()
-      ? (configSnap.data().guadagnoMinKg || 0.2)
-      : 0.2;
-
-    let vendita = Number((acquisto + guadagnoMinKg).toFixed(4));
-
-    const newData = { 
-      nome, 
-      categoria, 
-      codiceCER, 
-      descrizione,
-      prezzoAcquistoDefault: acquisto,
-      prezzoVenditaDefault: vendita
-    };
-
-    if (editingId) {
-      // 🔴 BEFORE
-      const ref = doc(db, "materiali", editingId);
-      const snap = await getDoc(ref);
-      const before = snap.exists() ? snap.data() : null;
-
-      // 🟢 UPDATE
-      await updateDoc(ref, newData);
-
-      // 🟢 AFTER
-      const after = { ...before, ...newData };
-
-      // 🧠 LOG BLOCCO
-      await scriviLog({
-        pagina: "GestioneCER",
-        evento: "UPDATE_MATERIALE",
-        riferimento: {
-          collezione: "materiali",
-          documentoId: editingId
-        },
-        before,
-        after,
-        utente : getUtenteReact(),
-        ripristinabile: true
-      });
-
-      setMessage("Materiale aggiornato con prezzo corretto!");
-    } else {
-      // 🟢 CREATE
-      const docRef = await addDoc(collection(db, "materiali"), newData);
-
-      // 🧠 LOG BLOCCO
-      await scriviLog({
-        pagina: "GestioneCER",
-        evento: "CREATE_MATERIALE",
-        riferimento: {
-          collezione: "materiali",
-          documentoId: docRef.id
-        },
-        before: null,
-        after: newData,
-        utente : getUtenteReact(),
-        ripristinabile: true
-      });
-
-      setMessage("Materiale aggiunto con prezzo corretto!");
-    }
-
-    resetForm();
-    fetchMateriali();
-
-    setEditingId(null);
-    setFormVisible(false);
-    setButtonLabel("Aggiungi Materiale");
-    setInitialFormState({});
-  } catch (err) {
-    console.error(err);
-    setMessage("Errore salvataggio");
-  }
-};
-
-useEffect(() => {
-  if (!formVisible) return;
-
-  const hasDataChanged = () => (
-    nome !== initialFormState.nome ||
-    categoria !== initialFormState.categoria ||
-    codiceCER !== initialFormState.codiceCER ||
-    descrizione !== initialFormState.descrizione ||
-    prezzoDefault !== initialFormState.prezzoDefault
-  );
-
-  if ((editingId && hasDataChanged()) || (!editingId && nome && codiceCER)) {
-    setButtonLabel("Salva");
-  } else {
-    setButtonLabel("Annulla");
-  }
-}, [nome, categoria, codiceCER, descrizione, prezzoDefault, formVisible, editingId, initialFormState]);
-
-const handleDeleteMateriale = async (m) => {
-  const conferma = window.confirm(
-    `Vuoi eliminare definitivamente il materiale "${m.nome}"?\n\nOperazione irreversibile.`
-  );
-
-  if (!conferma) return;
-
-  try {
-    // 🔎 controllo movimenti
-    const haMovimenti =
-      (m.nrMovimenti || 0) > 0 ||
-      (m.nrScarichi || 0) > 0 ||
-      (m.nrCarichi || 0) > 0;
-
-    if (haMovimenti) {
-      alert("Impossibile eliminare: il materiale ha movimenti associati.");
+  const handleSave = async () => {
+    if (!nome || !codiceCER) {
+      setMessage("Nome e CER obbligatori");
       return;
     }
 
-    // 🗑️ elimina materiale
-    await deleteDoc(doc(db, "materiali", m.idDoc));
+    try {
+      const acquisto = parseFloat(String(prezzoDefault || "").replace(",", ".")) || 0;
 
-    // 🧹 rimuovi dai listini
-    const updatedListini = listini.map((l) => {
-      const prezzi = l.prezzi || {};
+      const configSnap = await getDoc(doc(db, "configurazioni", "datiAzienda"));
+      const guadagnoMinKg = configSnap.exists()
+        ? (configSnap.data().guadagnoMinKg || 0.2)
+        : 0.2;
 
-      const cleaned = Object.fromEntries(
-        Object.entries(prezzi).filter(([key]) => key !== m.nome)
-      );
+      let vendita = Number((acquisto + guadagnoMinKg).toFixed(4));
 
-      return { ...l, prezzi: cleaned };
-    });
+      // Nel materiale si salva SOLO il codice CER (mai la descrizione della normativa)
+      const newData = {
+        nome,
+        categoria,
+        codiceCER,
+        descrizione,
+        prezzoAcquistoDefault: acquisto,
+        prezzoVenditaDefault: vendita
+      };
 
-    // 🔥 aggiorna DB listini
-    for (const l of updatedListini) {
-      await updateDoc(doc(db, "listini", l.id), {
-        prezzi: l.prezzi,
-      });
-    }
+      if (editingId) {
+        // 🔴 BEFORE
+        const ref = doc(db, "materiali", editingId);
+        const snap = await getDoc(ref);
+        const before = snap.exists() ? snap.data() : null;
 
-    // 🧠 log
-    await scriviLog({
-      pagina: "GestioneCER",
-      evento: "DELETE_MATERIALE",
-      riferimento: {
-        collezione: "materiali",
-        documentoId: m.idDoc,
-      },
-      before: m,
-      after: null,
-      utente: getUtenteReact(),
-      ripristinabile: true,
-    });
+        // 🟢 UPDATE
+        await updateDoc(ref, newData);
 
-    await fetchMateriali();
-    await fetchListini();
+        // 🟢 AFTER
+        const after = { ...before, ...newData };
 
-    setMessage("Materiale eliminato con successo");
-  } catch (err) {
-    console.error(err);
-    alert("Errore eliminazione materiale");
-  }
-};
-
-const syncListiniConMateriali = async () => {
-  try {
-    const normalize = (name = "") =>
-      name.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-    const materialiSnap = await getDocs(collection(db, "materiali"));
-    const listiniSnap = await getDocs(collection(db, "listini"));
-
-    const materialiList = materialiSnap.docs.map(d => ({
-      idDoc: d.id,
-      ...d.data()
-    }));
-
-    let materialiAggiuntiTotali = 0;
-
-    const updatedListini = [];
-
-    for (const l of listiniSnap.docs) {
-      const listino = l.data();
-      const ref = doc(db, "listini", l.id);
-
-      const prezzi = listino.prezzi ? { ...listino.prezzi } : {};
-
-      const esistenti = new Set(
-        Object.keys(prezzi).map(normalize)
-      );
-
-      let added = 0;
-
-      for (const m of materialiList) {
-        const key = normalize(m.nome);
-
-        if (!esistenti.has(key)) {
-          prezzi[m.nome] = {
-            acquisto: m.prezzoAcquistoDefault || 0,
-            vendita: m.prezzoVenditaDefault || 0
-          };
-
-          esistenti.add(key);
-          added++;
-        }
-      }
-
-      if (added > 0) {
-        materialiAggiuntiTotali += added;
-
-        await updateDoc(ref, { prezzi });
-
-        updatedListini.push({
-          id: l.id,
-          ...listino,
-          prezzi
+        // 🧠 LOG BLOCCO
+        await scriviLog({
+          pagina: "GestioneCER",
+          evento: "UPDATE_MATERIALE",
+          riferimento: {
+            collezione: "materiali",
+            documentoId: editingId
+          },
+          before,
+          after,
+          utente: getUtenteReact(),
+          ripristinabile: true
         });
+
+        setMessage("Materiale aggiornato con prezzo corretto!");
       } else {
-        updatedListini.push({
-          id: l.id,
-          ...listino
+        // 🟢 CREATE
+        const docRef = await addDoc(collection(db, "materiali"), newData);
+
+        // 🧠 LOG BLOCCO
+        await scriviLog({
+          pagina: "GestioneCER",
+          evento: "CREATE_MATERIALE",
+          riferimento: {
+            collezione: "materiali",
+            documentoId: docRef.id
+          },
+          before: null,
+          after: newData,
+          utente: getUtenteReact(),
+          ripristinabile: true
         });
-      }
-    }
 
-    // 🔥 aggiorna stato locale SUBITO (fix principale del tuo bug)
-    setListini(updatedListini);
-
-    const msg =
-      materialiAggiuntiTotali === 0
-        ? "Nessun aggiornamento: tutti i materiali sono già nei listini."
-        : `${materialiAggiuntiTotali} materiali aggiunti ai listini.`;
-
-    const conferma = window.confirm(
-      msg + "\n\nVuoi procedere con la pulizia dei duplicati?"
-    );
-
-    if (!conferma) {
-      setMessage(msg + " (pulizia annullata)");
-      return;
-    }
-
-    // 🧹 PULIZIA
-    let totalDuplicates = 0;
-
-    for (const l of updatedListini) {
-      const ref = doc(db, "listini", l.id);
-
-      const prezzi = l.prezzi || {};
-      const map = new Map();
-
-      for (const [nome, val] of Object.entries(prezzi)) {
-        const key = normalize(nome);
-
-        if (!map.has(key)) {
-          map.set(key, { nomeOriginale: nome, data: val });
-        } else {
-          totalDuplicates++;
-        }
+        setMessage("Materiale aggiunto con prezzo corretto!");
       }
 
-      const cleaned = {};
-      for (const [, v] of map.entries()) {
-        cleaned[v.nomeOriginale] = v.data;
-      }
-
-      await updateDoc(ref, { prezzi: cleaned });
-    }
-
-    await fetchListini(); // 🔥 riallineamento finale sicurezza
-
-    alert(
-      msg +
-      "\n\nDuplicati gestiti: " +
-      totalDuplicates
-    );
-
-    setMessage("Sync listini completato");
-
-  } catch (err) {
-    console.error(err);
-    setMessage("Errore sync listini");
-  }
-};
-const puliziaListini = async () => {
-  try {
-    const listiniSnap = await getDocs(collection(db, "listini"));
-
-    const normalize = (name = "") =>
-      name.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-    let totalMerge = 0;
-
-    for (const l of listiniSnap.docs) {
-      const listino = l.data();
-      const ref = doc(db, "listini", l.id);
-
-      const prezzi = listino.prezzi || {};
-
-      const mapNormalizzati = new Map();
-
-      // 🔁 1. COSTRUISCO MAPPA NORMALIZZATA (MERGE DUPLICATI)
-      for (const [nome, valori] of Object.entries(prezzi)) {
-        const key = normalize(nome);
-
-        if (!mapNormalizzati.has(key)) {
-          mapNormalizzati.set(key, {
-            nomeOriginale: nome,
-            data: valori
-          });
-        } else {
-          // se duplicato → tengo il primo ma posso decidere merge intelligente
-          totalMerge++;
-        }
-      }
-
-      // 🔁 2. RICOSTRUISCO OGGETTO PULITO
-      const cleanedPrezzi = {};
-      for (const [, value] of mapNormalizzati.entries()) {
-        cleanedPrezzi[value.nomeOriginale] = value.data;
-      }
-
-      await updateDoc(ref, {
-        prezzi: cleanedPrezzi
-      });
-    }
-
-    if (totalMerge === 0) {
-      alert("Nessun duplicato trovato. Listini già puliti.");
-      setMessage("Listini già normalizzati");
-    } else {
-      alert(`Pulizia completata. Rimossi/accorpati ${totalMerge} duplicati.`);
-      setMessage("Pulizia listini completata");
-    }
-
-  } catch (err) {
-    console.error(err);
-    setMessage("Errore pulizia listini");
-  }
-};
-
-const safeDate = (d) => {
-  if (!d) return null;
-
-  if (typeof d.toDate === "function") {
-    return d.toDate();
-  }
-
-  const formatDataSafe = (d) => {
-  if (!d) return "";
-  if (typeof d.toDate === "function") return d.toDate().toLocaleString("it-IT");
-  if (d instanceof Date) return d.toLocaleString("it-IT");
-  return new Date(d).toLocaleString("it-IT");
-};
-
-  if (d instanceof Date) {
-    return d;
-  }
-
-  return new Date(d);
-};
-const handlePulsantePrincipale = () => {
-  if (!formVisible) {
-    // Apri il form per aggiungere
-    resetForm();
-    setFormVisible(true);
-    setButtonLabel("Annulla");
-    setInitialFormState({
-      nome: "",
-      categoria: "",
-      codiceCER: "",
-      descrizione: "",
-      prezzoDefault: ""
-    });
-  } else {
-    if (buttonLabel === "Salva") {
-      handleSave();
-    } else {
-      // Annulla
       resetForm();
+      fetchMateriali();
+
+      setEditingId(null);
       setFormVisible(false);
       setButtonLabel("Aggiungi Materiale");
+      setInitialFormState({});
+    } catch (err) {
+      console.error(err);
+      setMessage("Errore salvataggio");
     }
-  }
-};
+  };
 
-const getCountMateriale = (nome, cer) => {
-  const check = (v) => String(v || "").trim().toUpperCase();
-  let count = 0;
+  useEffect(() => {
+    if (!formVisible) return;
 
-  scarichi.forEach(s => {
-    if (s.codiceCER !== cer) return;
+    const hasDataChanged = () => (
+      nome !== initialFormState.nome ||
+      categoria !== initialFormState.categoria ||
+      codiceCER !== initialFormState.codiceCER ||
+      descrizione !== initialFormState.descrizione ||
+      prezzoDefault !== initialFormState.prezzoDefault
+    );
 
-    (s.scarico || []).forEach(b => {
-      (b.righe || []).forEach(r => {
-        if (check(r.materiale) === check(nome)) count++;
-      });
-    });
-  });
+    if ((editingId && hasDataChanged()) || (!editingId && nome && codiceCER)) {
+      setButtonLabel("Salva");
+    } else {
+      setButtonLabel("Annulla");
+    }
+  }, [nome, categoria, codiceCER, descrizione, prezzoDefault, formVisible, editingId, initialFormState]);
 
-  carichi.forEach(c => {
-    if (c.codiceCER !== cer) return;
-
-    (c.carico || []).forEach(b => {
-      (b.righe || []).forEach(r => {
-        if (check(r.materiale) === check(nome)) count++;
-      });
-    });
-  });
-
-  return count;
-};
-  // ---------------- EDIT + SCROLL ----------------
-// EDIT
-const handleEdit = (m) => {
-  setNome(m.nome);
-  setCategoria(m.categoria);
-  setCodiceCER(m.codiceCER);
-  setDescrizione(m.descrizione);
-  setPrezzoDefault(m.prezzoAcquistoDefault ?? "");
-  setEditingId(m.idDoc);
-
-  setInitialFormState({
-    nome: m.nome,
-    categoria: m.categoria,
-    codiceCER: m.codiceCER,
-    descrizione: m.descrizione,
-    prezzoDefault: m.prezzoAcquistoDefault ?? ""
-  });
-
-  setButtonLabel("Annulla");  // inizialmente Annulla
-  setFormVisible(true);        // apre il form
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
-const countMovimentiDX = (materialeDX, cer) => {
-  const norm = (v) => String(v || "").trim().toUpperCase();
-
-  let count = 0;
-
-  // SCARICHI
-  scarichi.forEach((s) => {
-    (s.scarico || []).forEach((blocco) => {
-      if (norm(blocco.cer) !== norm(cer)) return;
-
-      (blocco.righe || []).forEach((r) => {
-        if (norm(r.materiale) === norm(materialeDX)) {
-          count++;
-        }
-      });
-    });
-  });
-
-  // CARICHI
-  carichi.forEach((c) => {
-    (c.carico || []).forEach((blocco) => {
-      if (norm(blocco.cer) !== norm(cer)) return;
-
-      (blocco.righe || []).forEach((r) => {
-        if (norm(r.materiale) === norm(materialeDX)) {
-          count++;
-        }
-      });
-    });
-  });
-
-  return count;
-};
-const handleMergeMateriali = async () => {
-  if (!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX) {
-    alert("Selezioni non valide");
-    return;
-  }
-
-  try {
-    // 🔎 PREVIEW CONTEGGIO
-   let count = countMovimentiDX(mergeMatDX, mergeCER);
-
-    const checkMatch = (nome) =>
-      String(nome || "").trim().toUpperCase();
-  
+  const handleDeleteMateriale = async (m) => {
     const conferma = window.confirm(
-      `Verranno modificati ${count} movimenti.\n\nContinuare?`
+      `Vuoi eliminare definitivamente il materiale "${m.nome}"?\n\nOperazione irreversibile.`
     );
 
     if (!conferma) return;
 
-    // 🔁 UPDATE SCARICHI
-    for (const s of scarichi) {
-      let modified = false;
+    try {
+      // 🔎 controllo movimenti
+      const haMovimenti =
+        (m.nrMovimenti || 0) > 0 ||
+        (m.nrScarichi || 0) > 0 ||
+        (m.nrCarichi || 0) > 0;
 
-      const nuoviBlocchi = (s.scarico || []).map(b => {
-        const nuoveRighe = (b.righe || []).map(r => {
-          if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
-            modified = true;
-            return { ...r, materiale: mergeMatSX };
-          }
-          return r;
-        });
-        return { ...b, righe: nuoveRighe };
+      if (haMovimenti) {
+        alert("Impossibile eliminare: il materiale ha movimenti associati.");
+        return;
+      }
+
+      // 🗑️ elimina materiale
+      await deleteDoc(doc(db, "materiali", m.idDoc));
+
+      // 🧹 rimuovi dai listini
+      const updatedListini = listini.map((l) => {
+        const prezzi = l.prezzi || {};
+
+        const cleaned = Object.fromEntries(
+          Object.entries(prezzi).filter(([key]) => key !== m.nome)
+        );
+
+        return { ...l, prezzi: cleaned };
       });
 
-      if (modified) {
-        await updateDoc(doc(db, "scarichi", s.id), {
-          scarico: nuoviBlocchi
+      // 🔥 aggiorna DB listini
+      for (const l of updatedListini) {
+        await updateDoc(doc(db, "listini", l.id), {
+          prezzi: l.prezzi,
         });
       }
-    }
 
-    // 🔁 UPDATE CARICHI
-    for (const c of carichi) {
-      let modified = false;
-
-      const nuoviBlocchi = (c.carico || []).map(b => {
-        const nuoveRighe = (b.righe || []).map(r => {
-          if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
-            modified = true;
-            return { ...r, materiale: mergeMatSX };
-          }
-          return r;
-        });
-        return { ...b, righe: nuoveRighe };
+      // 🧠 log
+      await scriviLog({
+        pagina: "GestioneCER",
+        evento: "DELETE_MATERIALE",
+        riferimento: {
+          collezione: "materiali",
+          documentoId: m.idDoc,
+        },
+        before: m,
+        after: null,
+        utente: getUtenteReact(),
+        ripristinabile: true,
       });
 
-      if (modified) {
-        await updateDoc(doc(db, "carichi", c.id), {
-          carico: nuoviBlocchi
+      await fetchMateriali();
+      await fetchListini();
+
+      setMessage("Materiale eliminato con successo");
+    } catch (err) {
+      console.error(err);
+      alert("Errore eliminazione materiale");
+    }
+  };
+
+  const syncListiniConMateriali = async () => {
+    try {
+      const normalize = (name = "") =>
+        name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+      const materialiSnap = await getDocs(collection(db, "materiali"));
+      const listiniSnap = await getDocs(collection(db, "listini"));
+
+      const materialiList = materialiSnap.docs.map(d => ({
+        idDoc: d.id,
+        ...d.data()
+      }));
+
+      let materialiAggiuntiTotali = 0;
+
+      const updatedListini = [];
+
+      for (const l of listiniSnap.docs) {
+        const listino = l.data();
+        const ref = doc(db, "listini", l.id);
+
+        const prezzi = listino.prezzi ? { ...listino.prezzi } : {};
+
+        const esistenti = new Set(
+          Object.keys(prezzi).map(normalize)
+        );
+
+        let added = 0;
+
+        for (const m of materialiList) {
+          const key = normalize(m.nome);
+
+          if (!esistenti.has(key)) {
+            prezzi[m.nome] = {
+              acquisto: m.prezzoAcquistoDefault || 0,
+              vendita: m.prezzoVenditaDefault || 0
+            };
+
+            esistenti.add(key);
+            added++;
+          }
+        }
+
+        if (added > 0) {
+          materialiAggiuntiTotali += added;
+
+          await updateDoc(ref, { prezzi });
+
+          updatedListini.push({
+            id: l.id,
+            ...listino,
+            prezzi
+          });
+        } else {
+          updatedListini.push({
+            id: l.id,
+            ...listino
+          });
+        }
+      }
+
+      // 🔥 aggiorna stato locale SUBITO
+      setListini(updatedListini);
+
+      const msg =
+        materialiAggiuntiTotali === 0
+          ? "Nessun aggiornamento: tutti i materiali sono già nei listini."
+          : `${materialiAggiuntiTotali} materiali aggiunti ai listini.`;
+
+      const conferma = window.confirm(
+        msg + "\n\nVuoi procedere con la pulizia dei duplicati?"
+      );
+
+      if (!conferma) {
+        setMessage(msg + " (pulizia annullata)");
+        return;
+      }
+
+      // 🧹 PULIZIA
+      let totalDuplicates = 0;
+
+      for (const l of updatedListini) {
+        const ref = doc(db, "listini", l.id);
+
+        const prezzi = l.prezzi || {};
+        const map = new Map();
+
+        for (const [nome, val] of Object.entries(prezzi)) {
+          const key = normalize(nome);
+
+          if (!map.has(key)) {
+            map.set(key, { nomeOriginale: nome, data: val });
+          } else {
+            totalDuplicates++;
+          }
+        }
+
+        const cleaned = {};
+        for (const [, v] of map.entries()) {
+          cleaned[v.nomeOriginale] = v.data;
+        }
+
+        await updateDoc(ref, { prezzi: cleaned });
+      }
+
+      await fetchListini(); // 🔥 riallineamento finale sicurezza
+
+      alert(
+        msg +
+        "\n\nDuplicati gestiti: " +
+        totalDuplicates
+      );
+
+      setMessage("Sync listini completato");
+
+    } catch (err) {
+      console.error(err);
+      setMessage("Errore sync listini");
+    }
+  };
+
+  const puliziaListini = async () => {
+    try {
+      const listiniSnap = await getDocs(collection(db, "listini"));
+
+      const normalize = (name = "") =>
+        name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+      let totalMerge = 0;
+
+      for (const l of listiniSnap.docs) {
+        const listino = l.data();
+        const ref = doc(db, "listini", l.id);
+
+        const prezzi = listino.prezzi || {};
+
+        const mapNormalizzati = new Map();
+
+        // 🔁 1. COSTRUISCO MAPPA NORMALIZZATA (MERGE DUPLICATI)
+        for (const [nome, valori] of Object.entries(prezzi)) {
+          const key = normalize(nome);
+
+          if (!mapNormalizzati.has(key)) {
+            mapNormalizzati.set(key, {
+              nomeOriginale: nome,
+              data: valori
+            });
+          } else {
+            totalMerge++;
+          }
+        }
+
+        // 🔁 2. RICOSTRUISCO OGGETTO PULITO
+        const cleanedPrezzi = {};
+        for (const [, value] of mapNormalizzati.entries()) {
+          cleanedPrezzi[value.nomeOriginale] = value.data;
+        }
+
+        await updateDoc(ref, {
+          prezzi: cleanedPrezzi
         });
       }
+
+      if (totalMerge === 0) {
+        alert("Nessun duplicato trovato. Listini già puliti.");
+        setMessage("Listini già normalizzati");
+      } else {
+        alert(`Pulizia completata. Rimossi/accorpati ${totalMerge} duplicati.`);
+        setMessage("Pulizia listini completata");
+      }
+
+    } catch (err) {
+      console.error(err);
+      setMessage("Errore pulizia listini");
+    }
+  };
+
+  const safeDate = (d) => {
+    if (!d) return null;
+
+    if (typeof d.toDate === "function") {
+      return d.toDate();
     }
 
-    const matDX = materiali.find(m => m.nome === mergeMatDX);
+    if (d instanceof Date) {
+      return d;
+    }
 
-if (matDX) {
-  await updateDoc(doc(db, "materiali", matDX.idDoc), {
-    attivo: false
-  });
+    return new Date(d);
+  };
 
-  // 🔥 RIMOZIONE COMPLETA DAL DATABASE LOGICA (opzionale ma consigliata)
-  // se vuoi proprio eliminarlo:
-  await deleteDoc(doc(db, "materiali", matDX.idDoc));
-}
+  const handlePulsantePrincipale = () => {
+    if (!formVisible) {
+      // Apri il form per aggiungere
+      resetForm();
+      setFormVisible(true);
+      setButtonLabel("Annulla");
+      setInitialFormState({
+        nome: "",
+        categoria: "",
+        codiceCER: "",
+        descrizione: "",
+        prezzoDefault: ""
+      });
+    } else {
+      if (buttonLabel === "Salva") {
+        handleSave();
+      } else {
+        // Annulla
+        resetForm();
+        setFormVisible(false);
+        setButtonLabel("Aggiungi Materiale");
+      }
+    }
+  };
 
-    alert("Merge completato");
+  const getCountMateriale = (nome, cer) => {
+    const check = (v) => String(v || "").trim().toUpperCase();
+    let count = 0;
 
-    await fetchMateriali();
-    await fetchScarichi();
-    await fetchCarichi();
+    scarichi.forEach(s => {
+      if (s.codiceCER !== cer) return;
 
-    setMergeMatSX("");
-    setMergeMatDX("");
+      (s.scarico || []).forEach(b => {
+        (b.righe || []).forEach(r => {
+          if (check(r.materiale) === check(nome)) count++;
+        });
+      });
+    });
 
-  } catch (err) {
-    console.error(err);
-    alert("Errore merge");
-  }
-};
+    carichi.forEach(c => {
+      if (c.codiceCER !== cer) return;
+
+      (c.carico || []).forEach(b => {
+        (b.righe || []).forEach(r => {
+          if (check(r.materiale) === check(nome)) count++;
+        });
+      });
+    });
+
+    return count;
+  };
+
+  // ---------------- EDIT + SCROLL ----------------
+  const handleEdit = (m) => {
+    setNome(m.nome);
+    setCategoria(m.categoria);
+    setCodiceCER(m.codiceCER);
+    setDescrizione(m.descrizione);
+    setPrezzoDefault(m.prezzoAcquistoDefault ?? "");
+    setEditingId(m.idDoc);
+
+    setInitialFormState({
+      nome: m.nome,
+      categoria: m.categoria,
+      codiceCER: m.codiceCER,
+      descrizione: m.descrizione,
+      prezzoDefault: m.prezzoAcquistoDefault ?? ""
+    });
+
+    setButtonLabel("Annulla");  // inizialmente Annulla
+    setFormVisible(true);        // apre il form
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const countMovimentiDX = (materialeDX, cer) => {
+    const norm = (v) => String(v || "").trim().toUpperCase();
+
+    let count = 0;
+
+    // SCARICHI
+    scarichi.forEach((s) => {
+      (s.scarico || []).forEach((blocco) => {
+        if (norm(blocco.cer) !== norm(cer)) return;
+
+        (blocco.righe || []).forEach((r) => {
+          if (norm(r.materiale) === norm(materialeDX)) {
+            count++;
+          }
+        });
+      });
+    });
+
+    // CARICHI
+    carichi.forEach((c) => {
+      (c.carico || []).forEach((blocco) => {
+        if (norm(blocco.cer) !== norm(cer)) return;
+
+        (blocco.righe || []).forEach((r) => {
+          if (norm(r.materiale) === norm(materialeDX)) {
+            count++;
+          }
+        });
+      });
+    });
+
+    return count;
+  };
+
+  const handleMergeMateriali = async () => {
+    if (!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX) {
+      alert("Selezioni non valide");
+      return;
+    }
+
+    try {
+      // 🔎 PREVIEW CONTEGGIO
+      let count = countMovimentiDX(mergeMatDX, mergeCER);
+
+      const checkMatch = (nome) =>
+        String(nome || "").trim().toUpperCase();
+
+      const conferma = window.confirm(
+        `Verranno modificati ${count} movimenti.\n\nContinuare?`
+      );
+
+      if (!conferma) return;
+
+      // 🔁 UPDATE SCARICHI
+      for (const s of scarichi) {
+        let modified = false;
+
+        const nuoviBlocchi = (s.scarico || []).map(b => {
+          const nuoveRighe = (b.righe || []).map(r => {
+            if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
+              modified = true;
+              return { ...r, materiale: mergeMatSX };
+            }
+            return r;
+          });
+          return { ...b, righe: nuoveRighe };
+        });
+
+        if (modified) {
+          await updateDoc(doc(db, "scarichi", s.id), {
+            scarico: nuoviBlocchi
+          });
+        }
+      }
+
+      // 🔁 UPDATE CARICHI
+      for (const c of carichi) {
+        let modified = false;
+
+        const nuoviBlocchi = (c.carico || []).map(b => {
+          const nuoveRighe = (b.righe || []).map(r => {
+            if (checkMatch(r.materiale) === checkMatch(mergeMatDX)) {
+              modified = true;
+              return { ...r, materiale: mergeMatSX };
+            }
+            return r;
+          });
+          return { ...b, righe: nuoveRighe };
+        });
+
+        if (modified) {
+          await updateDoc(doc(db, "carichi", c.id), {
+            carico: nuoviBlocchi
+          });
+        }
+      }
+
+      const matDX = materiali.find(m => m.nome === mergeMatDX);
+
+      if (matDX) {
+        await updateDoc(doc(db, "materiali", matDX.idDoc), {
+          attivo: false
+        });
+
+        // 🔥 RIMOZIONE COMPLETA DAL DATABASE LOGICA (opzionale ma consigliata)
+        await deleteDoc(doc(db, "materiali", matDX.idDoc));
+      }
+
+      alert("Merge completato");
+
+      await fetchMateriali();
+      await fetchScarichi();
+      await fetchCarichi();
+
+      setMergeMatSX("");
+      setMergeMatDX("");
+
+    } catch (err) {
+      console.error(err);
+      alert("Errore merge");
+    }
+  };
+
   // ---------------- TOGGLE DETTAGLI ----------------
   const toggleDettagli = (id) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const materialiFiltrati = materiali
+    .filter(m =>
+      (filtroMateriale === "Tutti" || m.nome === filtroMateriale) &&
+      (filtroCER === "Tutti" || m.codiceCER === filtroCER)
+    )
+    .map(m => {
+      const start = dal;
+      const end = al ? new Date(al) : null;
+      if (end) end.setHours(23, 59, 59, 999);
 
+      const movimentiBase = [
+        ...scarichi.map(s => ({ ...s, tipo: "scarico" })),
+        ...carichi.map(c => ({ ...c, tipo: "carico" }))
+      ];
 
-const materialiFiltrati = materiali
-  .filter(m =>
-    (filtroMateriale === "Tutti" || m.nome === filtroMateriale) &&
-    (filtroCER === "Tutti" || m.codiceCER === filtroCER)
-  )
-  .map(m => {
-    const start = dal;
-    const end = al ? new Date(al) : null;
-    if (end) end.setHours(23, 59, 59, 999);
+      const movimenti = movimentiBase.filter(mov => {
+        const data = safeDate(mov.data);
+        if (!data) return false;
 
-    const movimentiBase = [
-  ...scarichi.map(s => ({ ...s, tipo: "scarico" })),
-  ...carichi.map(c => ({ ...c, tipo: "carico" }))
-];
+        if (tutti) return true;
+        if (!start || !end) return true;
 
-const movimenti = movimentiBase.filter(mov => {
-  const data = safeDate(mov.data);
-  if (!data) return false;
-
-  if (tutti) return true;
-  if (!start || !end) return true;
-
-  return data >= start && data <= end;
-});
-
-    // 🔥 ESTRAZIONE DETTAGLI COMPLETA (FIX DEFINITIVO)
-    const movimentiMateriale = movimenti.flatMap(mov => {
-const blocchi =
-  mov.tipo === "carico"
-    ? (Array.isArray(mov.carico) ? mov.carico : [])
-    : (Array.isArray(mov.scarico) ? mov.scarico : []);
-      return blocchi.flatMap(blocco => {
-        const righe = blocco.righe || [];
-
-        return righe
-          .filter(r => {
-            const norm = s => String(s || "").trim().toUpperCase();
-
-            const cerMatch =
-              norm(blocco.cer) === norm(m.codiceCER);
-
-            const nomeMatch =
-              norm(r.materiale || r.nome) === norm(m.nome);
-
-            return cerMatch && nomeMatch;
-          })
-          .map(r => {
-            const isCarico = mov.tipo === "carico";
-
-            const prezzoKg = isCarico
-              ? (r.prezzoVendita ?? r.prezzoAcquisto ?? 0)
-              : (r.prezzoAcquisto ?? 0);
-
-            const peso = r.peso || 0;
-
-            return {
-              ...r,
-              data: mov.data,
-              listino: mov.listino,
-              fornitore: mov.fornitore,
-              tipo: mov.tipo,
-              prezzoKg,
-              prezzoTotale: prezzoKg * peso,
-              peso
-            };
-          });
+        return data >= start && data <= end;
       });
+
+      // 🔥 ESTRAZIONE DETTAGLI COMPLETA
+      const movimentiMateriale = movimenti.flatMap(mov => {
+        const blocchi =
+          mov.tipo === "carico"
+            ? (Array.isArray(mov.carico) ? mov.carico : [])
+            : (Array.isArray(mov.scarico) ? mov.scarico : []);
+        return blocchi.flatMap(blocco => {
+          const righe = blocco.righe || [];
+
+          return righe
+            .filter(r => {
+              const norm = s => String(s || "").trim().toUpperCase();
+
+              const cerMatch =
+                norm(blocco.cer) === norm(m.codiceCER);
+
+              const nomeMatch =
+                norm(r.materiale || r.nome) === norm(m.nome);
+
+              return cerMatch && nomeMatch;
+            })
+            .map(r => {
+              const isCarico = mov.tipo === "carico";
+
+              const prezzoKg = isCarico
+                ? (r.prezzoVendita ?? r.prezzoAcquisto ?? 0)
+                : (r.prezzoAcquisto ?? 0);
+
+              const peso = r.peso || 0;
+
+              return {
+                ...r,
+                data: mov.data,
+                listino: mov.listino,
+                fornitore: mov.fornitore,
+                tipo: mov.tipo,
+                prezzoKg,
+                prezzoTotale: prezzoKg * peso,
+                peso
+              };
+            });
+        });
+      });
+
+      // 🔥 ORDINE CORRETTO
+      movimentiMateriale.sort(
+        (a, b) =>
+          (safeDate(a.data)?.getTime?.() || 0) -
+          (safeDate(b.data)?.getTime?.() || 0)
+      );
+
+      // 🔥 CONTEGGI REALI
+      const nrScarichi = movimentiMateriale.filter(r => r.tipo === "scarico").length;
+      const nrCarichi = movimentiMateriale.filter(r => r.tipo === "carico").length;
+      const nrMovimenti = movimentiMateriale.length;
+      const dataPrimoMovimento = nrMovimenti
+        ? formatDataIT(safeDate(movimentiMateriale[0].data))
+        : "";
+
+      const dataUltimoMovimento = nrMovimenti
+        ? formatDataIT(safeDate(movimentiMateriale[nrMovimenti - 1].data))
+        : "";
+
+      const dataPrimoScarico = movimentiMateriale.find(r => r.tipo === "scarico")
+        ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "scarico").data))
+        : "";
+
+      const dataUltimoScarico = [...movimentiMateriale]
+        .reverse()
+        .find(r => r.tipo === "scarico")
+        ? formatDataIT(
+            safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "scarico").data)
+          )
+        : "";
+
+      const dataPrimoCarico = movimentiMateriale.find(r => r.tipo === "carico")
+        ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "carico").data))
+        : "";
+
+      const dataUltimoCarico = [...movimentiMateriale]
+        .reverse()
+        .find(r => r.tipo === "carico")
+        ? formatDataIT(
+            safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "carico").data)
+          )
+        : "";
+
+      return {
+        ...m,
+        nrScarichi,
+        nrCarichi,
+        nrMovimenti,
+        dataPrimoScarico,
+        dataUltimoScarico,
+        dataPrimoCarico,
+        dataUltimoCarico,
+        dataPrimoMovimento,
+        dataUltimoMovimento,
+        scarichiDettaglio: movimentiMateriale
+      };
+    })
+    .sort((a, b) => {
+      const v1 = a[sortField] || "";
+      const v2 = b[sortField] || "";
+      return sortAsc ? v1.localeCompare(v2) : v2.localeCompare(v1);
     });
-console.log("MATERIALE:", m.nome);
-console.log("SCARICHI:", movimentiMateriale.filter(r => r.tipo === "scarico").length);
-console.log("CARICHI:", movimentiMateriale.filter(r => r.tipo === "carico").length);
-    // 🔥 ORDINE CORRETTO
-    movimentiMateriale.sort(
-      (a, b) =>
-        (safeDate(a.data)?.getTime?.() || 0) -
-        (safeDate(b.data)?.getTime?.() || 0)
-    );
 
-    // 🔥 CONTEGGI REALI
-   // 🔥 SCARICHI (lasciamo invariato)
-const nrScarichi = movimentiMateriale.filter(r => r.tipo === "scarico").length;
-const nrCarichi = movimentiMateriale.filter(r => r.tipo === "carico").length;
-const nrMovimenti = movimentiMateriale.length;
-    const dataPrimoMovimento = nrMovimenti
-      ? formatDataIT(safeDate(movimentiMateriale[0].data))
-      : "";
-
-    const dataUltimoMovimento = nrMovimenti
-      ? formatDataIT(safeDate(movimentiMateriale[nrMovimenti - 1].data))
-      : "";
-
-    const dataPrimoScarico = movimentiMateriale.find(r => r.tipo === "scarico")
-      ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "scarico").data))
-      : "";
-
-    const dataUltimoScarico = [...movimentiMateriale]
-      .reverse()
-      .find(r => r.tipo === "scarico")
-      ? formatDataIT(
-          safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "scarico").data)
-        )
-      : "";
-
-    const dataPrimoCarico = movimentiMateriale.find(r => r.tipo === "carico")
-      ? formatDataIT(safeDate(movimentiMateriale.find(r => r.tipo === "carico").data))
-      : "";
-
-    const dataUltimoCarico = [...movimentiMateriale]
-      .reverse()
-      .find(r => r.tipo === "carico")
-      ? formatDataIT(
-          safeDate([...movimentiMateriale].reverse().find(r => r.tipo === "carico").data)
-        )
-      : "";
-
-    return {
-      ...m,
-      nrScarichi,
-      nrCarichi,
-      nrMovimenti,
-      dataPrimoScarico,
-      dataUltimoScarico,
-      dataPrimoCarico,
-      dataUltimoCarico,
-      dataPrimoMovimento,
-      dataUltimoMovimento,
-      scarichiDettaglio: movimentiMateriale
-    };
-  })
-  .sort((a, b) => {
-    const v1 = a[sortField] || "";
-    const v2 = b[sortField] || "";
-    return sortAsc ? v1.localeCompare(v2) : v2.localeCompare(v1);
-  });
-
-// ---------------- INTESTAZIONI DINAMICHE ----------------
-const intestazioni = () => {
-  switch(filtroTipoMovimento) {
-    case "SCARICO":
-      return ["Nome","Categoria","CER","Descrizione","Nr Scarichi","Primo Scarico","Ultimo Scarico","Azioni"];
-    case "CARICO":
-      return ["Nome","Categoria","CER","Descrizione","Nr Carichi","Primo Carico","Ultimo Carico","Azioni"];
-    case "TUTTI":
-    default:
-      return ["Nome","Categoria","CER","Descrizione","Nr Movimenti","Primo Movimento","Ultimo Movimento","Azioni"];
-  }
-};
-
-
-
-const handleStampa = async () => {
-  if (!materialiFiltrati || materialiFiltrati.length === 0) {
-    alert("Nessun dato da stampare");
-    return;
-  }
-
-  const { jsPDF } = await import("jspdf");
-  const autoTable = (await import("jspdf-autotable")).default;
-  const { PdfHeader } = await import("../utils/dateUtils");
-
-  const { pdf, startY } = await PdfHeader();
-
-  let y = startY + 10;
-
-  pdf.setFontSize(16);
-  pdf.text("Gestione Codici CER", 14, y);
-  y += 10;
-
-  const formatData = (d) => {
-    if (!d) return "";
-    return `${String(d.getDate()).padStart(2, "0")}/${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}/${d.getFullYear()}`;
+  // ---------------- INTESTAZIONI DINAMICHE ----------------
+  const intestazioni = () => {
+    switch (filtroTipoMovimento) {
+      case "SCARICO":
+        return ["Nome", "Categoria", "CER", "Descrizione", "Nr Scarichi", "Primo Scarico", "Ultimo Scarico", "Azioni"];
+      case "CARICO":
+        return ["Nome", "Categoria", "CER", "Descrizione", "Nr Carichi", "Primo Carico", "Ultimo Carico", "Azioni"];
+      case "TUTTI":
+      default:
+        return ["Nome", "Categoria", "CER", "Descrizione", "Nr Movimenti", "Primo Movimento", "Ultimo Movimento", "Azioni"];
+    }
   };
 
-  if (!tutti) {
-    pdf.setFontSize(11);
-    pdf.text(
-      `Dal ${formatData(dal) || "..."} al ${formatData(al) || "..."}`,
-      14,
-      y
-    );
-    y += 7;
-  }
-
-  pdf.text(`Tipo Movimento: ${filtroTipoMovimento}`, 14, y);
-  y += 10;
-
-  materialiFiltrati.forEach((m, index) => {
-    const movimenti = (m.scarichiDettaglio || []).filter((r) => {
-      if (filtroTipoMovimento === "TUTTI") return true;
-      return r.tipo.toUpperCase() === filtroTipoMovimento;
-    });
-
-    // 🔴 TITOLO MATERIALE
-    pdf.setFontSize(12);
-    pdf.text(
-      `${m.nome} | ${m.categoria} | CER: ${m.codiceCER}`,
-      14,
-      y
-    );
-    y += 6;
-
-    if (movimenti.length === 0) {
-      pdf.setFontSize(9);
-      pdf.text("Nessun movimento", 14, y);
-      y += 8;
+  const handleStampa = async () => {
+    if (!materialiFiltrati || materialiFiltrati.length === 0) {
+      alert("Nessun dato da stampare");
       return;
     }
 
-    const body = movimenti.map((r) => [
-      r.tipo,
-      formatDataIT(safeDate(r.data)),
-      r.fornitore || "-",
-      r.listino || "-",
-      (r.prezzoKg || 0).toFixed(2),
-      r.peso || 0,
-      (r.prezzoTotale || 0).toFixed(2)
-    ]);
+    const { jsPDF } = await import("jspdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+    const { PdfHeader } = await import("../utils/dateUtils");
 
-    autoTable(pdf, {
-      startY: y,
-      head: [[
-        "Tipo",
-        "Data",
-        "Controparte",
-        "Listino",
-        "€/kg",
-        "Kg",
-        "Totale €"
-      ]],
-      body,
-      theme: "grid",
-      styles: { fontSize: 8 },
-      margin: { left: 14, right: 14 }
+    const { pdf, startY } = await PdfHeader();
+
+    let y = startY + 10;
+
+    pdf.setFontSize(16);
+    pdf.text("Gestione Codici CER", 14, y);
+    y += 10;
+
+    const formatData = (d) => {
+      if (!d) return "";
+      return `${String(d.getDate()).padStart(2, "0")}/${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}/${d.getFullYear()}`;
+    };
+
+    if (!tutti) {
+      pdf.setFontSize(11);
+      pdf.text(
+        `Dal ${formatData(dal) || "..."} al ${formatData(al) || "..."}`,
+        14,
+        y
+      );
+      y += 7;
+    }
+
+    pdf.text(`Tipo Movimento: ${filtroTipoMovimento}`, 14, y);
+    y += 10;
+
+    materialiFiltrati.forEach((m, index) => {
+      const movimenti = (m.scarichiDettaglio || []).filter((r) => {
+        if (filtroTipoMovimento === "TUTTI") return true;
+        return r.tipo.toUpperCase() === filtroTipoMovimento;
+      });
+
+      // 🔴 TITOLO MATERIALE
+      pdf.setFontSize(12);
+      pdf.text(
+        `${m.nome} | ${m.categoria} | CER: ${m.codiceCER}`,
+        14,
+        y
+      );
+      y += 6;
+
+      if (movimenti.length === 0) {
+        pdf.setFontSize(9);
+        pdf.text("Nessun movimento", 14, y);
+        y += 8;
+        return;
+      }
+
+      const body = movimenti.map((r) => [
+        r.tipo,
+        formatDataIT(safeDate(r.data)),
+        r.fornitore || "-",
+        r.listino || "-",
+        (r.prezzoKg || 0).toFixed(2),
+        r.peso || 0,
+        (r.prezzoTotale || 0).toFixed(2)
+      ]);
+
+      autoTable(pdf, {
+        startY: y,
+        head: [[
+          "Tipo",
+          "Data",
+          "Controparte",
+          "Listino",
+          "€/kg",
+          "Kg",
+          "Totale €"
+        ]],
+        body,
+        theme: "grid",
+        styles: { fontSize: 8 },
+        margin: { left: 14, right: 14 }
+      });
+
+      y = pdf.lastAutoTable.finalY + 10;
+
+      // 🔴 spazio tra materiali + gestione pagina
+      if (y > 270 && index < materialiFiltrati.length - 1) {
+        pdf.addPage();
+        y = 20;
+      }
     });
 
-    y = pdf.lastAutoTable.finalY + 10;
+    await salvaESharePdfCapacitor(pdf, "gestione_cer.pdf");
+  };
 
-    // 🔴 spazio tra materiali + gestione pagina
-    if (y > 270 && index < materialiFiltrati.length - 1) {
-      pdf.addPage();
-      y = 20;
-    }
-  });
+  const materialiDropdown = [
+    "Tutti",
+    ...Array.from(new Set(
+      materiali
+        .filter(m => filtroCER === "Tutti" || m.codiceCER === filtroCER)
+        .map(m => m.nome)
+    )).sort((a, b) => a.localeCompare(b, "it"))
+  ];
 
- 
-   await salvaESharePdfCapacitor(pdf, "gestione_cer.pdf");
-};
-const materialiDropdown = [
-  "Tutti",
-  ...Array.from(new Set(
-    materiali
-      .filter(m => filtroCER === "Tutti" || m.codiceCER === filtroCER)
-      .map(m => m.nome)
-  )).sort((a, b) => a.localeCompare(b, "it"))
-];
+  const cerDropdown = [
+    "Tutti",
+    ...Array.from(new Set(
+      materiali
+        .filter(m => filtroMateriale === "Tutti" || m.nome === filtroMateriale)
+        .map(m => m.codiceCER)
+    )).sort((a, b) => a.localeCompare(b, "it"))
+  ];
 
-const cerDropdown = [
-  "Tutti",
-  ...Array.from(new Set(
-    materiali
-      .filter(m => filtroMateriale === "Tutti" || m.nome === filtroMateriale)
-      .map(m => m.codiceCER)
-  )).sort((a, b) => a.localeCompare(b, "it"))
-];
+  // ---------------- COMBOBOX CODICI CER ----------------
+  // Mostra "codice - descrizione"; il valore salvato nel materiale è solo il codice.
+  const cerOptions = cerList.map(c => ({
+    value: c.codice,
+    label: c.descrizione ? `${c.codice} - ${c.descrizione}` : c.codice
+  }));
+
+  // Se il materiale ha un codice non presente in normativa (dato storico),
+  // lo mostra comunque così la modifica non dà errori.
+  const cerSelezionato = codiceCER
+    ? (cerOptions.find(o => o.value === codiceCER) || { value: codiceCER, label: codiceCER })
+    : null;
 
   const handleSort = (field) => {
-    if(field===sortField) setSortAsc(!sortAsc);
+    if (field === sortField) setSortAsc(!sortAsc);
     else { setSortField(field); setSortAsc(true); }
   };
-const selectStyle = {
-  control: (base) => ({ ...base, minWidth: 200 }),
-  menu: (base) => ({ ...base, zIndex: 9999 })
-};
+
+  const selectStyle = {
+    control: (base) => ({ ...base, minWidth: 200 }),
+    menu: (base) => ({ ...base, zIndex: 9999 })
+  };
+
   // ---------------- UI ----------------
   return (
-    <div className="gestione-utenti-container">
-      <div style={{display:"flex",justifyContent:"space-between"}}>
+    <div className="gestione-cer-page">
+      <div className="gc-topbar">
         <button onClick={goHome}>🏠 Dashboard</button>
         <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>  </div>
+          🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </button>
+      </div>
 
       <h2>Gestione Codici CER</h2>
-      
-      <div style={{marginBottom:15}}>
+
+      <div className="gc-section">
         <button onClick={handleStampa}>🖨️ Stampa PDF</button>
         <button onClick={syncListiniConMateriali}>
-  🔄 Aggiorna listini con nuovi materiali
-</button>
+          🔄 Aggiorna listini con nuovi materiali
+        </button>
+                <button onClick={() => setMergeMode(!mergeMode)}>
+          🔀 Merge Materiali
+        </button>
       </div>
-      {message && <p style={{color:"green"}}>{message}</p>}
+      {message && <p className="gc-message">{message}</p>}
 
-{formVisible && (
-  <div className="form" style={{ marginBottom: "15px", transition: "all 0.3s" }}>
-    <input placeholder="Nome materiale" value={nome} onChange={e=>setNome(e.target.value)} />
-    <select value={categoria} onChange={e=>setCategoria(e.target.value)}>
-      <option value="">Categoria</option>
-      {[...new Set(materiali.map(m=>m.categoria).filter(Boolean))].map(c=> <option key={c}>{c}</option>)}
-    </select>
-    <input placeholder="Codice CER" value={codiceCER} onChange={e=>setCodiceCER(e.target.value)} />
-    <input placeholder="Descrizione" value={descrizione} onChange={e=>setDescrizione(e.target.value)} />
-    <input
-      placeholder="Prezzo default"
-      type="text"
-      value={prezzoDefault !== "" ? String(prezzoDefault).replace(".", ",") : ""}
-      onChange={e => {
-        let val = e.target.value.replace(",", ".");
-        setPrezzoDefault(val);
-      }}
-    />
+      <div className="gc-workspace">
+      {formVisible && (
+        <div className="gc-form">
+          <input className="gc-input" placeholder="Nome materiale" value={nome} onChange={e => setNome(e.target.value)} />
+          <select className="gc-input" value={categoria} onChange={e => setCategoria(e.target.value)}>
+            <option value="">Categoria</option>
+            {[...new Set(materiali.map(m => m.categoria).filter(Boolean))].map(c => <option key={c}>{c}</option>)}
+          </select>
+          <div className="gc-cer-select">
+            <Select
+              styles={selectStyle}
+              placeholder="Codice CER"
+              value={cerSelezionato}
+              onChange={(opt) => setCodiceCER(opt?.value || "")}
+              options={cerOptions}
+              isClearable
+            />
+          </div>
+          <input className="gc-input" placeholder="Descrizione" value={descrizione} onChange={e => setDescrizione(e.target.value)} />
+          <input
+            className="gc-input"
+            placeholder="Prezzo default"
+            type="text"
+            value={prezzoDefault !== "" ? String(prezzoDefault).replace(".", ",") : ""}
+            onChange={e => {
+              let val = e.target.value.replace(",", ".");
+              setPrezzoDefault(val);
+            }}
+          />
+        </div>
+      )}
+      {mergeMode && (
+        <div className="gc-merge-box">
 
-    {/* Rimuovi questo dal form */}
-{/* <button onClick={handleSave} style={{ marginTop: "10px" }}>
-      {editingId ? "Salva" : "Aggiungi"}
-</button> */}
-  </div>
-)}
-<div style={{ marginBottom: 15 }}>
-  <button onClick={handlePulsantePrincipale}>
-    {buttonLabel}
-  </button>
+          {/* CER */}
+          <div className="gc-field-row">
+            <label className="gc-label">
+              📦 Seleziona CER
+            </label>
 
-<button onClick={() => setMergeMode(!mergeMode)}>
-  🔀 Merge Materiali
-</button></div>{mergeMode && (
-  <div style={{ marginBottom: 20, padding: 10, border: "1px solid #ccc" }}>
-    
-    {/* CER */}
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    📦 Seleziona CER
-  </label>
+            <Select
+              styles={selectStyle}
+              value={mergeCER ? { value: mergeCER, label: mergeCER } : null}
+              onChange={(opt) => {
+                setMergeCER(opt?.value || "");
+                setMergeMatSX("");
+                setMergeMatDX("");
+              }}
+              options={[
+                { value: "", label: "Seleziona CER" },
+                ...Array.from(new Set(materiali.map(m => m.codiceCER)))
+                  .sort()
+                  .map(c => ({ value: c, label: c }))
+              ]}
+            />
+          </div>
 
-  <Select
-    styles={selectStyle}
-    value={mergeCER ? { value: mergeCER, label: mergeCER } : null}
-    onChange={(opt) => {
-      setMergeCER(opt?.value || "");
-      setMergeMatSX("");
-      setMergeMatDX("");
-    }}
-    options={[
-      { value: "", label: "Seleziona CER" },
-      ...Array.from(new Set(materiali.map(m => m.codiceCER)))
-        .sort()
-        .map(c => ({ value: c, label: c }))
-    ]}
-  />
-</div>
+          {/* MATERIALI */}
+          <div className="gc-field-row">
+            <label className="gc-label">
+              🎯 Materiale finale (SX)
+            </label>
 
-    {/* MATERIALI */}
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    🎯 Materiale finale (SX)
-  </label>
+            <Select
+              isDisabled={!mergeCER}
+              styles={selectStyle}
+              value={mergeMatSX ? { value: mergeMatSX, label: mergeMatSX } : null}
+              onChange={(opt) => setMergeMatSX(opt?.value || "")}
+              options={materiali
+                .filter(m => m.codiceCER === mergeCER)
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .map(m => ({ value: m.nome, label: m.nome }))
+              }
+            />
+          </div>
 
-  <Select
-    isDisabled={!mergeCER}
-    styles={selectStyle}
-    value={mergeMatSX ? { value: mergeMatSX, label: mergeMatSX } : null}
-    onChange={(opt) => setMergeMatSX(opt?.value || "")}
-    options={materiali
-      .filter(m => m.codiceCER === mergeCER)
-      .sort((a, b) => a.nome.localeCompare(b.nome))
-      .map(m => ({ value: m.nome, label: m.nome }))
-    }
-  />
-</div>
+          <div className="gc-field-row">
+            <label className="gc-label">
+              🔥 Materiale da fondere (DX)
+            </label>
 
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    🔥 Materiale da fondere (DX)
-  </label>
+            <Select
+              isDisabled={!mergeCER}
+              styles={selectStyle}
+              value={mergeMatDX ? { value: mergeMatDX, label: mergeMatDX } : null}
+              onChange={(opt) => setMergeMatDX(opt?.value || "")}
+              options={materiali
+                .filter(m => m.codiceCER === mergeCER)
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .map(m => ({ value: m.nome, label: m.nome }))
+              }
+            />
+          </div>
 
-  <Select
-    isDisabled={!mergeCER}
-    styles={selectStyle}
-    value={mergeMatDX ? { value: mergeMatDX, label: mergeMatDX } : null}
-    onChange={(opt) => setMergeMatDX(opt?.value || "")}
-    options={materiali
-      .filter(m => m.codiceCER === mergeCER)
-      .sort((a, b) => a.nome.localeCompare(b.nome))
-      .map(m => ({ value: m.nome, label: m.nome }))
-    }
-  />
-</div>
+          {/* BOTTONE */}
+          <button
+            disabled={!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX}
+            onClick={handleMergeMateriali}
+            className="gc-btn-gap"
+          >
+            ✅ Conferma Merge
+          </button>
 
-    {/* BOTTONE */}
-    <button
-      disabled={!mergeMatSX || !mergeMatDX || mergeMatSX === mergeMatDX}
-      onClick={handleMergeMateriali}
-      style={{ marginLeft: 10 }}
-    >
-      ✅ Conferma Merge
-    </button>
+        </div>
+      )}
 
-  </div>
-)}
+      <div className="gc-section">
+        <button onClick={handlePulsantePrincipale}>
+          {buttonLabel}
+        </button>
 
 
-<div className="filtri">
+      </div>
+      </div>
 
-  <label className="filter-item">
-    Materiale:
-    <Select
-      styles={selectStyle}
-      value={{ value: filtroMateriale, label: filtroMateriale }}
-      onChange={(opt) => setFiltroMateriale(opt.value)}
-      options={materialiDropdown.map(m => ({ value: m, label: m }))}
-    />
-  </label>
+      
 
-  <label className="filter-item">
-    Codice CER:
-    <Select
-      styles={selectStyle}
-      value={{ value: filtroCER, label: filtroCER }}
-      onChange={(opt) => setFiltroCER(opt.value)}
-      options={cerDropdown.map(c => ({ value: c, label: c }))}
-    />
-  </label>
-<div>
-   <label className="filter-item">
-        Tipo Movimento:
-        <select
-          value={filtroTipoMovimento}
-          onChange={e => setFiltroTipoMovimento(e.target.value)}
-        >
-          <option value="TUTTI">TUTTI</option>
-          <option value="SCARICO">SCARICO</option>
-          <option value="CARICO">CARICO</option>
-        </select>
-      </label>
-</div><div>
-  <label className="filter-item">
-    <input
-      type="checkbox"
-      checked={tutti}
-      onChange={e => setTutti(e.target.checked)}
-    />
-    Disabilita filtro date
-  </label>
+      <div className="filtri">
 
-  {!tutti && (
-    <>
-      <label className="filter-item">
-        Dal:
-        <DatePicker
-          selected={dal}
-          onChange={setDal}
-          minDate={minDataDB || null}
-          maxDate={al || maxDataDB || new Date()}
-          dateFormat="dd/MM/yyyy"
-          placeholderText="gg/mm/yyyy"
-        />
-      </label>
+        <label className="filter-item">
+          Materiale:
+          <Select
+            styles={selectStyle}
+            value={{ value: filtroMateriale, label: filtroMateriale }}
+            onChange={(opt) => setFiltroMateriale(opt.value)}
+            options={materialiDropdown.map(m => ({ value: m, label: m }))}
+          />
+        </label>
 
-      <label className="filter-item">
-        Al:
-        <DatePicker
-          selected={al}
-          onChange={setAl}
-          minDate={dal || minDataDB || null}
-          maxDate={maxDataDB || new Date()}
-          dateFormat="dd/MM/yyyy"
-          placeholderText="gg/mm/yyyy"
-        />
-      </label>
+        <label className="filter-item">
+          Codice CER:
+          <Select
+            styles={selectStyle}
+            value={{ value: filtroCER, label: filtroCER }}
+            onChange={(opt) => setFiltroCER(opt.value)}
+            options={cerDropdown.map(c => ({ value: c, label: c }))}
+          />
+        </label>
 
-     
-    </>
-  )}
-</div>
-</div>
+        <div>
+          <label className="filter-item">
+            Tipo Movimento:
+            <select
+              value={filtroTipoMovimento}
+              onChange={e => setFiltroTipoMovimento(e.target.value)}
+            >
+              <option value="TUTTI">TUTTI</option>
+              <option value="SCARICO">SCARICO</option>
+              <option value="CARICO">CARICO</option>
+            </select>
+          </label>
+        </div>
+
+        <div>
+          <label className="filter-item">
+            <input
+              type="checkbox"
+              checked={tutti}
+              onChange={e => setTutti(e.target.checked)}
+            />
+            Disabilita filtro date
+          </label>
+
+          {!tutti && (
+            <>
+              <label className="filter-item">
+                Dal:
+                <DatePicker
+                  selected={dal}
+                  onChange={setDal}
+                  minDate={minDataDB || null}
+                  maxDate={al || maxDataDB || new Date()}
+                  dateFormat="dd/MM/yyyy"
+                  placeholderText="gg/mm/yyyy"
+                />
+              </label>
+
+              <label className="filter-item">
+                Al:
+                <DatePicker
+                  selected={al}
+                  onChange={setAl}
+                  minDate={dal || minDataDB || null}
+                  maxDate={maxDataDB || new Date()}
+                  dateFormat="dd/MM/yyyy"
+                  placeholderText="gg/mm/yyyy"
+                />
+              </label>
+            </>
+          )}
+        </div>
+      </div>
 
       <table>
-      <thead>
-  <tr>
-    {intestazioni().map((h, idx) => (
-      <th
-        key={idx}
-        onClick={() => {
-          if (["Nome","Categoria","CER"].includes(h)) {
-            const fieldMap = { "Nome":"nome","Categoria":"categoria","CER":"codiceCER" };
-            handleSort(fieldMap[h]);
-          }
-        }}
-      >
-        {h}
-      </th>
-    ))}
-  </tr>
-</thead>
+        <thead>
+          <tr>
+            {intestazioni().map((h, idx) => (
+              <th
+                key={idx}
+                onClick={() => {
+                  if (["Nome", "Categoria", "CER"].includes(h)) {
+                    const fieldMap = { "Nome": "nome", "Categoria": "categoria", "CER": "codiceCER" };
+                    handleSort(fieldMap[h]);
+                  }
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
         <tbody>
           {materialiFiltrati.map(m => (
             <React.Fragment key={m.idDoc}>
@@ -1206,74 +1240,74 @@ const selectStyle = {
                 <td>{m.codiceCER}</td>
                 <td>{m.descrizione}</td>
                 <td>
-  {filtroTipoMovimento === "SCARICO"
-    ? m.nrScarichi
-    : filtroTipoMovimento === "CARICO"
-    ? m.nrCarichi
-    : m.nrMovimenti}
-</td>
+                  {filtroTipoMovimento === "SCARICO"
+                    ? m.nrScarichi
+                    : filtroTipoMovimento === "CARICO"
+                    ? m.nrCarichi
+                    : m.nrMovimenti}
+                </td>
 
-<td>
-  {filtroTipoMovimento === "SCARICO"
-    ? m.dataPrimoScarico
-    : filtroTipoMovimento === "CARICO"
-    ? m.dataPrimoCarico
-    : m.dataPrimoMovimento}
-</td>
+                <td>
+                  {filtroTipoMovimento === "SCARICO"
+                    ? m.dataPrimoScarico
+                    : filtroTipoMovimento === "CARICO"
+                    ? m.dataPrimoCarico
+                    : m.dataPrimoMovimento}
+                </td>
 
-<td>
-  {filtroTipoMovimento === "SCARICO"
-    ? m.dataUltimoScarico
-    : filtroTipoMovimento === "CARICO"
-    ? m.dataUltimoCarico
-    : m.dataUltimoMovimento}
-</td>
+                <td>
+                  {filtroTipoMovimento === "SCARICO"
+                    ? m.dataUltimoScarico
+                    : filtroTipoMovimento === "CARICO"
+                    ? m.dataUltimoCarico
+                    : m.dataUltimoMovimento}
+                </td>
                 <td>
                   <button onClick={() => handleEdit(m)}>Modifica</button>
 
-{canDeleteMateriale(m) && (
-  <button
-    style={{ marginLeft: 5, background: "red", color: "white" }}
-    onClick={() => handleDeleteMateriale(m)}
-  >
-    Elimina
-  </button>
-)}
-                {(
-  (filtroTipoMovimento === "SCARICO" && m.nrScarichi > 0) ||
-  (filtroTipoMovimento === "CARICO" && m.nrCarichi > 0) ||
-  (filtroTipoMovimento === "TUTTI" && m.nrMovimenti > 0)
-) && (
-  <button
-    style={{ marginLeft: 5 }}
-    onClick={() => toggleDettagli(m.idDoc)}
-  >
-    {expandedRows[m.idDoc] ? "Chiudi" : "Dettagli"}
-  </button>
-)}
+                  {canDeleteMateriale(m) && (
+                    <button
+                      className="gc-btn-danger gc-btn-gap5"
+                      onClick={() => handleDeleteMateriale(m)}
+                    >
+                      Elimina
+                    </button>
+                  )}
+                  {(
+                    (filtroTipoMovimento === "SCARICO" && m.nrScarichi > 0) ||
+                    (filtroTipoMovimento === "CARICO" && m.nrCarichi > 0) ||
+                    (filtroTipoMovimento === "TUTTI" && m.nrMovimenti > 0)
+                  ) && (
+                    <button
+                      className="gc-btn-gap5"
+                      onClick={() => toggleDettagli(m.idDoc)}
+                    >
+                      {expandedRows[m.idDoc] ? "Chiudi" : "Dettagli"}
+                    </button>
+                  )}
                 </td>
               </tr>
 
-            {expandedRows[m.idDoc] && (
-  <tr>
-    <td colSpan={8}>
-      {filtroTipoMovimento === "TUTTI" ? (
-        <>
-          <h4>SCARICHI</h4>
-          <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo === "scarico")} tipo="SCARICO" />
+              {expandedRows[m.idDoc] && (
+                <tr>
+                  <td colSpan={8}>
+                    {filtroTipoMovimento === "TUTTI" ? (
+                      <>
+                        <h4>SCARICHI</h4>
+                        <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo === "scarico")} tipo="SCARICO" />
 
-          <h4>CARICHI</h4>
-          <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo === "carico")} tipo="CARICO" />
+                        <h4>CARICHI</h4>
+                        <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo === "carico")} tipo="CARICO" />
 
-          <h4>Totale / Margine</h4>
-          <TableTotaleMargine dati={m.scarichiDettaglio} />
-        </>
-      ) : (
-        <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo.toUpperCase() === filtroTipoMovimento)} tipo={filtroTipoMovimento} />
-      )}
-    </td>
-  </tr>
-)}
+                        <h4>Totale / Margine</h4>
+                        <TableTotaleMargine dati={m.scarichiDettaglio} />
+                      </>
+                    ) : (
+                      <TableMovimenti dati={m.scarichiDettaglio.filter(r => r.tipo.toUpperCase() === filtroTipoMovimento)} tipo={filtroTipoMovimento} />
+                    )}
+                  </td>
+                </tr>
+              )}
             </React.Fragment>
           ))}
         </tbody>
@@ -1285,13 +1319,13 @@ const selectStyle = {
 export default GestioneCER;
 
 const TableMovimenti = ({ dati, tipo }) => (
-  <table style={{ width: "100%", marginTop:5, marginBottom:10, border:"1px solid #ccc" }}>
+  <table className="gc-sub-table">
     <thead>
       <tr>
         <th>Data / Ora</th>
         <th>Fornitore</th>
         <th>Listino</th>
-        <th>{tipo === "SCARICO" ? "Prezzo/kg" : "Prezzo/kg"}</th>
+        <th>Prezzo/kg</th>
         <th>Peso Totale</th>
         <th>{tipo === "SCARICO" ? "Costo Totale €" : "Ricavo Totale €"}</th>
       </tr>
@@ -1307,10 +1341,10 @@ const TableMovimenti = ({ dati, tipo }) => (
           <td>{r.prezzoTotale.toFixed(2)}</td>
         </tr>
       ))}
-      <tr style={{ fontWeight:"bold" }}>
+      <tr className="gc-total-row">
         <td colSpan={4}>Totale</td>
-        <td>{dati.reduce((sum,r)=>sum+(r.peso||0),0)}</td>
-        <td>{dati.reduce((sum,r)=>sum+(r.prezzoTotale||0),0).toFixed(2)}</td>
+        <td>{dati.reduce((sum, r) => sum + (r.peso || 0), 0)}</td>
+        <td>{dati.reduce((sum, r) => sum + (r.prezzoTotale || 0), 0).toFixed(2)}</td>
       </tr>
     </tbody>
   </table>
@@ -1320,14 +1354,14 @@ const TableTotaleMargine = ({ dati }) => {
   const scarico = dati.filter(r => r.tipo === "scarico");
   const carico = dati.filter(r => r.tipo === "carico");
 
-  const pesoMagazzino = scarico.reduce((sum,r)=>sum+(r.peso||0),0) - carico.reduce((sum,r)=>sum+(r.peso||0),0);
-  const costoTotale = scarico.reduce((sum,r)=>sum+(r.prezzoTotale||0),0);
-  const ricavoTotale = carico.reduce((sum,r)=>sum+(r.prezzoTotale||0),0);
+  const pesoMagazzino = scarico.reduce((sum, r) => sum + (r.peso || 0), 0) - carico.reduce((sum, r) => sum + (r.peso || 0), 0);
+  const costoTotale = scarico.reduce((sum, r) => sum + (r.prezzoTotale || 0), 0);
+  const ricavoTotale = carico.reduce((sum, r) => sum + (r.prezzoTotale || 0), 0);
   const margineKg = pesoMagazzino ? (ricavoTotale - costoTotale) / pesoMagazzino : 0;
   const utile = ricavoTotale - costoTotale;
 
   return (
-    <table style={{ width: "100%", marginTop:5, marginBottom:10, border:"1px solid #ccc" }}>
+    <table className="gc-sub-table">
       <thead>
         <tr>
           <th>Materiale</th>
@@ -1337,7 +1371,7 @@ const TableTotaleMargine = ({ dati }) => {
         </tr>
       </thead>
       <tbody>
-        <tr style={{ fontWeight:"bold" }}>
+        <tr className="gc-total-row">
           <td>Totale</td>
           <td>{pesoMagazzino}</td>
           <td>{margineKg.toFixed(2)}</td>

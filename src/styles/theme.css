@@ -1,0 +1,29 @@
+/* ==================================================
+   METALFLOW - TEMA (variabili condivise)
+   Unica fonte per colori, font, raggi e ombre.
+   ================================================== */
+
+:root {
+  --mf-primary: #1e5a80;
+  --mf-primary-hover: #174664;
+
+  --mf-admin: #46545e;
+  --mf-admin-hover: #303c44;
+  --mf-admin-active: #263238;
+
+  --mf-danger: #a83232;
+  --mf-danger-hover: #862727;
+
+  /* Eccezione voluta: pulsante di salvataggio in Scarichi */
+  --mf-success: #4caf50;
+
+  --mf-text: #263238;
+  --mf-border: #dce3e8;
+  --mf-surface: #ffffff;
+  --mf-surface-alt: #f6f8fa;
+  --mf-shadow: 0 3px 12px rgba(38, 50, 56, 0.07);
+
+  --mf-radius: 10px;
+  --mf-radius-sm: 7px;
+  --mf-font: Arial, sans-serif;
+}
