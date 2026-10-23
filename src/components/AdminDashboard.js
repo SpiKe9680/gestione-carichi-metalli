@@ -56,7 +56,7 @@ const AdminDashboard = ({ logout }) => {
 
         <ActionButton onClick={() => navigate("/scarichi")}>
           <FaExchangeAlt />
-          <span>Inserisci Scarico/Carico</span>
+          <span>Aggiungi Scarico/Carico</span>
         </ActionButton>
 
         <ActionButton onClick={() => navigate("/gestione-scarichi")}>
