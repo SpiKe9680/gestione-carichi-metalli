@@ -7,7 +7,10 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { ripristinaUtente } from "../utils/utenti";
 import bcrypt from "bcryptjs";
-
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
+import { FaSignOutAlt } from "react-icons/fa";
+import "./GestioneUtenti.css";
 const GestioneUtenti = () => {
   const [users, setUsers] = useState([]);
   const [email, setEmail] = useState("");
@@ -20,7 +23,7 @@ const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
   // stato
 const [username, setUsername] = useState("");
 const [selectedUser, setSelectedUser] = useState(null);
-
+const [logoBase64, setLogoBase64] = useState("");
 
 const [isDirty, setIsDirty] = useState(false);
 const [confirmPassword, setConfirmPassword] = useState("");
@@ -338,6 +341,7 @@ useEffect(() => {
 
         // 🔥 CAMPO CORRETTO
         setAdminEmail(data.mailRecupero || "");
+        setLogoBase64(data.logoBase64 || "");
       }
 
     } catch (err) {
@@ -536,195 +540,285 @@ if (sortConfig.key) {
     return sortConfig.direction === "asc" ? comparison : -comparison;
   });
 }
-  return (
-    <div className="gestione-utenti-container" style={{ padding: "20px" }}>
-      {/* NAV */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-        <button onClick={goHome}>🏠 Dashboard</button>
-        <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>
+ 
+return (
+  <PageLayout
+    title="Gestione Utenti"
+    logoBase64={logoBase64}
+    maxWidth={1400}
+    headerActions={
+      <>
+        <ActionButton variant="admin" compact onClick={goHome}>
+          🏠 Dashboard
+        </ActionButton>
+
+        <ActionButton
+          variant="danger"
+          compact
+          onClick={handleLogout}
+        >
+          <FaSignOutAlt />
+          Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </ActionButton>
+      </>
+    }
+  >
+    <div className="mf-users-content">
+      <div className="mf-users-toolbar">
+        <h2>Gestione Utenti</h2>
+
+        <ActionButton
+          onClick={() => {
+            setMode("add");
+            setSelectedUser(null);
+            setUsername("");
+            setEmail("");
+            setPassword("");
+            setConfirmPassword("");
+            setRole("OPERATORE");
+            setIsDirty(false);
+            setMessage("");
+          }}
+        >
+          + Nuovo Utente
+        </ActionButton>
       </div>
 
-      <h2>Gestione Utenti</h2>
-      {message && <p style={{ color: "green" }}>{message}</p>}
-<div style={{ marginBottom: 15 }}>
-  <button
-    onClick={() => {
-      setMode("add");
-      setSelectedUser(null);
-      setUsername("");
-      setPassword("");
-      setEmail("");
-      setRole("OPERATORE");
-      setConfirmPassword("");
-      setIsDirty(false);
-    }}
-    style={{ background: "#4caf50", color: "white" }}
-  >
-    ➕ Nuovo Utente
-  </button>
-</div>
-{/* FORM COMPATTO UTENTI (MOBILE FRIENDLY) */}
+      {message && (
+        <div className="mf-users-message" role="status">
+          {message}
+        </div>
+      )}
 
-{(mode === "add" || mode === "edit") && (
-<div style={{ marginBottom: 20, padding: 10, border: "1px solid #ddd" }}>
+      {(mode === "add" || mode === "edit") && (
+        <section className="mf-users-section">
+          <h3>
+            {mode === "edit" ? "Modifica utente" : "Nuovo utente"}
+          </h3>
 
-  <div className="filter-item">
+          <div className="mf-users-grid">
+            <div className="mf-users-field">
+              <label htmlFor="mf-user-username">Username</label>
+              <input
+                id="mf-user-username"
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setIsDirty(true);
+                }}
+                autoComplete="username"
+              />
+            </div>
 
-    <input
-      placeholder="Username"
-      value={username}
-      onChange={e => setUsername(e.target.value)}
-    />
+            <div className="mf-users-field">
+              <label htmlFor="mf-user-email">Email</label>
+              <input
+                id="mf-user-email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setIsDirty(true);
+                }}
+                autoComplete="email"
+              />
+            </div>
 
-    <input
-      type="password"
-      placeholder="Password"
-      value={password}
-      onChange={e => setPassword(e.target.value)}
-    />
+            <div className="mf-users-field">
+              <label htmlFor="mf-user-password">
+                {mode === "edit"
+                  ? "Nuova password (facoltativa)"
+                  : "Password"}
+              </label>
+              <input
+                id="mf-user-password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setIsDirty(true);
+                }}
+                autoComplete={
+                  mode === "edit" ? "new-password" : "new-password"
+                }
+              />
+            </div>
 
-    <input
-      type="password"
-      placeholder="Conferma"
-      value={confirmPassword}
-      onChange={e => setConfirmPassword(e.target.value)}
-    />
+            <div className="mf-users-field">
+              <label htmlFor="mf-user-confirm-password">
+                Conferma password
+              </label>
+              <input
+                id="mf-user-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setIsDirty(true);
+                }}
+                autoComplete="new-password"
+              />
+            </div>
 
-    <select value={role} onChange={e => setRole(e.target.value)}>
-      <option value="OPERATORE">Operatore</option>
-      <option value="MANAGER">Manager</option>
-      <option value="ADMIN">Admin</option>
-    </select>
+            <div className="mf-users-field">
+              <label htmlFor="mf-user-role">Ruolo</label>
+              <select
+                id="mf-user-role"
+                value={role}
+                onChange={(e) => {
+                  setRole(e.target.value);
+                  setIsDirty(true);
+                }}
+              >
+                <option value="OPERATORE">OPERATORE</option>
+                <option value="MANAGER">MANAGER</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+            </div>
+          </div>
 
-    <input
-      type="email"
-      placeholder="Mail recupero"
-      value={email}
-      onChange={e => setEmail(e.target.value)}
-      style={{ minWidth: 250 }}
-    />
-  </div>
+          <div className="mf-users-actions">
+            <ActionButton
+              disabled={
+                !username ||
+                password !== confirmPassword ||
+                (mode === "add" && !password)
+              }
+              onClick={() =>
+                mode === "edit"
+                  ? handleUpdateUser()
+                  : handleAddUser()
+              }
+            >
+              {mode === "edit" ? "Salva modifiche" : "Crea utente"}
+            </ActionButton>
 
-  <div style={{ marginTop: 10, display: "flex", gap: "10px" }}>
+            <ActionButton variant="admin" onClick={handleAnnulla}>
+              Annulla
+            </ActionButton>
+          </div>
+        </section>
+      )}
 
-    <button
-      onClick={async () => {
-        if (mode === "edit") {
-          await handleUpdateUser();
-        } else {
-          await handleAddUser();
-        }
-      }}
-      disabled={
-  !username ||
-  password !== confirmPassword ||
-  (mode === "add" && !password)
-}
-    >
-      {mode === "edit" ? "💾 Modifica Utente" : "➕ Aggiungi Utente"}
-    </button>
+      <section className="mf-users-section">
+        <h3>Utenti registrati</h3>
 
-    <button onClick={handleAnnulla} style={{ background: "#ccc" }}>
-      Annulla
-    </button>
+        <div className="mf-users-table-wrap">
+          <table className="mf-users-table">
+            <thead>
+              <tr>
+                <th
+                  className="is-sortable"
+                  onClick={() => requestSort("username")}
+                >
+                  Username{" "}
+                  {sortConfig.key === "username" &&
+                    (sortConfig.direction === "asc" ? "▲" : "▼")}
+                </th>
 
-  </div>
-</div>
-)}
-      {/* TABELLA UTENTI */}
-{/* TABELLA UTENTI */}
-{/* TABELLA UTENTI */}
-<table style={{ width: "100%", borderCollapse: "collapse" }}>
-<thead>
-  <tr style={{ borderBottom: "2px solid #ccc" }}>
-    <th onClick={() => requestSort("username")} style={{ cursor: "pointer", textAlign: "left" }}>
-      Nome Utente{" "}
-      {sortConfig.key === "username"
-        ? sortConfig.direction === "asc"
-          ? "⬆️"
-          : "⬇️"
-        : ""}
-    </th>
+                <th
+                  className="is-sortable"
+                  onClick={() => requestSort("email")}
+                >
+                  Email{" "}
+                  {sortConfig.key === "email" &&
+                    (sortConfig.direction === "asc" ? "▲" : "▼")}
+                </th>
 
-    <th onClick={() => requestSort("email")} style={{ cursor: "pointer", textAlign: "left" }}>
-      Email Recupero{" "}
-      {sortConfig.key === "email"
-        ? sortConfig.direction === "asc"
-          ? "⬆️"
-          : "⬇️"
-        : ""}
-    </th>
+                <th
+                  className="is-sortable"
+                  onClick={() => requestSort("ruolo")}
+                >
+                  Ruolo{" "}
+                  {sortConfig.key === "ruolo" &&
+                    (sortConfig.direction === "asc" ? "▲" : "▼")}
+                </th>
 
-    <th onClick={() => requestSort("ruolo")} style={{ cursor: "pointer", textAlign: "left" }}>
-      Ruolo{" "}
-      {sortConfig.key === "ruolo"
-        ? sortConfig.direction === "asc"
-          ? "⬆️"
-          : "⬇️"
-        : ""}
-    </th>
-<th style={{ textAlign: "left" }}>Stato</th>
-    <th style={{ textAlign: "left" }}>Azioni</th>
-  </tr>
-</thead>
-<tbody>
-  {usersOrdinati.map(u => (
-    <tr
-      key={u.id}
-      style={{ borderBottom: "1px solid #eee", cursor: "pointer" }}
-      onClick={() => handleSelectUser(u)}
-    >
-      {/* NOME UTENTE */}
-      <td>{u.username ? u.username : (u.email ? u.email.split("@")[0] : "-")}</td>
+                <th>Stato</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
 
-      {/* EMAIL RECUPERO */}
-      <td>{u.email || "-"}</td>
-      <td>{u.ruolo || "operatore"}</td>
-      <td>
-  <span
-    style={{
-      color: u.stato === "BLOCCATO" ? "red" : "green",
-      fontWeight: "bold"
-    }}
-  >
-    {u.stato}
-  </span>
-</td>
-      {/* AZIONI */}
-<td style={{ display: "flex", gap: "10px" }}>
-  <button
-    onClick={e => { e.stopPropagation(); handleDeleteUser(u); }}
-    disabled={u.id === auth.currentUser?.uid}
-    style={{ backgroundColor: "#f44336", color: "white" }}
-  >
-    Elimina
-  </button>
+            <tbody>
+              {usersOrdinati.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="mf-users-empty">
+                    Nessun utente presente.
+                  </td>
+                </tr>
+              ) : (
+                usersOrdinati.map((u) => (
+                  <tr
+                    key={u.id}
+                    onClick={() => handleSelectUser(u)}
+                    title="Clicca per modificare l'utente"
+                  >
+                    <td>{u.username || u.email?.split("@")[0] || "-"}</td>
+                    <td>{u.email || "-"}</td>
+                    <td>{u.ruolo || "OPERATORE"}</td>
 
-  <button
-    onClick={e => { e.stopPropagation(); handleResetPassword(u); }}
-    style={{ backgroundColor: "#ff9800", color: "white" }}
-  >
-    Reset Password
-  </button>
+                    <td>
+                      <span
+                        className={`mf-users-status ${
+                          u.stato === "BLOCCATO"
+                            ? "mf-users-status--blocked"
+                            : "mf-users-status--enabled"
+                        }`}
+                      >
+                        {u.stato || "ABILITATO"}
+                      </span>
+                    </td>
 
-  {/* 🔥 NUOVO: SBLOCCA SOLO SE BLOCCATO */}
-  {u.stato === "BLOCCATO" && (
-    <button
-      onClick={e => { e.stopPropagation(); handleUnlockUser(u); }}
-      style={{ backgroundColor: "#4caf50", color: "white" }}
-    >
-      Sblocca
-    </button>
-  )}
-</td>
-    </tr>
-  ))}
-</tbody>
-</table>
+                    <td>
+                      <div className="mf-users-row-actions">
+                        <ActionButton
+                          variant="danger"
+                          compact
+                          disabled={u.id === auth.currentUser?.uid}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteUser(u);
+                          }}
+                        >
+                          Elimina
+                        </ActionButton>
+
+                        <ActionButton
+                          variant="admin"
+                          compact
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResetPassword(u);
+                          }}
+                        >
+                          Reset password
+                        </ActionButton>
+
+                        {u.stato === "BLOCCATO" && (
+                          <ActionButton
+                            compact
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUnlockUser(u);
+                            }}
+                          >
+                            Sblocca
+                          </ActionButton>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
-  );
+  </PageLayout>
+);
+
 };
 
 export default GestioneUtenti;

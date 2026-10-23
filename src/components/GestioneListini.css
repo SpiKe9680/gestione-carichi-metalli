@@ -1,0 +1,480 @@
+
+/* ==================================================
+   METALFLOW - GESTIONE LISTINI
+   Stili dedicati alla pagina Gestione Listini.
+   ================================================== */
+
+.gestione-listini {
+  width: 100%;
+  min-width: 0;
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+}
+
+/* Filtro tipo listino */
+
+.gl-filter-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.gl-filter-panel label,
+.gl-field-label {
+  color: var(--mf-text);
+  font-weight: 600;
+}
+
+.gl-filter-panel select,
+.gl-form-field input,
+.gl-form-field select,
+.gl-editor-type select {
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font: inherit;
+}
+
+/* Barra azioni */
+
+.gl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.gl-toolbar > * {
+  min-width: 0;
+}
+
+/* Pannelli */
+
+.gl-create-panel,
+.gl-editor {
+  min-width: 0;
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  background: var(--mf-surface);
+  box-shadow: var(--mf-shadow);
+}
+
+.gl-section-title {
+  margin: 0 0 16px;
+  color: var(--mf-text);
+  font-size: 19px;
+}
+
+.gl-create-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+}
+
+.gl-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.gl-form-field input,
+.gl-form-field select {
+  width: 100%;
+}
+
+.gl-percent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gl-percent-row input {
+  width: 100%;
+}
+
+.gl-form-actions {
+  display: flex;
+  align-items: end;
+}
+
+/* ==================================================
+   TABELLA LISTINI
+   Lo scroll orizzontale rimane confinato al wrapper.
+   ================================================== */
+
+.gl-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 16px 0 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+}
+
+.gl-table {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+  font-size: 13px;
+}
+
+/* Celle */
+
+.gl-table th,
+.gl-table td {
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--mf-border);
+  border-bottom: 1px solid var(--mf-border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Intestazioni */
+
+.gl-table thead th {
+  min-width: 100px;
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.gl-table th.gl-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.gl-table th.gl-sortable:hover {
+  background: #eaf0f4;
+}
+
+/* Numero progressivo */
+
+.gl-table .gl-number-cell {
+  min-width: 65px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nome listino */
+
+.gl-table .gl-name-cell {
+  min-width: 180px;
+  max-width: 280px;
+  text-align: left;
+}
+
+/* Tipo listino */
+
+.gl-table th:nth-child(3),
+.gl-table td:nth-child(3) {
+  min-width: 110px;
+}
+
+/* Colonne riepilogative numeriche */
+
+.gl-table thead th:nth-child(4),
+.gl-table thead th:nth-child(5),
+.gl-table tbody td:nth-child(4),
+.gl-table tbody td:nth-child(5) {
+  min-width: 100px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controparti associate */
+
+.gl-table .gl-suppliers-cell {
+  min-width: 180px;
+  max-width: 300px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.gl-counterparty-item {
+  display: block;
+  line-height: 1.4;
+  padding: 2px 0;
+}
+
+/* Associazione controparti */
+
+.gl-table .gl-association-cell {
+  min-width: 230px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.gl-association-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 220px;
+  min-width: 0;
+}
+
+/* Il Select personalizzato può usare div interni:
+   limita la larghezza all'interno della cella. */
+
+.gl-association-controls > * {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gl-association-controls select {
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 1px solid var(--mf-border);
+  border-radius: 6px;
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font: inherit;
+}
+
+/* Select ricercabile */
+
+.gl-association-controls > div {
+  min-width: 0;
+}
+
+/* Pulsanti associazione */
+
+.gl-small-button {
+  display: block;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--mf-primary);
+  border-radius: 6px;
+  background: var(--mf-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.gl-small-button:hover:not(:disabled) {
+  background: var(--mf-primary-hover);
+  border-color: var(--mf-primary-hover);
+}
+
+.gl-small-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Riga selezionata */
+
+.gl-table tbody tr {
+  cursor: pointer;
+}
+
+.gl-table tbody tr:hover {
+  background: var(--mf-surface-alt);
+}
+
+.gl-table tbody tr.gl-row-selected {
+  background: #fff0c2;
+}
+
+.gl-table tbody tr.gl-row-selected:hover {
+  background: #ffe7a3;
+}
+
+.gl-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.gl-table th:last-child,
+.gl-table td:last-child {
+  border-right: 0;
+}
+
+/* ==================================================
+   EDITOR PREZZI
+   ================================================== */
+
+.gl-editor-header {
+  margin-bottom: 16px;
+}
+
+.gl-editor-header h3 {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+
+.gl-editor-type {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.gl-price-unit {
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--mf-text);
+}
+
+.gl-price-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+
+.gl-price-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-alt);
+}
+
+.gl-price-name {
+  color: var(--mf-text);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.gl-price-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--mf-border);
+  border-radius: 6px;
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font: inherit;
+}
+
+.gl-price-input--modified {
+  border-color: #d89b22;
+  background: #fff8e8;
+}
+
+.gl-propagate-option,
+.gl-global-propagate {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--mf-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.gl-propagate-option input,
+.gl-global-propagate input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.gl-global-propagate {
+  margin-top: 18px;
+}
+
+.gl-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Errori */
+
+.gl-errors {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--mf-danger);
+  border-radius: var(--mf-radius-sm);
+  background: #fff2f2;
+  color: var(--mf-danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Tablet e smartphone */
+
+@media (max-width: 600px) {
+  .gl-filter-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gl-filter-panel select {
+    width: 100%;
+  }
+
+  .gl-toolbar {
+    flex-direction: column;
+  }
+
+  .gl-create-panel,
+  .gl-editor {
+    padding: 12px;
+  }
+
+  .gl-table th,
+  .gl-table td {
+    padding: 9px 10px;
+  }
+
+  .gl-table thead th {
+    font-size: 12px;
+  }
+
+  .gl-price-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gl-editor-actions {
+    flex-direction: column;
+  }
+
+  .gl-association-controls {
+    width: 200px;
+  }
+}

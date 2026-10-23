@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log";
 import { useEffect } from "react";
 import bcrypt from "bcryptjs";
-
+import "./Login.css";
 const Login = () => {
   const navigate = useNavigate();
   const [logoBase64, setLogoBase64] = useState(null);
@@ -663,192 +663,231 @@ const handleChangeUsername = async () => {
     }
   };
 
-  return (
-    <div
-      style={{
-        padding: 20,
-        maxWidth: 400,
-        margin: "0 auto"
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10
-        }}
-      >
-        {logoBase64 && (
-          <img
-            src={`data:image/png;base64,${logoBase64}`}
-            alt="logo"
-            style={{ height: 160 }}
-          />
-        )}
 
-        <h2 style={{ margin: 0 }}>
-          Accesso Utente
-        </h2>
-      </div>
-
-      {message && (
-        <p style={{ color: "red" }}>
-          {message}
-        </p>
+return (
+  <main className="mf-login">
+    <header className="mf-login-header">
+      {logoBase64 && (
+        <img
+          src={`data:image/png;base64,${logoBase64}`}
+          alt="Logo aziendale"
+          className="mf-login-logo"
+        />
       )}
 
-      <input
-        placeholder="Nome utente o email"
-        value={inputUsername}
-        onChange={e =>
-          setInputUsername(e.target.value)
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            handleLogin();
-          }
-        }}
-        style={{
-          width: "100%",
-          marginBottom: 10,
-          padding: 8
-        }}
-      />
+      <h2>Accesso Utente</h2>
+    </header>
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={inputPassword}
-        onChange={e =>
-          setInputPassword(e.target.value)
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            handleLogin();
-          }
-        }}
-        style={{
-          width: "100%",
-          marginBottom: 10,
-          padding: 8
-        }}
-      />
+    {message && (
+      <div className="mf-login-message" role="status" aria-live="polite">
+        {message}
+      </div>
+    )}
+
+    <div className="mf-login-form">
+      <div className="mf-login-field">
+        <label htmlFor="login-username">Username o email</label>
+        <input
+          id="login-username"
+          type="text"
+          placeholder="Nome utente o email"
+          autoComplete="username"
+          value={inputUsername}
+          onChange={(e) => setInputUsername(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleLogin();
+            }
+          }}
+        />
+      </div>
+
+      <div className="mf-login-field">
+        <label htmlFor="login-password">Password</label>
+        <input
+          id="login-password"
+          type="password"
+          placeholder="Password"
+          autoComplete="current-password"
+          value={inputPassword}
+          onChange={(e) => setInputPassword(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleLogin();
+            }
+          }}
+        />
+      </div>
 
       <button
+        type="button"
+        className="mf-login-button"
         onClick={handleLogin}
-        style={{
-          width: "100%",
-          padding: 10
-        }}
       >
         Accedi
       </button>
+    </div>
 
-      {/* AZIONI EXTRA */}
-
+    <div className="mf-login-extra-actions">
       <button
-        onClick={() => setMode("username")}
-        style={{
-          width: "100%",
-          padding: 10
-        }}
+        type="button"
+        className="mf-login-button mf-login-button--secondary"
+        onClick={() => setMode(mode === "username" ? null : "username")}
       >
         Cambia Username
       </button>
 
       <button
-        onClick={() => setMode("password")}
-        style={{
-          width: "100%",
-          padding: 10
-        }}
+        type="button"
+        className="mf-login-button mf-login-button--secondary"
+        onClick={() => setMode(mode === "password" ? null : "password")}
       >
         Cambia Password
       </button>
+    </div>
 
-      {/* MODIFICA USERNAME */}
-      {mode === "username" && (
-        <div style={{ marginTop: 20 }}>
-          <h4>Cambio Username</h4>
+    {mode === "username" && (
+      <section className="mf-login-panel">
+        <h3>Cambio Username</h3>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-old-username">Username attuale</label>
           <input
+            id="login-old-username"
+            type="text"
+            autoComplete="username"
             placeholder="Username attuale"
             value={oldUser}
-            onChange={e =>
-              setOldUser(e.target.value)
-            }
+            onChange={(e) => setOldUser(e.target.value)}
           />
+        </div>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-old-password-username">
+            Password attuale
+          </label>
           <input
+            id="login-old-password-username"
             type="password"
+            autoComplete="current-password"
             placeholder="Password attuale"
             value={oldPass}
-            onChange={e =>
-              setOldPass(e.target.value)
-            }
+            onChange={(e) => setOldPass(e.target.value)}
           />
+        </div>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-new-username">Nuovo username</label>
           <input
+            id="login-new-username"
+            type="text"
+            autoComplete="username"
             placeholder="Nuovo username"
             value={newUsername}
-            onChange={e =>
-              setNewUsername(e.target.value)
-            }
+            onChange={(e) => setNewUsername(e.target.value)}
           />
+        </div>
 
-          <button onClick={handleChangeUsername}>
+        <div className="mf-login-panel-actions">
+          <button
+            type="button"
+            className="mf-login-button"
+            onClick={handleChangeUsername}
+          >
             Conferma
           </button>
+
+          <button
+            type="button"
+            className="mf-login-button mf-login-button--secondary"
+            onClick={() => setMode(null)}
+          >
+            Annulla
+          </button>
         </div>
-      )}
+      </section>
+    )}
 
-      {/* MODIFICA PASSWORD */}
-      {mode === "password" && (
-        <div style={{ marginTop: 20 }}>
-          <h4>Cambio Password</h4>
+    {mode === "password" && (
+      <section className="mf-login-panel">
+        <h3>Cambio Password</h3>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-password-username">
+            Username o email
+          </label>
           <input
+            id="login-password-username"
+            type="text"
+            autoComplete="username"
             placeholder="Username o email"
             value={oldUser}
-            onChange={e =>
-              setOldUser(e.target.value)
-            }
+            onChange={(e) => setOldUser(e.target.value)}
           />
+        </div>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-password-current">
+            Password attuale
+          </label>
           <input
+            id="login-password-current"
             type="password"
+            autoComplete="current-password"
             placeholder="Password attuale"
             value={oldPass}
-            onChange={e =>
-              setOldPass(e.target.value)
-            }
+            onChange={(e) => setOldPass(e.target.value)}
           />
+        </div>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-password-new">Nuova password</label>
           <input
+            id="login-password-new"
             type="password"
-            placeholder="Nuova Password"
+            autoComplete="new-password"
+            placeholder="Nuova password"
             value={newPassword}
-            onChange={e =>
-              setNewPassword(e.target.value)
-            }
+            onChange={(e) => setNewPassword(e.target.value)}
           />
+        </div>
 
+        <div className="mf-login-field">
+          <label htmlFor="login-password-confirm">
+            Conferma nuova password
+          </label>
           <input
+            id="login-password-confirm"
             type="password"
+            autoComplete="new-password"
             placeholder="Conferma password"
             value={confirmPassword}
-            onChange={e =>
-              setConfirmPassword(e.target.value)
-            }
+            onChange={(e) => setConfirmPassword(e.target.value)}
           />
+        </div>
 
-          <button onClick={handleChangePassword}>
+        <div className="mf-login-panel-actions">
+          <button
+            type="button"
+            className="mf-login-button"
+            onClick={handleChangePassword}
+          >
             Conferma
           </button>
+
+          <button
+            type="button"
+            className="mf-login-button mf-login-button--secondary"
+            onClick={() => setMode(null)}
+          >
+            Annulla
+          </button>
         </div>
-      )}
-    </div>
-  );
+      </section>
+    )}
+  </main>
+);
+
 };
 
 export default Login;

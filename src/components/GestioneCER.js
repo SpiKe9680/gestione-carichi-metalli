@@ -838,11 +838,20 @@ const GestioneCER = () => {
         scarichiDettaglio: movimentiMateriale
       };
     })
-    .sort((a, b) => {
-      const v1 = a[sortField] || "";
-      const v2 = b[sortField] || "";
-      return sortAsc ? v1.localeCompare(v2) : v2.localeCompare(v1);
-    });
+   .sort((a, b) => {
+  const v1 = a[sortField];
+  const v2 = b[sortField];
+  
+  // 🔢 Se sono numeri, confronta numericamente
+  if (typeof v1 === "number" && typeof v2 === "number") {
+    return sortAsc ? v1 - v2 : v2 - v1;
+  }
+  
+  // 📅 Se sono stringhe, usa localeCompare
+  const s1 = String(v1 || "");
+  const s2 = String(v2 || "");
+  return sortAsc ? s1.localeCompare(s2) : s2.localeCompare(s1);
+});
 
   // ---------------- INTESTAZIONI DINAMICHE ----------------
   const intestazioni = () => {
@@ -987,10 +996,10 @@ const GestioneCER = () => {
     ? (cerOptions.find(o => o.value === codiceCER) || { value: codiceCER, label: codiceCER })
     : null;
 
-  const handleSort = (field) => {
-    if (field === sortField) setSortAsc(!sortAsc);
-    else { setSortField(field); setSortAsc(true); }
-  };
+ const handleSort = (field) => {
+  if (field === sortField) setSortAsc(!sortAsc);
+  else { setSortField(field); setSortAsc(true); }
+};
 
   const selectStyle = {
     control: (base) => ({ ...base, minWidth: 200 }),
@@ -1214,23 +1223,47 @@ const GestioneCER = () => {
       </div>
 
       <table>
-        <thead>
-          <tr>
-            {intestazioni().map((h, idx) => (
-              <th
-                key={idx}
-                onClick={() => {
-                  if (["Nome", "Categoria", "CER"].includes(h)) {
-                    const fieldMap = { "Nome": "nome", "Categoria": "categoria", "CER": "codiceCER" };
-                    handleSort(fieldMap[h]);
-                  }
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
+<thead>
+  <tr>
+    {intestazioni().map((h, idx) => {
+      // Map completo di tutte le colonne sortabili
+      const fieldMap = {
+        "Nome": "nome",
+        "Categoria": "categoria",
+        "CER": "codiceCER",
+        "Descrizione": "descrizione",
+        "Nr Scarichi": "nrScarichi",
+        "Nr Carichi": "nrCarichi",
+        "Nr Movimenti": "nrMovimenti",
+        "Primo Scarico": "dataPrimoScarico",
+        "Ultimo Scarico": "dataUltimoScarico",
+        "Primo Carico": "dataPrimoCarico",
+        "Ultimo Carico": "dataUltimoCarico",
+        "Primo Movimento": "dataPrimoMovimento",
+        "Ultimo Movimento": "dataUltimoMovimento"
+      };
+      
+      const field = fieldMap[h];
+      const isSortable = field !== undefined;
+      const isActive = field === sortField;
+      
+      return (
+        <th
+          key={idx}
+          onClick={() => isSortable && handleSort(field)}
+          style={{
+            cursor: isSortable ? "pointer" : "default",
+            opacity: isSortable ? 1 : 0.6
+          }}
+          title={isSortable ? "Clicca per ordinare" : ""}
+        >
+          {h}
+          {isActive && (sortAsc ? " ⬆️" : " ⬇️")}
+        </th>
+      );
+    })}
+  </tr>
+</thead>
         <tbody>
           {materialiFiltrati.map(m => (
             <React.Fragment key={m.idDoc}>

@@ -10,6 +10,10 @@ import {
    deleteDoc,
   Timestamp,
 } from "firebase/firestore";
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
+import { loadConfigAzienda } from "../utils/dateUtils";
+import "./AnagraficaMovimentoFinanziario.css";
 import { useNavigate } from "react-router-dom";
 import { scriviLog } from "../utils/log"; // o dove ce l'hai
 import DatePicker from "react-datepicker";
@@ -174,7 +178,16 @@ setMovimentiCache(movimenti);
     (d) => d.data().anagraficaId !== anagraficaId
   );
 };
+const [configAzienda, setConfigAzienda] = useState(null);
 
+useEffect(() => {
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+
+  load();
+}, []);
 
 const getKey = (date) => {
   const d = date?.toDate ? date.toDate() : new Date(date);
@@ -741,670 +754,684 @@ const handleStampa = async () => {
     console.error("Errore stampa:", err);
   }
 };
-  return (
-    <div className="gestione-log-container">
-      {/* NAV IDENTICA ALLA TUA */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-        <button onClick={goHome}>🏠 Dashboard</button>
 
-        <button onClick={handleLogout}>
-          🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-        </button>
-      </div>
 
-      <h2>Anagrafica Movimenti Finanziari</h2>
 
-  {/* FORM */}
- {!uiLocked && (
-<div className="filtri-log">
-
-  {/* BAR TOP: AGGIUNGI + FILTRI */}
- <div
-  style={{
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    marginBottom: 10,
-    opacity: uiLocked ? 0.4 : 1,
-    pointerEvents: uiLocked ? "none" : "auto",
-  }}
->
-
-    {/* AGGIUNGI / ANNULLA */}
-    {!showForm ? (
-      <button onClick={() => setShowForm(true)}>
-        ➕ Aggiungi
-      </button>
-    ) : (
-      <button
-        onClick={() => {
-          setShowForm(false);
-
-          // reset form
-          setNomeBreve("");
-          setDescrizione("");
-          setTipo("USCITA");
-          setPeriodicita("SINGOLO");
-          setImporto(0);
-          setDataAttivazione(new Date());
-          setEditMode(false);
-          setEditId(null);
-          setDisableChecked(true);
-setDataDisForm(new Date());
-        }}
-      >
-        ❌ Annulla
-      </button>
-    )}
-
- 
-  </div>
-{!showForm && !uiLocked && (
-  <div className="toolbar-filtri">
-
-  {/* SEARCH */}
-  <input
-    className="filter-item"
-    placeholder="Cerca Movimento"
-    value={searchText}
-    onChange={(e) => setSearchText(e.target.value)}
-  />
-
-  {/* TIPO */}
-  <select
-    className="filter-item"
-    value={filterTipo}
-    onChange={(e) => setFilterTipo(e.target.value)}
-  >
-    <option value="TUTTI">TUTTI</option>
-    <option value="ENTRATA">ENTRATA</option>
-    <option value="USCITA">USCITA</option>
-  </select>
-
-  {/* PERIODICITA */}
-  <select
-    className="filter-item"
-    value={filterPeriodicita}
-    onChange={(e) => setFilterPeriodicita(e.target.value)}
-  >
-    <option value="TUTTE">TUTTE</option>
-    <option value="SINGOLO">SINGOLO</option>
-    <option value="GIORNALIERO">GIORNALIERO</option>
-    <option value="SETTIMANALE">SETTIMANALE</option>
-    <option value="MENSILE">MENSILE</option>
-    <option value="ANNUALE">ANNUALE</option>
-  </select>
-
-  {hasActiveFilters && !uiLocked && (
-    <button
-      className="filter-item"
-      onClick={resetFiltri}
-      style={{
-        background: "#e74c3c",
-        color: "white"
-      }}
-    >
-      ♻ Reset Filtri
-    </button>
-  )}
-
-  {!uiLocked && (
-    <button className="filter-item" onClick={handleStampa}>
-      🖨 Stampa
-    </button>
-  )}
-
-</div>
-)}
-  {/* FORM SOLO SE VISIBILE */}
-  {showForm && (
-    <div style={{ display: "flex", flexDirection: "column", maxWidth: 400, gap: 8 }}>
-
-      <input
-        placeholder="Nome breve"
-        value={nomeBreve}
-        onChange={(e) => setNomeBreve(e.target.value)}
-      />
-
-      <input
-        placeholder="Descrizione"
-        value={descrizione}
-        onChange={(e) => setDescrizione(e.target.value)}
-      />
-
-      <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
-        <option value="ENTRATA">ENTRATA</option>
-        <option value="USCITA">USCITA</option>
-      </select>
-
-      <select value={periodicita} onChange={(e) => setPeriodicita(e.target.value)}>
-        <option value="SINGOLO">SINGOLO</option>
-        <option value="GIORNALIERO">GIORNALIERO</option>
-        <option value="SETTIMANALE">SETTIMANALE</option>
-        <option value="MENSILE">MENSILE</option>
-        <option value="ANNUALE">ANNUALE</option>
-      </select>
-
-      <input
-        placeholder="Importo"
-        value={importo}
-        onChange={(e) => {
-          let val = e.target.value;
-          val = val.replace(",", ".");
-          val = val.replace(/[^0-9.]/g, "");
-          setImporto(val);
-        }}
-      />
-
-      
-<div style={{ marginTop: 15 }}>
-
-  <label style={{ fontWeight: "bold" }}>
-    Attivo dal:
-  </label>
-
-  <div>
-    <DatePicker
-      selected={dataAttivazione}
-      onChange={(date) => setDataAttivazione(date)}
-      dateFormat="dd MMM yyyy"
-      locale={it}
-    />
-  </div>
-
-  <div style={{ marginTop: 10 }}>
-    <label>
-      <input
-        type="checkbox"
-        checked={disableChecked}
-        onChange={(e) => setDisableChecked(e.target.checked)}
-      />
-      {" "}Disabilita
-    </label>
-  </div>
-
-  {disableChecked && (
-    <div style={{ marginTop: 8 }}>
-      <label style={{ fontWeight: "bold" }}>
-        Data di disabilitazione:
-      </label>
-
-      <div>
-        <DatePicker
-          selected={dataDisForm}
-          onChange={(date) => setDataDisForm(date)}
-          dateFormat="dd MMM yyyy"
-          locale={it}
-          minDate={
-            new Date(dataAttivazione.getTime() + 86400000)
-          }
-        />
-      </div>
-    </div>
-  )}
-
-</div>
-      <button
-        onClick={async () => {
-          await salva();
-          setShowForm(false);   // 🔥 CHIUSURA AUTOMATICA DOPO SALVATAGGIO
-        }}
-        disabled={!isFormValid}
-      >
-        {editMode ? "✏️ Salva modifiche" : "💾 Salva"}
-      </button>
-
-    </div>
-  )}
-
-</div>
-)}
-      {/* TABELLA IDENTICA STILE */}
-<table className="tabella-log" style={{ marginTop: "16px" }}>
-<thead>
-  <tr>
-    <th onClick={() => handleSort("nomeBreve")} style={{ cursor: "pointer" }}>
-      Nome {getSortIcon("nomeBreve")}
-    </th>
-
-    <th onClick={() => handleSort("tipo")} style={{ cursor: "pointer" }}>
-      Tipo {getSortIcon("tipo")}
-    </th>
-
-    <th onClick={() => handleSort("periodicita")} style={{ cursor: "pointer" }}>
-      Periodicità {getSortIcon("periodicita")}
-    </th>
-
-    <th onClick={() => handleSort("importo")} style={{ cursor: "pointer" }}>
-      Importo {getSortIcon("importo")}
-    </th>
-
-    <th>
-      Prossima Occorrenza
-    </th>
-
-    <th>
-      Da Contabilizzare
-    </th>
-
-    <th>
-      Contabilizzati
-    </th>
-
-    <th>
-      Stato
-    </th>
-
-    <th>
-      Azioni
-    </th>
-  </tr>
-</thead>
-
-  <tbody>
-    {sortData(
-  lista.filter((item) => {
-    const matchText =
-      item.nomeBreve?.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.descrizione?.toLowerCase().includes(searchText.toLowerCase());
-
-    const matchTipo =
-      filterTipo === "TUTTI" || item.tipo === filterTipo;
-
-    const matchPeriodicita =
-      filterPeriodicita === "TUTTE" ||
-      item.periodicita === filterPeriodicita;
-
-    return matchText && matchTipo && matchPeriodicita;
-  })
-).map((item) => {
-      const start = item.createdAt?.toDate ? item.createdAt.toDate() : new Date();
-      const oggi = new Date();
-
-     const next = getNextOccurrence(item);
-
-      // ---- DA CONTABILIZZARE (GREZZO MA COERENTE) ----
-      let daContabilizzare = 0;
-
-if (item.periodicita !== "SINGOLO") {
-  const next = getNextOccurrence(item);
-
-}
-
-      return (
-        <tr
-          key={item.id}
-          style={{
-            background: item.dataDisabilitazione ? "#ddd" : "transparent",
-          }}
+return (
+  <PageLayout
+    title="Anagrafica Movimenti Finanziari"
+    logoBase64={configAzienda?.logoBase64}
+    maxWidth={1600}
+    headerActions={
+      <>
+        <ActionButton
+          variant="admin"
+          compact
+          onClick={goHome}
         >
-          <td>{item.nomeBreve}</td>
-          <td>{item.tipo}</td>
-          <td>{item.periodicita}</td>
-          <td>{item.importo}</td>
-          <td>
-            {next ? next.toLocaleDateString("it-IT") : "-"}
-          </td>
+          🏠 Dashboard
+        </ActionButton>
 
-          
-
-<td style={{ fontWeight: "bold" }}>
-  {(() => {
-    const mov = movimentiCache.filter(m => m.anagraficaId === item.id);
-
-    if (item.periodicita === "SINGOLO") {
-      return mov.length === 0 ? 1 : 0;
+        <ActionButton
+          variant="danger"
+          compact
+          onClick={handleLogout}
+        >
+          🚪 Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </ActionButton>
+      </>
     }
-
-    const start = item.createdAt?.toDate
-      ? item.createdAt.toDate()
-      : new Date();
-
-    const oggi = getDataLimite(item); // 🔥 FIX
-
-    let cursor = new Date(start);
-    let totale = 0;
-
-    for (let i = 0; i < 500; i++) {
-      if (cursor > oggi) break;
-
-      totale++;
-
-      switch (item.periodicita) {
-        case "GIORNALIERO":
-          cursor.setDate(cursor.getDate() + 1);
-          break;
-        case "SETTIMANALE":
-          cursor.setDate(cursor.getDate() + 7);
-          break;
-        case "MENSILE":
-          cursor.setMonth(cursor.getMonth() + 1);
-          break;
-        case "ANNUALE":
-          cursor.setFullYear(cursor.getFullYear() + 1);
-          break;
-        default:
-          i = 999;
-      }
-    }
-
-    return Math.max(totale - mov.length, 0);
-  })()}
-</td>
-<td style={{ fontWeight: "bold" }}>
-  {
-    movimentiCache.filter(m => m.anagraficaId === item.id).length
-  }
-</td>
-          <td>
-            {item.dataDisabilitazione ? (
-              <>
-                DISABILITATO dal{" "}
-                {item.dataDisabilitazione?.toDate
-                  ? item.dataDisabilitazione.toDate().toLocaleDateString("it-IT")
-                  : ""}
-              </>
-            ) : (
-              <>
-                ATTIVO dal{" "}
-                {item.createdAt?.toDate
-                  ? item.createdAt.toDate().toLocaleDateString("it-IT")
-                  : ""}
-              </>
-            )}
-          </td>
-
-          <td>
-            {!item.dataDisabilitazione && (
-              <button onClick={() => disabilita(item)}>
-                Disabilita
-              </button>
-            )}
-
-            <button onClick={() => modifica(item)}>
-              ✏️ Modifica
-            </button>
-
-           <button
-  onClick={() => apriContabilizza(item)}
-  disabled={
-    (() => {
-      const mov = movimentiCache.filter(m => m.anagraficaId === item.id);
-
-      if (item.periodicita === "SINGOLO") {
-        return mov.length > 0; // già contabilizzato → niente da fare
-      }
-
-      const start = item.createdAt?.toDate
-        ? item.createdAt.toDate()
-        : new Date();
-
-      const oggi = getDataLimite(item);
-      let cursor = new Date(start);
-      let totale = 0;
-
-      for (let i = 0; i < 500; i++) {
-        if (cursor > oggi) break;
-        totale++;
-
-        switch (item.periodicita) {
-          case "GIORNALIERO":
-            cursor.setDate(cursor.getDate() + 1);
-            break;
-          case "SETTIMANALE":
-            cursor.setDate(cursor.getDate() + 7);
-            break;
-          case "MENSILE":
-            cursor.setMonth(cursor.getMonth() + 1);
-            break;
-          case "ANNUALE":
-            cursor.setFullYear(cursor.getFullYear() + 1);
-            break;
-          default:
-            i = 999;
-        }
-      }
-
-      const daContabilizzare = Math.max(totale - mov.length, 0);
-
-      return daContabilizzare === 0;
-    })()
-  }
->
-  Contabilizza
-</button>
-<button
-  style={{
-    marginLeft: 8,
-    background: "#f39c12",
-    opacity: movimentiCache.filter(m => m.anagraficaId === item.id).length === 0 ? 0.5 : 1,
-    pointerEvents: movimentiCache.filter(m => m.anagraficaId === item.id).length === 0 ? "none" : "auto",
-  }}
-  disabled={movimentiCache.filter(m => m.anagraficaId === item.id).length === 0}
-  onClick={() => {
-    const movs = movimentiCache.filter(m => m.anagraficaId === item.id);
-
-    if (movs.length === 0) {
-      alert("Nessun movimento da stornare");
-      return;
-    }
-
-    setContItem({
-      ...item,
-      modalMode: "STORNO"   // 🔥 QUESTO È IL FIX CHIAVE
-    });
-
-  setOccList(
-  movs
-    .map(m => ({
-      id: m.id,
-      data: m.data?.toDate ? m.data.toDate() : new Date(m.data),
-      importo: m.importo
-    }))
-    .sort((a, b) => new Date(a.data) - new Date(b.data))
-);
-
-    setShowContabilizza(true);
-  }}
->
-  🔄 Storno
-</button>
-            {deletableMap[item.id] === true && (
+  >
+    <div className="gestione-log-container mf-anagrafica">
+      {/* FORM E FILTRI */}
+      {!uiLocked && (
+        <div className="filtri-log mf-anagrafica-toolbar">
+          <div className="mf-anagrafica-azioni-principali">
+            {!showForm && (
               <button
-                style={{ marginLeft: 8, color: "red" }}
-                onClick={() => elimina(item)}
+                className="mf-anagrafica-btn-conferma"
+                onClick={() => setShowForm(true)}
               >
-                🗑 Elimina
+                ➕ Aggiungi
               </button>
             )}
-          </td>
-        </tr>
-      );
-    })}
-  </tbody>
-</table>
-      {showDisabilita && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      background: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <div style={{ background: "#fff", padding: 20 }}>
-      <h3>Data disabilitazione</h3>
+          </div>
 
-      <input
-        type="date"
-        value={dataDisabilitazione}
-        min={
-          itemSelezionato?.createdAt
-            ?.toDate()
-            .toISOString()
-            .split("T")[0]
-        }
-        onChange={(e) => setDataDisabilitazione(e.target.value)}
-      />
+          {/* FILTRI */}
+          {!showForm && (
+            <div className="toolbar-filtri mf-anagrafica-filtri">
+              <input
+                className="filter-item"
+                placeholder="Cerca Movimento"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
 
-      <div style={{ marginTop: 10 }}>
-        <button onClick={confermaDisabilitazione}>
-          Conferma
-        </button>
+              <select
+                className="filter-item"
+                value={filterTipo}
+                onChange={(e) => setFilterTipo(e.target.value)}
+              >
+                <option value="TUTTI">TUTTI</option>
+                <option value="ENTRATA">ENTRATA</option>
+                <option value="USCITA">USCITA</option>
+              </select>
 
-        <button onClick={() => setShowDisabilita(false)}>
-          Annulla
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-{showContabilizza && contItem && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      background: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-    }}
-  >
-    <div
-      style={{
-        background: "#fff",
-        padding: 20,
-        minWidth: 450,
-        maxHeight: "80vh",
-        overflowY: "auto",
-      }}
-    >
+              <select
+                className="filter-item"
+                value={filterPeriodicita}
+                onChange={(e) => setFilterPeriodicita(e.target.value)}
+              >
+                <option value="TUTTE">TUTTE</option>
+                <option value="SINGOLO">SINGOLO</option>
+                <option value="GIORNALIERO">GIORNALIERO</option>
+                <option value="SETTIMANALE">SETTIMANALE</option>
+                <option value="MENSILE">MENSILE</option>
+                <option value="ANNUALE">ANNUALE</option>
+              </select>
 
-      {/* HEADER */}
-      <h3>{contItem.nomeBreve}</h3>
+              {hasActiveFilters && (
+                <button
+                  className="filter-item mf-anagrafica-reset"
+                  onClick={resetFiltri}
+                >
+                  ♻ Reset Filtri
+                </button>
+              )}
 
-      <div style={{ marginBottom: 10 }}>
-        <strong>
-  {contItem.modalMode === "STORNO"
-    ? "🔄 STORNO MOVIMENTI"
-    : contItem.tipo === "USCITA"
-    ? "💸 Spese"
-    : "💰 Entrate"}
-</strong>
-        {" — "} Elementi: <b>{occList.length}</b>
-{contItem.modalMode === "STORNO" && " (stornabili)"}
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        Contabilizzati:{" "}
-        <b>
-          {movimentiCache.filter(m => m.anagraficaId === contItem.id).length}
-        </b>
-      </div>
-
-      {/* AZIONI GLOBALI */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-
-        <button
-          onClick={() => {
-            setShowContabilizza(false);
-            setContItem(null);
-            setOccList([]);
-          }}
-        >
-          Chiudi
-        </button>
-
-        {/* 🔥 TUTTO */}
-       <button
-  style={{
-    background: contItem.modalMode === "STORNO"
-      ? "#f39c12"
-      : contItem.tipo === "USCITA"
-      ? "#c0392b"
-      : "#27ae60",
-    color: "white",
-    padding: "6px 10px",
-    opacity: loadingBulk ? 0.6 : 1,
-    pointerEvents: loadingBulk ? "none" : "auto",
-  }}
-  disabled={loadingBulk}
-onClick={handleBulkMovimenti}
->
-  {loadingBulk
-    ? "⏳ Elaborazione..."
-    : contItem.modalMode === "STORNO"
-      ? "🔄 STORNA TUTTO"
-      : contItem.tipo === "USCITA"
-        ? "💸 PAGA TUTTO"
-        : "💰 INCASSA TUTTO"}
-</button>
-      </div>
-
-      {/* LISTA */}
-      {occList.length === 0 && (
-        <div>Nessun movimento</div>
+              <button
+                className="filter-item mf-anagrafica-stampa"
+                onClick={handleStampa}
+              >
+                🖨 Stampa
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
-      {occList.map((occ, idx) => (
-        <div
-          key={idx}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            padding: "6px 0",
-            borderBottom: "1px solid #eee",
-          }}
-        >
-          <span>{occ.data.toLocaleDateString("it-IT")}</span>
-          <span>{Number(occ.importo).toFixed(2)} €</span>
-
-          <button
-onClick={handleBulkMovimenti}
+      {/* MODALE INSERIMENTO / MODIFICA */}
+      {showForm && !uiLocked && (
+        <div className="mf-anagrafica-overlay">
+          <div
+            className="mf-anagrafica-modale"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mf-anagrafica-form-titolo"
           >
-           {contItem.modalMode === "STORNO" ? "STORNA" : contItem.tipo === "USCITA" ? "PAGA" : "INCASSA"}
-          </button>
+            <h3 id="mf-anagrafica-form-titolo">
+              {editMode
+                ? "Modifica movimento finanziario"
+                : "Nuovo movimento finanziario"}
+            </h3>
 
+            <div className="mf-anagrafica-form">
+              <label>Nome breve</label>
+              <input
+                placeholder="Nome breve"
+                value={nomeBreve}
+                onChange={(e) => setNomeBreve(e.target.value)}
+              />
+
+              <label>Descrizione</label>
+              <input
+                placeholder="Descrizione"
+                value={descrizione}
+                onChange={(e) => setDescrizione(e.target.value)}
+              />
+
+              <label>Tipo</label>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value)}
+              >
+                <option value="ENTRATA">ENTRATA</option>
+                <option value="USCITA">USCITA</option>
+              </select>
+
+              <label>Periodicità</label>
+              <select
+                value={periodicita}
+                onChange={(e) => setPeriodicita(e.target.value)}
+              >
+                <option value="SINGOLO">SINGOLO</option>
+                <option value="GIORNALIERO">GIORNALIERO</option>
+                <option value="SETTIMANALE">SETTIMANALE</option>
+                <option value="MENSILE">MENSILE</option>
+                <option value="ANNUALE">ANNUALE</option>
+              </select>
+
+              <label>Importo</label>
+              <input
+                placeholder="Importo"
+                value={importo}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  val = val.replace(",", ".");
+                  val = val.replace(/[^0-9.]/g, "");
+                  setImporto(val);
+                }}
+              />
+
+              <div className="mf-anagrafica-date-section">
+                <label>Attivo dal:</label>
+
+                <div className="mf-anagrafica-date-picker">
+                  <DatePicker
+                    selected={dataAttivazione}
+                    onChange={(date) => setDataAttivazione(date)}
+                    dateFormat="dd MMM yyyy"
+                    locale={it}
+                  />
+                </div>
+
+                <div className="mf-anagrafica-checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={disableChecked}
+                      onChange={(e) => setDisableChecked(e.target.checked)}
+                    />
+                    {" "}Disabilita
+                  </label>
+                </div>
+
+                {disableChecked && (
+                  <div className="mf-anagrafica-date-disabilitazione">
+                    <label>Data di disabilitazione:</label>
+
+                    <div className="mf-anagrafica-date-picker">
+                      <DatePicker
+                        selected={dataDisForm}
+                        onChange={(date) => setDataDisForm(date)}
+                        dateFormat="dd MMM yyyy"
+                        locale={it}
+                        minDate={
+                          new Date(dataAttivazione.getTime() + 86400000)
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mf-anagrafica-modale-azioni">
+                <button
+                  className="mf-anagrafica-btn-conferma mf-anagrafica-salva"
+                  onClick={async () => {
+                    await salva();
+                    setShowForm(false);
+                  }}
+                  disabled={!isFormValid}
+                >
+                  {editMode ? "✏️ Salva modifiche" : "💾 Salva"}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setNomeBreve("");
+                    setDescrizione("");
+                    setTipo("USCITA");
+                    setPeriodicita("SINGOLO");
+                    setImporto(0);
+                    setDataAttivazione(new Date());
+                    setEditMode(false);
+                    setEditId(null);
+                    setDisableChecked(true);
+                    setDataDisForm(new Date());
+                  }}
+                >
+                  ❌ Annulla
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      ))}
+      )}
 
-    </div>
-  </div>
-)}
+      {/* TABELLA ANAGRAFICA */}
+      <div className="mf-anagrafica-tabella-wrapper">
+        <table className="tabella-log mf-anagrafica-tabella">
+          <thead>
+            <tr>
+              <th onClick={() => handleSort("nomeBreve")} style={{ cursor: "pointer" }}>
+                Nome {getSortIcon("nomeBreve")}
+              </th>
+              <th onClick={() => handleSort("tipo")} style={{ cursor: "pointer" }}>
+                Tipo {getSortIcon("tipo")}
+              </th>
+              <th onClick={() => handleSort("periodicita")} style={{ cursor: "pointer" }}>
+                Periodicità {getSortIcon("periodicita")}
+              </th>
+              <th onClick={() => handleSort("importo")} style={{ cursor: "pointer" }}>
+                Importo {getSortIcon("importo")}
+              </th>
+              <th>Prossimo evento</th>
+              <th>Da Contabilizzare</th>
+              <th>Contabilizzati</th>
+              <th>Stato</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
 
-{loadingBulk && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 99999,
-      color: "white",
-      fontSize: 18,
-      flexDirection: "column",
-    }}
-  >
-    <div style={{ fontSize: 40, marginBottom: 10 }}>⏳</div>
-    Elaborazione movimenti in corso...
-  </div>
-)}
+          <tbody>
+            {sortData(
+              lista.filter((item) => {
+                const matchText =
+                  item.nomeBreve?.toLowerCase().includes(searchText.toLowerCase()) ||
+                  item.descrizione?.toLowerCase().includes(searchText.toLowerCase());
+
+                const matchTipo =
+                  filterTipo === "TUTTI" || item.tipo === filterTipo;
+
+                const matchPeriodicita =
+                  filterPeriodicita === "TUTTE" ||
+                  item.periodicita === filterPeriodicita;
+
+                return matchText && matchTipo && matchPeriodicita;
+              })
+            ).map((item) => {
+              const start = item.createdAt?.toDate
+                ? item.createdAt.toDate()
+                : new Date();
+              const oggi = new Date();
+              const next = getNextOccurrence(item);
+
+              let daContabilizzare = 0;
+
+              if (item.periodicita !== "SINGOLO") {
+                const next = getNextOccurrence(item);
+              }
+
+              return (
+                <tr
+                  key={item.id}
+                  className={
+                    item.dataDisabilitazione
+                      ? "mf-anagrafica-riga-disabilitata"
+                      : ""
+                  }
+                >
+                  <td>{item.nomeBreve}</td>
+
+                  <td>
+                    <span
+                      className={
+                        item.tipo === "ENTRATA"
+                          ? "mf-anagrafica-tipo-entrata"
+                          : "mf-anagrafica-tipo-uscita"
+                      }
+                    >
+                      {item.tipo}
+                    </span>
+                  </td>
+
+                  <td>{item.periodicita}</td>
+                  <td>{item.importo}</td>
+                  <td>{next ? next.toLocaleDateString("it-IT") : "-"}</td>
+
+                  <td className="mf-anagrafica-numero">
+                    {(() => {
+                      const mov = movimentiCache.filter(
+                        (m) => m.anagraficaId === item.id
+                      );
+
+                      if (item.periodicita === "SINGOLO") {
+                        return mov.length === 0 ? 1 : 0;
+                      }
+
+                      const start = item.createdAt?.toDate
+                        ? item.createdAt.toDate()
+                        : new Date();
+
+                      const oggi = getDataLimite(item);
+                      let cursor = new Date(start);
+                      let totale = 0;
+
+                      for (let i = 0; i < 500; i++) {
+                        if (cursor > oggi) break;
+                        totale++;
+
+                        switch (item.periodicita) {
+                          case "GIORNALIERO":
+                            cursor.setDate(cursor.getDate() + 1);
+                            break;
+                          case "SETTIMANALE":
+                            cursor.setDate(cursor.getDate() + 7);
+                            break;
+                          case "MENSILE":
+                            cursor.setMonth(cursor.getMonth() + 1);
+                            break;
+                          case "ANNUALE":
+                            cursor.setFullYear(cursor.getFullYear() + 1);
+                            break;
+                          default:
+                            i = 999;
+                        }
+                      }
+
+                      return Math.max(totale - mov.length, 0);
+                    })()}
+                  </td>
+
+                  <td className="mf-anagrafica-numero">
+                    {
+                      movimentiCache.filter(
+                        (m) => m.anagraficaId === item.id
+                      ).length
+                    }
+                  </td>
+
+                  <td>
+                    {item.dataDisabilitazione ? (
+                      <span className="mf-anagrafica-stato-disabilitato">
+                        DISABILITATO dal{" "}
+                        {item.dataDisabilitazione?.toDate
+                          ? item.dataDisabilitazione.toDate().toLocaleDateString("it-IT")
+                          : ""}
+                      </span>
+                    ) : (
+                      <span className="mf-anagrafica-stato-attivo">
+                        ATTIVO dal{" "}
+                        {item.createdAt?.toDate
+                          ? item.createdAt.toDate().toLocaleDateString("it-IT")
+                          : ""}
+                      </span>
+                    )}
+                  </td>
+
+                  <td>
+                    <div className="mf-anagrafica-azioni">
+                      {!item.dataDisabilitazione && (
+                        <button
+                          className="mf-anagrafica-btn-disabilita"
+                          onClick={() => disabilita(item)}
+                        >
+                          Disabilita
+                        </button>
+                      )}
+
+                      <button
+                        className="mf-anagrafica-btn-modifica"
+                        onClick={() => modifica(item)}
+                      >
+                        ✏️ Modifica
+                      </button>
+
+                      <button
+                        className="mf-anagrafica-btn-contabilizza"
+                        onClick={() => apriContabilizza(item)}
+                        disabled={
+                          (() => {
+                            const mov = movimentiCache.filter(
+                              (m) => m.anagraficaId === item.id
+                            );
+
+                            if (item.periodicita === "SINGOLO") {
+                              return mov.length > 0;
+                            }
+
+                            const start = item.createdAt?.toDate
+                              ? item.createdAt.toDate()
+                              : new Date();
+
+                            const oggi = getDataLimite(item);
+                            let cursor = new Date(start);
+                            let totale = 0;
+
+                            for (let i = 0; i < 500; i++) {
+                              if (cursor > oggi) break;
+                              totale++;
+
+                              switch (item.periodicita) {
+                                case "GIORNALIERO":
+                                  cursor.setDate(cursor.getDate() + 1);
+                                  break;
+                                case "SETTIMANALE":
+                                  cursor.setDate(cursor.getDate() + 7);
+                                  break;
+                                case "MENSILE":
+                                  cursor.setMonth(cursor.getMonth() + 1);
+                                  break;
+                                case "ANNUALE":
+                                  cursor.setFullYear(cursor.getFullYear() + 1);
+                                  break;
+                                default:
+                                  i = 999;
+                              }
+                            }
+
+                            const daContabilizzare = Math.max(
+                              totale - mov.length,
+                              0
+                            );
+
+                            return daContabilizzare === 0;
+                          })()
+                        }
+                      >
+                        Contabilizza
+                      </button>
+
+                      <button
+                        className="mf-anagrafica-btn-storno"
+                        style={{
+                          opacity:
+                            movimentiCache.filter(
+                              (m) => m.anagraficaId === item.id
+                            ).length === 0 ? 0.5 : 1,
+                          pointerEvents:
+                            movimentiCache.filter(
+                              (m) => m.anagraficaId === item.id
+                            ).length === 0 ? "none" : "auto",
+                        }}
+                        disabled={
+                          movimentiCache.filter(
+                            (m) => m.anagraficaId === item.id
+                          ).length === 0
+                        }
+                        onClick={() => {
+                          const movs = movimentiCache.filter(
+                            (m) => m.anagraficaId === item.id
+                          );
+
+                          if (movs.length === 0) {
+                            alert("Nessun movimento da stornare");
+                            return;
+                          }
+
+                          setContItem({
+                            ...item,
+                            modalMode: "STORNO",
+                          });
+
+                          setOccList(
+                            movs
+                              .map((m) => ({
+                                id: m.id,
+                                data: m.data?.toDate
+                                  ? m.data.toDate()
+                                  : new Date(m.data),
+                                importo: m.importo,
+                              }))
+                              .sort((a, b) => new Date(a.data) - new Date(b.data))
+                          );
+
+                          setShowContabilizza(true);
+                        }}
+                      >
+                        🔄 Storno
+                      </button>
+
+                      {deletableMap[item.id] === true && (
+                        <button
+                          className="mf-anagrafica-btn-elimina"
+                          onClick={() => elimina(item)}
+                        >
+                          🗑 Elimina
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* MODALE DISABILITAZIONE */}
+      {showDisabilita && (
+        <div className="mf-anagrafica-overlay">
+          <div className="mf-anagrafica-modale">
+            <h3>Data disabilitazione</h3>
+
+            <input
+              type="date"
+              value={dataDisabilitazione}
+              min={
+                itemSelezionato?.createdAt
+                  ?.toDate()
+                  .toISOString()
+                  .split("T")[0]
+              }
+              onChange={(e) => setDataDisabilitazione(e.target.value)}
+            />
+
+            <div className="mf-anagrafica-modale-azioni">
+              <button
+                className="mf-anagrafica-btn-conferma"
+                onClick={confermaDisabilitazione}
+              >
+                Conferma
+              </button>
+
+              <button onClick={() => setShowDisabilita(false)}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE CONTABILIZZAZIONE / STORNO */}
+      {showContabilizza && contItem && (
+        <div className="mf-anagrafica-overlay mf-anagrafica-overlay-top">
+          <div className="mf-anagrafica-modale mf-anagrafica-modale-contabilizza">
+            <h3>{contItem.nomeBreve}</h3>
+
+            <div className="mf-anagrafica-modale-intestazione">
+              <strong>
+                {contItem.modalMode === "STORNO"
+                  ? "🔄 STORNO MOVIMENTI"
+                  : contItem.tipo === "USCITA"
+                  ? "💸 Spese"
+                  : "💰 Entrate"}
+              </strong>
+              {" — "} Elementi: <b>{occList.length}</b>
+              {contItem.modalMode === "STORNO" && " (stornabili)"}
+            </div>
+
+            <div className="mf-anagrafica-contabilizzati">
+              Contabilizzati:{" "}
+              <b>
+                {
+                  movimentiCache.filter(
+                    (m) => m.anagraficaId === contItem.id
+                  ).length
+                }
+              </b>
+            </div>
+
+            <div className="mf-anagrafica-modale-azioni">
+              <button
+                onClick={() => {
+                  setShowContabilizza(false);
+                  setContItem(null);
+                  setOccList([]);
+                }}
+              >
+                Chiudi
+              </button>
+
+              <button
+                className={
+                  contItem.modalMode === "STORNO"
+                    ? "mf-anagrafica-btn-storno"
+                    : contItem.tipo === "USCITA"
+                    ? "mf-anagrafica-btn-elimina"
+                    : "mf-anagrafica-btn-conferma"
+                }
+                style={{
+                  opacity: loadingBulk ? 0.6 : 1,
+                  pointerEvents: loadingBulk ? "none" : "auto",
+                }}
+                disabled={loadingBulk}
+                onClick={handleBulkMovimenti}
+              >
+                {loadingBulk
+                  ? "⏳ Elaborazione..."
+                  : contItem.modalMode === "STORNO"
+                  ? "🔄 STORNA TUTTO"
+                  : contItem.tipo === "USCITA"
+                  ? "💸 PAGA TUTTO"
+                  : "💰 INCASSA TUTTO"}
+              </button>
+            </div>
+
+            {occList.length === 0 && (
+              <div className="mf-anagrafica-nessun-movimento">
+                Nessun movimento
+              </div>
+            )}
+
+            {occList.map((occ, idx) => (
+              <div
+                key={idx}
+                className="mf-anagrafica-occorrenza"
+              >
+                <span>{occ.data.toLocaleDateString("it-IT")}</span>
+
+                <span className="mf-anagrafica-importo">
+                  {Number(occ.importo).toFixed(2)} €
+                </span>
+
+                <button
+                  className={
+                    contItem.modalMode === "STORNO"
+                      ? "mf-anagrafica-btn-storno"
+                      : contItem.tipo === "USCITA"
+                      ? "mf-anagrafica-btn-elimina"
+                      : "mf-anagrafica-btn-conferma"
+                  }
+                  onClick={handleBulkMovimenti}
+                >
+                  {contItem.modalMode === "STORNO"
+                    ? "STORNA"
+                    : contItem.tipo === "USCITA"
+                    ? "PAGA"
+                    : "INCASSA"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY ELABORAZIONE */}
+      {loadingBulk && (
+        <div className="mf-anagrafica-overlay mf-anagrafica-loading">
+          <div className="mf-anagrafica-loading-icon">⏳</div>
+          Elaborazione movimenti in corso...
+        </div>
+      )}
     </div>
-  );
+  </PageLayout>
+);
+
+
+
 };
 
 export default AnagraficaMovimentoFinanziario;

@@ -1,81 +1,220 @@
-.gestione-scarichi-container {
-  max-width: 1400px;
-  margin: 20px auto;
-  padding: 20px;
-  background: #fdfdfd;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-  font-family: Arial, sans-serif;
-  overflow-x: auto;
+
+/* ==================================================
+   METALFLOW - GESTIONE UTENTI
+   Stili specifici della pagina.
+   L'header e i pulsanti condivisi sono gestiti
+   da PageLayout e ActionButton.
+   ================================================== */
+
+.mf-users-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  color: var(--mf-text);
+  font-family: var(--mf-font);
 }
 
-h2 {
-  margin-bottom: 20px;
+.mf-users-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.form {
+.mf-users-toolbar h2 {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 22px;
+}
+
+.mf-users-message {
+  padding: 12px 14px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  overflow-wrap: anywhere;
+}
+
+.mf-users-section {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  background: var(--mf-surface);
+  box-shadow: var(--mf-shadow);
+}
+
+.mf-users-section h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  color: var(--mf-text);
+}
+
+.mf-users-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mf-users-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mf-users-field label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mf-text);
+}
+
+.mf-users-field input,
+.mf-users-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font: inherit;
+}
+
+.mf-users-field input:focus,
+.mf-users-field select:focus {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 1px;
+}
+
+.mf-users-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-top: 18px;
 }
 
-.form input, .form select {
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+.mf-users-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  background: var(--mf-surface);
+  box-shadow: var(--mf-shadow);
 }
 
-button {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  color: white;
-  transition: background 0.2s;
-  background: #444;
-  min-height: 32px;
-}
-
-button:hover {
-  opacity: 0.9;
-}
-
-.elimina {
-  background-color: #cc0000;
-  margin-left: 5px;
-}
-
-table {
+.mf-users-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 14px;
 }
 
-table th, table td {
-  padding: 8px 10px;
-  border: 1px solid #ccc;
+.mf-users-table th,
+.mf-users-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--mf-border);
   text-align: left;
   vertical-align: middle;
 }
-select {
-  padding: 6px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  min-height: 32px;
-  background: white;
-  color: black;
+
+.mf-users-table th {
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-table th {
-  background-color: #eee;
+.mf-users-table th.is-sortable {
+  cursor: pointer;
+  user-select: none;
 }
 
-@media (max-width: 768px) {
-  .form {
+.mf-users-table th.is-sortable:hover {
+  background: #eaf0f4;
+}
+
+.mf-users-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mf-users-table tbody tr:hover {
+  background: var(--mf-surface-alt);
+}
+
+.mf-users-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mf-users-table td {
+  overflow-wrap: anywhere;
+}
+
+.mf-users-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 250px;
+}
+
+.mf-users-status {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mf-users-status--blocked {
+  background: #fbe9e7;
+  color: var(--mf-danger);
+}
+
+.mf-users-status--enabled {
+  background: #e8f5e9;
+  color: #276738;
+}
+
+.mf-users-empty {
+  padding: 22px !important;
+  text-align: center !important;
+  color: #687780;
+}
+
+@media (max-width: 700px) {
+  .mf-users-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mf-users-section {
+    padding: 14px;
+  }
+
+  .mf-users-toolbar {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  button {
+  .mf-users-toolbar h2 {
+    font-size: 20px;
+  }
+
+  .mf-users-actions {
+    flex-direction: column;
+  }
+
+  .mf-users-actions > * {
     width: 100%;
+  }
+
+  .mf-users-table {
+    min-width: 760px;
   }
 }

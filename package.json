@@ -33,13 +33,15 @@
     "react-window": "^2.2.7",
     "web-vitals": "^2.1.4"
   },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "deploy": "git add . && git commit -m \"update\" && git push origin master && npm run build && firebase deploy --only hosting"
-  },
+  
+"scripts": {
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject",
+  "deploy": "git add . && git commit -m \"update\" && git push origin master && npm run build && firebase deploy --only hosting",
+  "apk": "npm run build && npx cap sync android && cd android && gradlew.bat assembleRelease && copy /Y app\\build\\outputs\\apk\\release\\app-release.apk ..\\METALFLOW.apk"
+},
   "eslintConfig": {
     "extends": [
       "react-app",

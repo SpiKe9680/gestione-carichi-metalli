@@ -1,0 +1,575 @@
+
+/* ==================================================
+   METALFLOW - GESTIONE CONTROPARTI AVANZATA
+   Convenzioni UI condivise
+   ================================================== */
+
+.gca-container {
+  width: calc(100% - 32px);
+  max-width: 1600px;
+  margin: 16px auto;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  box-shadow: var(--mf-shadow);
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+}
+
+.gca-container *,
+.gca-container *::before,
+.gca-container *::after {
+  box-sizing: border-box;
+}
+
+/* Header */
+
+.gca-container .gca-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+/* Logo e titolo sempre affiancati */
+
+.gca-container .gca-brand {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.gca-container .scarichi-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 180px;
+  max-height: 65px;
+  object-fit: contain;
+}
+
+.gca-container .scarichi-title {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+}
+
+/* Azioni header */
+
+.gca-container .gca-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Non modificare .mf-btn: gli stili arrivano da layout.css */
+
+.gca-container .gca-toolbar .mf-btn,
+.gca-container .gca-merge-actions .mf-btn,
+.gca-container .gca-row-actions .mf-btn,
+.gca-container .gca-modal-actions .mf-btn {
+  width: auto;
+}
+
+/* Azioni principali */
+
+.gca-container .gca-page-actions {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.gca-container .gca-page-actions .mf-btn {
+  flex: 0 1 auto;
+  width: auto;
+  min-height: 44px;
+}
+
+/* Pannello fusione */
+
+.gca-container .gca-merge-panel {
+  margin-bottom: 20px;
+  padding: 18px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gca-container .gca-merge-panel h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.gca-container .gca-merge-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gca-container .gca-merge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.gca-container .gca-warning {
+  margin-top: 10px;
+  padding: 10px 12px;
+  color: var(--mf-danger);
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* Filtri */
+
+.gca-container .gca-filters {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #e6f3fa;
+  border: 1px solid #bcd9ea;
+  border-radius: 8px;
+}
+
+.gca-container .gca-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gca-container .gca-checkbox-label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--mf-primary);
+}
+
+.gca-container .gca-date-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gca-container .gca-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: var(--mf-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gca-container .gca-field input,
+.gca-container .gca-field textarea,
+.gca-container .gca-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.gca-container .gca-field input:focus,
+.gca-container .gca-field textarea:focus,
+.gca-container .gca-field select:focus {
+  border-color: var(--mf-primary);
+  outline: 2px solid rgb(30 90 128 / 15%);
+  outline-offset: 1px;
+}
+
+.gca-container .gca-field input[readonly] {
+  background: var(--mf-surface-alt);
+  color: var(--mf-muted);
+}
+
+.gca-container .react-datepicker-wrapper,
+.gca-container .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+/* Tabella */
+
+.gca-container .gca-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mf-border);
+  border-radius: 8px;
+}
+
+.gca-container .gca-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--mf-surface);
+  font-size: 14px;
+}
+
+.gca-container .gca-table thead {
+  background: var(--mf-surface-alt);
+}
+
+.gca-container .gca-table th {
+  padding: 12px;
+  background: var(--mf-surface-alt);
+  border-bottom: 1px solid var(--mf-border);
+  color: var(--mf-text);
+  font-weight: 700;
+  text-align: center;
+  white-space: normal;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gca-container .gca-table th:last-child {
+  cursor: default;
+}
+
+.gca-container .gca-table th:hover:not(:last-child) {
+  background: #eaf0f4;
+}
+
+.gca-container .gca-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mf-border);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.gca-container .gca-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.gca-container .gca-table tbody tr:hover {
+  background: #f3f8fb;
+}
+
+.gca-container .gca-table .gca-name-cell {
+  font-weight: 600;
+  text-align: left;
+}
+
+
+.gca-container .gca-table td:nth-child(4),
+.gca-container .gca-table td:nth-child(5) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.gca-container .gca-table .gca-count-scarichi {
+  color: var(--mf-danger);
+  font-weight: 700;
+}
+
+.gca-container .gca-table .gca-count-carichi {
+  color: var(--mf-success, #4caf50);
+  font-weight: 700;
+}
+
+
+/* Pulsanti Azioni: tutti sulla stessa riga */
+
+.gca-container .gca-row-actions {
+  min-width: 330px;
+  white-space: nowrap;
+}
+
+.gca-container .gca-row-actions .mf-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 36px;
+  margin: 2px;
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+/* Errori */
+
+.gca-container .gca-errors {
+  margin-top: 20px;
+  padding: 12px;
+  color: var(--mf-danger);
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: 7px;
+  font-size: 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Overlay e modale */
+
+.gca-container .gca-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 60%);
+}
+
+.gca-container .gca-modal {
+  width: 700px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  box-shadow: var(--mf-shadow);
+}
+
+.gca-container .gca-modal h2 {
+  margin: 0 0 22px;
+  color: var(--mf-text);
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.gca-container .gca-modal h3 {
+  margin: 24px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--mf-border);
+  color: var(--mf-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.gca-container .gca-form-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gca-container .gca-form-grid-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gca-container .gca-form-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gca-container .gca-address-grid {
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+
+.gca-container .gca-location-grid {
+  grid-template-columns: 100px minmax(0, 1fr) 100px 110px;
+}
+
+.gca-container .gca-destination-code {
+  max-width: 280px;
+}
+
+.gca-container .gca-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mf-border);
+}
+
+/* Accessibilità */
+
+.gca-container button:focus-visible,
+.gca-container input:focus-visible {
+  outline-offset: 2px;
+}
+
+/* Tablet */
+
+@media (max-width: 1100px) {
+  .gca-container .gca-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .gca-container .gca-toolbar {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .gca-container .gca-merge-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gca-container .gca-table {
+    min-width: 850px;
+  }
+
+  .gca-container .gca-location-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Smartphone */
+
+@media (max-width: 600px) {
+  .gca-container {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .gca-container .gca-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .gca-container .gca-brand {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .gca-container .scarichi-logo {
+    max-width: 100px;
+    max-height: 45px;
+  }
+
+  .gca-container .scarichi-title {
+    font-size: 20px;
+  }
+
+  .gca-container .gca-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .gca-container .gca-toolbar .mf-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .gca-container .gca-page-actions {
+    flex-direction: column;
+  }
+
+  .gca-container .gca-page-actions .mf-btn {
+    width: 100%;
+  }
+
+  .gca-container .gca-merge-panel {
+    padding: 12px;
+  }
+
+  .gca-container .gca-merge-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gca-container .gca-merge-actions .mf-btn {
+    width: 100%;
+  }
+
+  .gca-container .gca-filters {
+    padding: 12px;
+  }
+
+  .gca-container .gca-date-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gca-container .gca-modal {
+    padding: 16px;
+    max-height: 95vh;
+  }
+
+  .gca-container .gca-modal h2 {
+    font-size: 19px;
+  }
+
+  .gca-container .gca-form-grid-two,
+  .gca-container .gca-address-grid,
+  .gca-container .gca-location-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gca-container .gca-destination-code {
+    max-width: none;
+  }
+
+  .gca-container .gca-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gca-container .gca-modal-actions .mf-btn {
+    width: 100%;
+  }
+}
+
+/* Smartphone molto stretti */
+
+@media (max-width: 360px) {
+  .gca-container {
+    width: calc(100% - 10px);
+    padding: 8px;
+  }
+
+  .gca-container .gca-header {
+    padding: 10px;
+  }
+
+  .gca-container .scarichi-logo {
+    max-width: 75px;
+    max-height: 40px;
+  }
+
+  .gca-container .scarichi-title {
+    font-size: 18px;
+  }
+
+  .gca-container .gca-modal {
+    padding: 12px;
+  }
+}

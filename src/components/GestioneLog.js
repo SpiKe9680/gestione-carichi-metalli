@@ -7,7 +7,11 @@ import { ripristinaLog } from "../utils/log";
 import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
+import { FaSignOutAlt } from "react-icons/fa";
+import { loadConfigAzienda } from "../utils/dateUtils";
+import { FaUndo, FaEye } from "react-icons/fa";
 const GestioneLog = () => {
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
@@ -26,7 +30,17 @@ const currentUser = JSON.parse(sessionStorage.getItem("utenteLoggato")) || {};
 const [currentPage, setCurrentPage] = useState(1);
 const pageSize = 50;
   const navigate = useNavigate();
+const [sortField, setSortField] = useState("timestamp");
+const [sortAsc, setSortAsc] = useState(false);
 
+const handleSort = (field) => {
+  if (sortField === field) {
+    setSortAsc(prev => !prev);
+  } else {
+    setSortField(field);
+    setSortAsc(true);
+  }
+};
   // NAV
   const handleLogout = async () => { await auth.signOut(); navigate("/login"); };
   
@@ -59,7 +73,16 @@ const logRipristinabile = (log) => {
     }
   };
   useEffect(() => { fetchLogs(); }, []);
+const [configAzienda, setConfigAzienda] = useState(null);
 
+useEffect(() => {
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+
+  load();
+}, []);
   // DATE DEFAULT
  useEffect(() => {
   if (maxDataDB) {
@@ -141,32 +164,90 @@ const computeBaseForDropdowns = () => {
 
   return dati;
 };
+const sortedLogs = [...filteredLogs].sort((a, b) => {
+  let valueA;
+  let valueB;
 
-const totalPages = Math.ceil(filteredLogs.length / pageSize);
+  switch (sortField) {
+    case "timestamp":
+      valueA = a.timestamp?.toDate?.()?.getTime() ?? 0;
+      valueB = b.timestamp?.toDate?.()?.getTime() ?? 0;
+      break;
 
-const paginatedLogs = filteredLogs.slice(
+    case "pagina":
+      valueA = a.pagina || "sconosciuta";
+      valueB = b.pagina || "sconosciuta";
+      break;
+
+    case "utente":
+      valueA = a.utente || "sconosciuto";
+      valueB = b.utente || "sconosciuto";
+      break;
+
+    case "evento":
+      valueA = a.evento || (a.azione ? `${a.azione}_${a.tipo}` : a.tipo) || "NON DEFINITO";
+      valueB = b.evento || (b.azione ? `${b.azione}_${b.tipo}` : b.tipo) || "NON DEFINITO";
+      break;
+
+    case "ripristinato":
+      valueA = a.ripristinato ? 1 : 0;
+      valueB = b.ripristinato ? 1 : 0;
+      break;
+
+    default:
+      return 0;
+  }
+
+  let confronto;
+
+  if (typeof valueA === "number" && typeof valueB === "number") {
+    confronto = valueA - valueB;
+  } else {
+    confronto = String(valueA).localeCompare(String(valueB), "it", {
+      sensitivity: "base"
+    });
+  }
+
+  return sortAsc ? confronto : -confronto;
+});
+
+const totalPages = Math.ceil(sortedLogs.length / pageSize);
+
+const paginatedLogs = sortedLogs.slice(
   (currentPage - 1) * pageSize,
   currentPage * pageSize
 );
 
-  return (
+return (
+  <PageLayout
+    title="Gestione Log Operazioni"
+    logoBase64={configAzienda?.logoBase64}
+    maxWidth={1800}
+    headerActions={
+      <>
+        <ActionButton variant="admin" compact onClick={goHome}>
+          🏠 Dashboard
+        </ActionButton>
+        <ActionButton variant="danger" compact onClick={handleLogout}>
+          <FaSignOutAlt />
+          Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </ActionButton>
+      </>
+    }
+  >
     <div className="gestione-log-container">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
-        <button onClick={goHome}>🏠 Dashboard</button>
-       <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>  </div>
-
-      <h2>Gestione Log Operazioni</h2>
-
       <div className="filtri-log">
-        <label style={{display:"flex",alignItems:"center"}}>
-          <input type="checkbox" checked={tutti} onChange={e=>setTutti(e.target.checked)} />
+        <label style={{ display: "flex", alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={tutti}
+            onChange={e => setTutti(e.target.checked)}
+          />
           Disabilita filtro date
         </label>
 
         {!tutti && (
-          <div style={{display:"flex", gap:"12px", marginTop:"8px"}}>
+          <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
             <label className="filter-item">
               Dal:
               <DatePicker
@@ -193,127 +274,167 @@ const paginatedLogs = filteredLogs.slice(
           </div>
         )}
 
-        <div style={{marginTop:"12px"}}>
-          <label>
-            Pagina:
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    📄 Pagina
-  </label>
+        <div style={{ marginTop: "12px" }}>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: "block", marginBottom: 5 }}>
+              📄 Pagina
+            </label>
+            <Select
+              styles={selectStyle}
+              value={{ value: paginaFilter, label: paginaFilter }}
+              onChange={opt => setPaginaFilter(opt?.value || "tutte")}
+              options={[
+                { value: "tutte", label: "Tutte" },
+                ...pagineDisponibili.map(p => ({ value: p, label: p }))
+              ]}
+            />
+          </div>
 
-  <Select
-    styles={selectStyle}
-    value={{ value: paginaFilter, label: paginaFilter }}
-    onChange={(opt) => setPaginaFilter(opt?.value || "tutte")}
-    options={[
-      { value: "tutte", label: "Tutte" },
-      ...pagineDisponibili.map(p => ({ value: p, label: p }))
-    ]}
-  />
-</div>
-          </label>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: "block", marginBottom: 5 }}>
+              👤 Utente
+            </label>
+            <Select
+              styles={selectStyle}
+              value={{ value: utenteFilter, label: utenteFilter }}
+              onChange={opt => setUtenteFilter(opt?.value || "tutti")}
+              options={[
+                { value: "tutti", label: "Tutti" },
+                ...utentiDisponibili.map(u => ({ value: u, label: u }))
+              ]}
+            />
+          </div>
 
-          <label style={{marginLeft:"12px"}}>
-            Utente:
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    👤 Utente
-  </label>
-
-  <Select
-    styles={selectStyle}
-    value={{ value: utenteFilter, label: utenteFilter }}
-    onChange={(opt) => setUtenteFilter(opt?.value || "tutti")}
-    options={[
-      { value: "tutti", label: "Tutti" },
-      ...utentiDisponibili.map(u => ({ value: u, label: u }))
-    ]}
-  />
-</div>
-          </label>
-
-          <label style={{marginLeft:"12px"}}>
-            Tipo:
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", marginBottom: 5 }}>
-    ⚙️ Tipo evento
-  </label>
-
-  <Select
-    styles={selectStyle}
-    value={{ value: tipoFilter, label: tipoFilter }}
-    onChange={(opt) => setTipoFilter(opt?.value || "tutte")}
-    options={[
-      { value: "tutte", label: "Tutte" },
-      ...tipiDisponibili.map(t => ({ value: t, label: t }))
-    ]}
-  />
-</div>
-          </label>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: "block", marginBottom: 5 }}>
+              ⚙️ Tipo evento
+            </label>
+            <Select
+              styles={selectStyle}
+              value={{ value: tipoFilter, label: tipoFilter }}
+              onChange={opt => setTipoFilter(opt?.value || "tutte")}
+              options={[
+                { value: "tutte", label: "Tutte" },
+                ...tipiDisponibili.map(t => ({ value: t, label: t }))
+              ]}
+            />
+          </div>
         </div>
       </div>
 
-      <table className="tabella-log" style={{marginTop:"16px"}}>
-        <thead>
-          <tr>
-            <th>Data / Ora</th>
-            <th>Pagina</th>
-            <th>Utente</th>
-            <th>Tipo</th>
-            <th>Ripristinato</th>
-            <th>Azioni</th>
-          </tr>
-        </thead>
+      <table className="tabella-log" style={{ marginTop: "16px" }}>
+<thead>
+  <tr>
+    {[
+      { label: "Data / Ora", field: "timestamp" },
+      { label: "Pagina", field: "pagina" },
+      { label: "Utente", field: "utente" },
+      { label: "Tipo", field: "evento" },
+      { label: "Ripristinato", field: "ripristinato" },
+      { label: "Azioni", field: null }
+    ].map((h, idx) => {
+      const isSortable = h.field !== null;
+      const isActive = h.field === sortField;
+
+      return (
+        <th
+          key={idx}
+          onClick={() => isSortable && handleSort(h.field)}
+          style={{
+            cursor: isSortable ? "pointer" : "default",
+            opacity: isSortable ? 1 : 0.6
+          }}
+          title={isSortable ? "Clicca per ordinare" : ""}
+        >
+          {h.label}
+          {isActive && (sortAsc ? " ⬆️" : " ⬇️")}
+        </th>
+      );
+    })}
+  </tr>
+</thead>
         <tbody>
-          {paginatedLogs.map(log=>(
-            <tr key={log.id} style={{background: log.ripristinato ? "#ddd" : "transparent"}}>
+          {paginatedLogs.map(log => (
+            <tr
+              key={log.id}
+              style={{ background: log.ripristinato ? "#ddd" : "transparent" }}
+            >
               <td>{formattaData(log.timestamp)}</td>
               <td>{log.pagina || "sconosciuta"}</td>
               <td>{log.utente || "sconosciuto"}</td>
-              <td>{log.evento || (log.azione ? `${log.azione}_${log.tipo}` : log.tipo) || "NON DEFINITO"}</td>
-              <td>{log.ripristinato ? "✅" : "❌"}</td>
               <td>
-                {logRipristinabile(log) && (  <button    onClick={async () => {      await ripristinaLog(log);
-
-      setLogs(prev =>
-        prev.map(l =>
-          l.id === log.id
-            ? { ...l, ripristinato: true }
-            : l
-        )
-      );
-    }}
-  >
-    Ripristina
-  </button>
-)}
-                <button style={{marginLeft:"8px"}} onClick={()=>apriDettagli(log)}>Dettagli</button>
+                {log.evento ||
+                  (log.azione ? `${log.azione}_${log.tipo}` : log.tipo) ||
+                  "NON DEFINITO"}
               </td>
+              <td>{log.ripristinato ? "✅" : "❌"}</td>
+<td>
+  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "nowrap" }}>
+    {logRipristinabile(log) && (
+      <ActionButton
+        variant="admin"
+        compact
+        onClick={async () => {
+          await ripristinaLog(log);
+
+          setLogs(prev =>
+            prev.map(l =>
+              l.id === log.id
+                ? { ...l, ripristinato: true }
+                : l
+            )
+          );
+        }}
+      >
+        <FaUndo />
+        Ripristina
+      </ActionButton>
+    )}
+
+    <ActionButton
+      variant="admin"
+      compact
+      onClick={() => apriDettagli(log)}
+    >
+      <FaEye />
+      Dettagli
+    </ActionButton>
+  </div>
+</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: 20, display: "flex", justifyContent: "center", gap: 10 }}>
-  <button
-    disabled={currentPage === 1}
-    onClick={() => setCurrentPage(p => p - 1)}
-  >
-    ⬅️ Prev
-  </button>
 
-  <span>
-    Pagina {currentPage} / {totalPages || 1}
-  </span>
+      <div
+        style={{
+          marginTop: 20,
+          display: "flex",
+          justifyContent: "center",
+          gap: 10
+        }}
+      >
+        <button
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage(p => p - 1)}
+        >
+          ⬅️ Prev
+        </button>
 
-  <button
-    disabled={currentPage === totalPages}
-    onClick={() => setCurrentPage(p => p + 1)}
-  >
-    Next ➡️
-  </button>
-</div>
+        <span>
+          Pagina {currentPage} / {totalPages || 1}
+        </span>
+
+        <button
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage(p => p + 1)}
+        >
+          Next ➡️
+        </button>
+      </div>
     </div>
-  );
+  </PageLayout>
+);
 };
 
 export default GestioneLog;

@@ -1,0 +1,447 @@
+
+/* ==================================================
+   METALFLOW - MOVIMENTI FINANZIARI
+   Convenzioni UI condivise
+   ================================================== */
+
+.mf-financial-page {
+  width: calc(100% - 32px);
+  max-width: 1600px;
+  margin: 16px auto;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+  box-shadow: var(--mf-shadow);
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+}
+
+.mf-financial-page *,
+.mf-financial-page *::before,
+.mf-financial-page *::after {
+  box-sizing: border-box;
+}
+
+/* Header */
+
+.mf-financial-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-financial-title {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.mf-financial-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mf-financial-toolbar .mf-btn,
+.mf-financial-week-navigation .mf-btn {
+  width: auto;
+}
+
+/* Area contenuti e stampa */
+
+.mf-financial-content {
+  min-width: 0;
+}
+
+.mf-financial-print-title {
+  display: none;
+  margin: 0 0 20px;
+  color: var(--mf-text);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* Avviso avvio impianto */
+
+.mf-financial-start-notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-left: 4px solid var(--mf-primary);
+  border-radius: var(--mf-radius-sm);
+  color: var(--mf-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Filtri e navigazione */
+
+.mf-financial-filters {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #e6f3fa;
+  border: 1px solid #bcd9ea;
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-financial-date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+  color: var(--mf-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mf-financial-date-label .react-datepicker-wrapper,
+.mf-financial-date-label .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+.mf-financial-date-label .big-datepicker {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font-family: var(--mf-font);
+  font-size: 14px;
+}
+
+.mf-financial-date-label .big-datepicker:focus {
+  border-color: var(--mf-primary);
+  outline: 2px solid rgb(30 90 128 / 15%);
+  outline-offset: 1px;
+}
+
+.mf-financial-week-navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Tabella */
+
+.mf-financial-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-financial-table {
+  width: 100%;
+  min-width: 800px;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mf-financial-table thead {
+  background: var(--mf-surface-alt);
+}
+
+.mf-financial-table th {
+  padding: 13px 12px;
+  background: var(--mf-surface-alt);
+  border-bottom: 1px solid var(--mf-border);
+  color: var(--mf-text);
+  font-weight: 700;
+  text-align: center;
+  white-space: normal;
+}
+
+.mf-financial-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--mf-border);
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.mf-financial-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mf-financial-table .mf-financial-day {
+  text-align: left;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Righe: indicatori dell'andamento giornaliero */
+
+.mf-financial-table .mf-financial-row {
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.mf-financial-table .mf-financial-row-positive {
+  background: green;
+  color: white;
+}
+
+.mf-financial-table .mf-financial-row-negative {
+  background: red;
+  color: white;
+}
+
+.mf-financial-table .mf-financial-row-neutral {
+  background: white;
+  color: black;
+}
+
+.mf-financial-table .mf-financial-row:hover {
+  filter: brightness(0.90);
+}
+
+.mf-financial-table .mf-financial-count,
+.mf-financial-table .mf-financial-amount {
+  text-align: right;
+}
+
+.mf-financial-table .mf-financial-profit {
+  font-weight: 700;
+}
+
+/* Riepilogo settimanale */
+
+.mf-financial-summary {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-financial-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mf-financial-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-financial-summary-item span {
+  color: var(--mf-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mf-financial-summary-item strong {
+  color: var(--mf-text);
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.mf-financial-expenses {
+  border-top: 3px solid var(--mf-danger, #c62828);
+}
+
+.mf-financial-income {
+  border-top: 3px solid var(--mf-success, #2e7d32);
+}
+
+.mf-financial-total {
+  border-top: 3px solid var(--mf-primary);
+}
+
+/* Accessibilità */
+
+.mf-financial-page button:focus-visible,
+.mf-financial-page input:focus-visible {
+  outline-offset: 2px;
+}
+
+/* Tablet */
+
+@media (max-width: 900px) {
+  .mf-financial-header {
+    align-items: flex-start;
+  }
+
+  .mf-financial-toolbar {
+    justify-content: flex-start;
+  }
+
+  .mf-financial-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mf-financial-total {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Smartphone */
+
+@media (max-width: 600px) {
+  .mf-financial-page {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .mf-financial-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .mf-financial-title {
+    font-size: 20px;
+  }
+
+  .mf-financial-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .mf-financial-toolbar .mf-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .mf-financial-filters {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .mf-financial-date-label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mf-financial-week-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mf-financial-week-navigation .mf-btn {
+    width: 100%;
+    min-height: 40px;
+    white-space: normal;
+  }
+
+  .mf-financial-summary {
+    padding: 12px;
+  }
+
+  .mf-financial-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mf-financial-total {
+    grid-column: auto;
+  }
+
+  .mf-financial-summary-item strong {
+    font-size: 18px;
+  }
+}
+
+/* Smartphone molto stretti */
+
+@media (max-width: 360px) {
+  .mf-financial-page {
+    width: calc(100% - 10px);
+    padding: 8px;
+  }
+
+  .mf-financial-title {
+    font-size: 18px;
+  }
+
+  .mf-financial-week-navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Stampa browser */
+
+@media print {
+  .mf-financial-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .mf-financial-header {
+    display: none;
+  }
+
+  .mf-financial-print-title {
+    display: block;
+  }
+
+  .mf-financial-filters {
+    background: #fff;
+    border-color: #ccc;
+  }
+
+  .mf-financial-table-wrapper {
+    overflow: visible;
+  }
+
+  .mf-financial-table {
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  .mf-financial-table th,
+  .mf-financial-table td {
+    padding: 7px 5px;
+  }
+
+  .mf-financial-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

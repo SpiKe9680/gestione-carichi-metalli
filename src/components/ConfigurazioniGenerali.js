@@ -11,7 +11,10 @@ import {
   addDoc,
   updateDoc
 } from "firebase/firestore";
-
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
+import { FaSignOutAlt } from "react-icons/fa";
+import "./ConfigurazioniGenerali.css";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -500,605 +503,449 @@ const toggleBancaAttiva = async (banca) => {
   }
 };
 
-  return (
-    <div style={{ padding: 20 }}>
-      {/* HEADER */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 20,
-        }}
-      >
-        <h2>Configurazioni Generali Azienda</h2>
+ 
+return (
+  <PageLayout
+    title="Configurazioni Generali Azienda"
+    logoBase64={logoBase64}
+    maxWidth={1400}
+    headerActions={
+      <>
+        <ActionButton
+          variant="admin"
+          compact
+          onClick={() => navigate("/admin")}
+        >
+          🏠 Dashboard
+        </ActionButton>
 
-        <div>
-          <button
-            onClick={() => navigate("/admin")}
-            style={{ marginRight: 10 }}
-          >
-            🏠 Dashboard
-          </button>
-
-          <button onClick={handleLogout}>
-  🚪Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
-</button>
-        </div>
-      </div>
-
-      {/* LOGO */}
-      <div style={{ marginBottom: 15 }}>
-        <label>Logo Azienda:</label>
-        <br />
-        {logoBase64 && (
-          <img
-            src={`data:${logoMimeType};base64,${logoBase64}`}
-            alt="Logo"
-            style={{
-              maxWidth: 150,
-              marginBottom: 10,
-              border: "1px solid #ccc",
-            }}
-          />
-        )}
-        <input type="file" accept="image/*" onChange={handleFileChange} />
-      </div>
-
-      {/* CAMPI */}
-      <div style={{ marginBottom: 10 }}>
-        <label>Ragione Sociale:</label>
-        <br />
-        <input
-          type="text"
-          value={ragioneSociale}
-          onChange={(e) => setRagioneSociale(e.target.value)}
-          style={{ width: "300px" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label>Indirizzo:</label>
-        <br />
-        <input
-          type="text"
-          value={indirizzo}
-          onChange={(e) => setIndirizzo(e.target.value)}
-          style={{ width: "300px" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label>CAP e Città:</label>
-        <br />
-        <input
-          type="text"
-          value={capCitta}
-          onChange={(e) => setCapCitta(e.target.value)}
-          style={{ width: "300px" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label>P.IVA:</label>
-        <br />
-        <input
-          type="text"
-          value={piva}
-          onChange={(e) => setPiva(e.target.value)}
-          style={{ width: "300px" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <label>Guadagno minimo €/kg:</label>
-        <br />
-        <input
-          type="number"
-          step="0.01"
-          value={guadagnoMinKg}
-          onChange={(e) =>
-            setGuadagnoMinKg(parseFloat(e.target.value) || 0.2)
-          }
-          style={{ width: "100px" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label>Mail recupero password:</label>
-        <br />
-        <input
-          type="email"
-          value={mailRecupero}
-          onChange={(e) => setMailRecupero(e.target.value)}
-          style={{ width: "300px" }}
-        />
-        
-      </div>
-{/* DATI FISCALI */}
-<div
-  style={{
-    marginTop: 25,
-    marginBottom: 25,
-    padding: 15,
-    border: "1px solid #ccc",
-    borderRadius: 8,
-  }}
->
-  <h3>Dati fiscali e fatturazione</h3>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Codice Fiscale:</label>
-    <br />
-    <input
-      type="text"
-      value={codiceFiscale}
-      onChange={(e) =>
-        setCodiceFiscale(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Codice Destinatario:</label>
-    <br />
-    <input
-      type="text"
-      value={codiceDestinatario}
-      onChange={(e) =>
-        setCodiceDestinatario(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>PEC:</label>
-    <br />
-    <input
-      type="email"
-      value={pec}
-      onChange={(e) =>
-        setPec(e.target.value)
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>E-mail aziendale:</label>
-    <br />
-    <input
-      type="email"
-      value={emailAziendale}
-      onChange={(e) =>
-        setEmailAziendale(
-          e.target.value
-        )
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Regime fiscale:</label>
-    <br />
-    <input
-      type="text"
-      value={regimeFiscale}
-      onChange={(e) =>
-        setRegimeFiscale(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "120px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Natura IVA predefinita:</label>
-    <br />
-    <input
-      type="text"
-      value={naturaIvaDefault}
-      onChange={(e) =>
-        setNaturaIvaDefault(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "120px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>
-      Riferimento normativo:
-    </label>
-    <br />
-    <input
-      type="text"
-      value={riferimentoNormativo}
-      onChange={(e) =>
-        setRiferimentoNormativo(
-          e.target.value
-        )
-      }
-      style={{ width: "500px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>
-      Condizioni pagamento:
-    </label>
-    <br />
-    <input
-      type="text"
-      value={condizioniPagamentoDefault}
-      onChange={(e) =>
-        setCondizioniPagamentoDefault(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "120px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>
-      Modalità pagamento:
-    </label>
-    <br />
-    <input
-      type="text"
-      value={modalitaPagamentoDefault}
-      onChange={(e) =>
-        setModalitaPagamentoDefault(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "120px" }}
-    />
-  </div>
-</div>
-
-
-<div style={{ marginBottom: 20 }}>
-  <label>Listino Carico Default:</label>
-<Select
-  options={listini
-    .filter(l => l.tipoListino === "CARICO")
-    .map(l => ({
-      value: l.id,
-      label: l.nome
-    }))
-  }
-  value={
-    listini
-      .filter(l => l.tipoListino === "CARICO")
-      .map(l => ({ value: l.id, label: l.nome }))
-      .find(o => o.value === listinoCaricoDefault) || null
-  }
-  onChange={(selected) => setListinoCaricoDefault(selected?.value || "")}
-  placeholder="Seleziona listino carico..."
-  isSearchable
-  isClearable
-/>
-
-</div>
-
-<div style={{ marginBottom: 20 }}>
-  <label>Listino Scarico Default:</label>
-<Select
-  options={listini
-    .filter(l => l.tipoListino === "SCARICO")
-    .map(l => ({
-      value: l.id,
-      label: l.nome
-    }))
-  }
-  value={
-    listini
-      .filter(l => l.tipoListino === "SCARICO")
-      .map(l => ({ value: l.id, label: l.nome }))
-      .find(o => o.value === listinoScaricoDefault) || null
-  }
-  onChange={(selected) => setListinoScaricoDefault(selected?.value || "")}
-  placeholder="Seleziona listino scarico..."
-  isSearchable
-  isClearable
-/>
-
-</div>
-
-{/* BANCHE */}
-<div
-  style={{
-    marginTop: 25,
-    marginBottom: 25,
-    padding: 15,
-    border: "1px solid #ccc",
-    borderRadius: 8,
-  }}
->
-  <h3>Gestione Banche</h3>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Nome Banca:</label>
-    <br />
-    <input
-      type="text"
-      value={bancaNome}
-      onChange={(e) =>
-        setBancaNome(e.target.value)
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>IBAN:</label>
-    <br />
-    <input
-      type="text"
-      value={bancaIban}
-      onChange={(e) =>
-        setBancaIban(
-          e.target.value.toUpperCase()
-        )
-      }
-      style={{ width: "400px" }}
-    />
-  </div>
-
-  <div
-    style={{
-      display: "flex",
-      gap: 15,
-      marginBottom: 10,
-    }}
+        <ActionButton
+          variant="danger"
+          compact
+          onClick={handleLogout}
+        >
+          <FaSignOutAlt />
+          Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </ActionButton>
+      </>
+    }
   >
-    <div>
-      <label>ABI:</label>
-      <br />
-      <input
-        type="text"
-        value={bancaAbi}
-        onChange={(e) =>
-          setBancaAbi(e.target.value)
-        }
-        style={{ width: "120px" }}
-      />
-    </div>
+    <div className="mf-config">
+      <section className="mf-config-section">
+        <h3>Dati aziendali</h3>
 
-    <div>
-      <label>CAB:</label>
-      <br />
-      <input
-        type="text"
-        value={bancaCab}
-        onChange={(e) =>
-          setBancaCab(e.target.value)
-        }
-        style={{ width: "120px" }}
-      />
-    </div>
-
-    <div>
-      <label>BIC (SWIFT):</label>
-      <br />
-      <input
-        type="text"
-        value={bancaBic}
-        onChange={(e) =>
-          setBancaBic(
-            e.target.value.toUpperCase()
-          )
-        }
-        style={{ width: "150px" }}
-      />
-    </div>
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>Intestatario:</label>
-    <br />
-    <input
-      type="text"
-      value={bancaIntestatario}
-      onChange={(e) =>
-        setBancaIntestatario(
-          e.target.value
-        )
-      }
-      style={{ width: "300px" }}
-    />
-  </div>
-
-  <div style={{ marginBottom: 10 }}>
-    <label>
-      <input
-        type="checkbox"
-        checked={bancaPredefinita}
-        onChange={(e) =>
-          setBancaPredefinita(
-            e.target.checked
-          )
-        }
-      />
-      {" "}Banca predefinita
-    </label>
-  </div>
-
-  <div style={{ marginBottom: 15 }}>
-    <label>
-      <input
-        type="checkbox"
-        checked={bancaAttiva}
-        onChange={(e) =>
-          setBancaAttiva(
-            e.target.checked
-          )
-        }
-      />
-      {" "}Banca attiva
-    </label>
-  </div>
-
-  <button
-    onClick={salvaBanca}
-    disabled={loadingBanca}
-    style={{ marginRight: 10 }}
-  >
-    {loadingBanca
-      ? "Salvando..."
-      : bancaModificaId
-      ? "Aggiorna Banca"
-      : "Aggiungi Banca"}
-  </button>
-
-  {bancaModificaId && (
-    <button
-      onClick={resetBanca}
-    >
-      Annulla modifica
-    </button>
-  )}
-
-  <hr
-    style={{
-      marginTop: 20,
-      marginBottom: 20
-    }}
-  />
-
-  {banche.length === 0 ? (
-    <div>
-      Nessuna banca configurata.
-    </div>
-  ) : (
-    <table
-      style={{
-        width: "100%",
-        borderCollapse: "collapse",
-      }}
-    >
-      <thead>
-        <tr>
-          <th style={{ textAlign: "left" }}>
-            Banca
-          </th>
-          <th style={{ textAlign: "left" }}>
-            IBAN
-          </th>
-          <th style={{ textAlign: "left" }}>
-            ABI
-          </th>
-          <th style={{ textAlign: "left" }}>
-            CAB
-          </th>
-          <th style={{ textAlign: "left" }}>
-            Stato
-          </th>
-          <th style={{ textAlign: "left" }}>
-            Azioni
-          </th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {banche.map((banca) => (
-          <tr key={banca.id}>
-            <td>
-              {banca.nome}
-              {banca.predefinita && (
-                <strong>
-                  {" "}⭐
-                </strong>
+        <div className="mf-config-grid">
+          <div className="mf-config-field mf-config-field--full">
+            <label>Logo aziendale</label>
+            <div className="mf-config-logo">
+              {logoBase64 && (
+                <img
+                  src={`data:${logoMimeType};base64,${logoBase64}`}
+                  alt="Logo aziendale"
+                />
               )}
-            </td>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleFileChange}
+              />
+            </div>
+          </div>
 
-            <td>
-              {banca.iban || "-"}
-            </td>
+          <div className="mf-config-field">
+            <label>Ragione sociale</label>
+            <input
+              type="text"
+              value={ragioneSociale}
+              onChange={(e) => setRagioneSociale(e.target.value)}
+            />
+          </div>
 
-            <td>
-              {banca.abi || "-"}
-            </td>
+          <div className="mf-config-field">
+            <label>Partita IVA</label>
+            <input
+              type="text"
+              value={piva}
+              onChange={(e) => setPiva(e.target.value)}
+            />
+          </div>
 
-            <td>
-              {banca.cab || "-"}
-            </td>
+          <div className="mf-config-field">
+            <label>Indirizzo</label>
+            <input
+              type="text"
+              value={indirizzo}
+              onChange={(e) => setIndirizzo(e.target.value)}
+            />
+          </div>
 
-            <td>
-              {banca.attiva === false
-                ? "Disattiva"
-                : "Attiva"}
-            </td>
+          <div className="mf-config-field">
+            <label>CAP e città</label>
+            <input
+              type="text"
+              value={capCitta}
+              onChange={(e) => setCapCitta(e.target.value)}
+            />
+          </div>
 
-            <td>
-              <button
-                onClick={() =>
-                  modificaBanca(banca)
-                }
-                style={{
-                  marginRight: 5
-                }}
-              >
-                Modifica
-              </button>
+          <div className="mf-config-field">
+            <label>Guadagno minimo €/kg</label>
+            <input
+              type="number"
+              step="0.01"
+              value={guadagnoMinKg}
+              onChange={(e) =>
+                setGuadagnoMinKg(parseFloat(e.target.value) || 0.2)
+              }
+            />
+          </div>
 
-              <button
-                onClick={() =>
-                  toggleBancaAttiva(
-                    banca
-                  )
-                }
-              >
-                {banca.attiva === false
-                  ? "Attiva"
-                  : "Disattiva"}
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )}
-</div>
+          <div className="mf-config-field">
+            <label>Mail recupero password</label>
+            <input
+              type="email"
+              value={mailRecupero}
+              onChange={(e) => setMailRecupero(e.target.value)}
+            />
+          </div>
+        </div>
+      </section>
 
-      {/* 🔥 GIORNO AVVIAMENTO FIXATO */}
-      <div style={{ marginBottom: 20 }}>
-        <label>Giorno di avviamento gestionale:</label>
-        <br />
+      <section className="mf-config-section">
+        <h3>Dati fiscali e fatturazione</h3>
 
-       <DatePicker
-  selected={
-    giornoAvviamento && !isNaN(new Date(giornoAvviamento).getTime())
-      ? new Date(giornoAvviamento)
-      : null
-  }
-  onChange={(date) => setGiornoAvviamento(date)}
-  dateFormat="dd MMM yyyy"
-  locale={it}
-  placeholderText="Seleziona data avvio"
-  isClearable
-/>
+        <div className="mf-config-grid">
+          <div className="mf-config-field">
+            <label>Codice fiscale</label>
+            <input
+              type="text"
+              value={codiceFiscale}
+              onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Codice destinatario</label>
+            <input
+              type="text"
+              value={codiceDestinatario}
+              onChange={(e) => setCodiceDestinatario(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>PEC</label>
+            <input
+              type="email"
+              value={pec}
+              onChange={(e) => setPec(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>E-mail aziendale</label>
+            <input
+              type="email"
+              value={emailAziendale}
+              onChange={(e) => setEmailAziendale(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Regime fiscale</label>
+            <input
+              type="text"
+              value={regimeFiscale}
+              onChange={(e) => setRegimeFiscale(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Natura IVA predefinita</label>
+            <input
+              type="text"
+              value={naturaIvaDefault}
+              onChange={(e) => setNaturaIvaDefault(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field mf-config-field--full">
+            <label>Riferimento normativo</label>
+            <input
+              type="text"
+              value={riferimentoNormativo}
+              onChange={(e) => setRiferimentoNormativo(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Condizioni pagamento</label>
+            <input
+              type="text"
+              value={condizioniPagamentoDefault}
+              onChange={(e) =>
+                setCondizioniPagamentoDefault(e.target.value.toUpperCase())
+              }
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Modalità pagamento</label>
+            <input
+              type="text"
+              value={modalitaPagamentoDefault}
+              onChange={(e) =>
+                setModalitaPagamentoDefault(e.target.value.toUpperCase())
+              }
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mf-config-section">
+        <h3>Listini predefiniti</h3>
+
+        <div className="mf-config-grid">
+          <div className="mf-config-field">
+            <label>Listino carico default</label>
+            <Select
+              className="mf-config-select"
+              classNamePrefix="react-select"
+              options={listini
+                .filter((l) => l.tipoListino === "CARICO")
+                .map((l) => ({ value: l.id, label: l.nome }))}
+              value={
+                listini
+                  .filter((l) => l.tipoListino === "CARICO")
+                  .map((l) => ({ value: l.id, label: l.nome }))
+                  .find((o) => o.value === listinoCaricoDefault) || null
+              }
+              onChange={(selected) =>
+                setListinoCaricoDefault(selected?.value || "")
+              }
+              placeholder="Seleziona listino carico..."
+              isSearchable
+              isClearable
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Listino scarico default</label>
+            <Select
+              className="mf-config-select"
+              classNamePrefix="react-select"
+              options={listini
+                .filter((l) => l.tipoListino === "SCARICO")
+                .map((l) => ({ value: l.id, label: l.nome }))}
+              value={
+                listini
+                  .filter((l) => l.tipoListino === "SCARICO")
+                  .map((l) => ({ value: l.id, label: l.nome }))
+                  .find((o) => o.value === listinoScaricoDefault) || null
+              }
+              onChange={(selected) =>
+                setListinoScaricoDefault(selected?.value || "")
+              }
+              placeholder="Seleziona listino scarico..."
+              isSearchable
+              isClearable
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mf-config-section">
+        <h3>Gestione banche</h3>
+
+        <div className="mf-config-grid">
+          <div className="mf-config-field">
+            <label>Nome banca</label>
+            <input
+              type="text"
+              value={bancaNome}
+              onChange={(e) => setBancaNome(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>IBAN</label>
+            <input
+              type="text"
+              value={bancaIban}
+              onChange={(e) => setBancaIban(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>ABI</label>
+            <input
+              type="text"
+              value={bancaAbi}
+              onChange={(e) => setBancaAbi(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>CAB</label>
+            <input
+              type="text"
+              value={bancaCab}
+              onChange={(e) => setBancaCab(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>BIC (SWIFT)</label>
+            <input
+              type="text"
+              value={bancaBic}
+              onChange={(e) => setBancaBic(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label>Intestatario</label>
+            <input
+              type="text"
+              value={bancaIntestatario}
+              onChange={(e) => setBancaIntestatario(e.target.value)}
+            />
+          </div>
+
+          <div className="mf-config-field">
+            <label className="mf-config-checkbox">
+              <input
+                type="checkbox"
+                checked={bancaPredefinita}
+                onChange={(e) => setBancaPredefinita(e.target.checked)}
+              />
+              Banca predefinita
+            </label>
+          </div>
+
+          <div className="mf-config-field">
+            <label className="mf-config-checkbox">
+              <input
+                type="checkbox"
+                checked={bancaAttiva}
+                onChange={(e) => setBancaAttiva(e.target.checked)}
+              />
+              Banca attiva
+            </label>
+          </div>
+        </div>
+
+        <div className="mf-config-banca-actions">
+          <ActionButton
+            onClick={salvaBanca}
+            disabled={loadingBanca}
+          >
+            {loadingBanca
+              ? "Salvataggio..."
+              : bancaModificaId
+              ? "Aggiorna banca"
+              : "Aggiungi banca"}
+          </ActionButton>
+
+          {bancaModificaId && (
+            <ActionButton variant="admin" onClick={resetBanca}>
+              Annulla modifica
+            </ActionButton>
+          )}
+        </div>
+
+        <div className="mf-config-table-wrap">
+          {banche.length === 0 ? (
+            <p style={{ padding: 12, margin: 0 }}>
+              Nessuna banca configurata.
+            </p>
+          ) : (
+            <table className="mf-config-table">
+              <thead>
+                <tr>
+                  <th>Banca</th>
+                  <th>IBAN</th>
+                  <th>ABI</th>
+                  <th>CAB</th>
+                  <th>Stato</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {banche.map((banca) => (
+                  <tr key={banca.id}>
+                    <td>
+                      {banca.nome}
+                      {banca.predefinita && <strong> ⭐</strong>}
+                    </td>
+                    <td>{banca.iban || "-"}</td>
+                    <td>{banca.abi || "-"}</td>
+                    <td>{banca.cab || "-"}</td>
+                    <td>{banca.attiva === false ? "Disattiva" : "Attiva"}</td>
+                    <td>
+                      <div className="mf-config-table-actions">
+                        <ActionButton
+                          variant="admin"
+                          compact
+                          onClick={() => modificaBanca(banca)}
+                        >
+                          Modifica
+                        </ActionButton>
+                        <ActionButton
+                          variant={banca.attiva === false ? "primary" : "danger"}
+                          compact
+                          onClick={() => toggleBancaAttiva(banca)}
+                        >
+                          {banca.attiva === false ? "Attiva" : "Disattiva"}
+                        </ActionButton>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <section className="mf-config-section">
+        <h3>Avviamento gestionale</h3>
+
+        <div className="mf-config-grid">
+          <div className="mf-config-field mf-config-date">
+            <label>Giorno di avviamento gestionale</label>
+            <DatePicker
+              selected={
+                giornoAvviamento &&
+                !isNaN(new Date(giornoAvviamento).getTime())
+                  ? new Date(giornoAvviamento)
+                  : null
+              }
+              onChange={(date) => setGiornoAvviamento(date)}
+              dateFormat="dd MMM yyyy"
+              locale={it}
+              placeholderText="Seleziona data avvio"
+              isClearable
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="mf-config-footer">
+        <ActionButton onClick={handleSave} disabled={loading}>
+          {loading ? "Salvataggio..." : "Salva configurazione"}
+        </ActionButton>
       </div>
 
-      {/* SAVE */}
-      <button onClick={handleSave} disabled={loading}>
-        {loading ? "Salvando..." : "Salva Configurazione"}
-      </button>
+      {messaggio && (
+        <div className="mf-config-message" role="status">
+          {messaggio}
+        </div>
+      )}
+    </div>
+  </PageLayout>
+);
 
-      {messaggio && <div style={{ marginTop: 15 }}>{messaggio}</div>}
- </div>
-  );
 };
 
 export default ConfigurazioniGenerali;

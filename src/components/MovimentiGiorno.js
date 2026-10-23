@@ -5,7 +5,11 @@ import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
 import { collection, getDocs, updateDoc, doc, getDoc, deleteDoc, addDoc } from "firebase/firestore";
 import jsPDF from "jspdf";
+import "./MovimentiGiorno.css"
 import html2canvas from "html2canvas";
+import PageLayout from "./layout/PageLayout";
+import ActionButton from "./ui/ActionButton";
+import { loadConfigAzienda } from "../utils/dateUtils";
 import { salvaESharePdfCapacitor } from "../utils/pdfStorage";
 const MovimentiGiorno = () => {
   const navigate = useNavigate();
@@ -145,7 +149,16 @@ const refreshAll = async () => {
   setMapProspetti(prospettiMap);
   setMapScarichi(scarichiMap);
 };
+const [configAzienda, setConfigAzienda] = useState(null);
 
+useEffect(() => {
+  const load = async () => {
+    const config = await loadConfigAzienda();
+    setConfigAzienda(config);
+  };
+
+  load();
+}, []);
   // --------------------------
   // NAVIGATION
   // --------------------------
@@ -364,15 +377,17 @@ const aggiornaFlagMovimenti = async (tipoDoc, docId, valore) => {
   });
 };
 
+
 const handleConsuntiva = async (row) => {
   const ok = window.confirm(
     `Confermare consuntivazione per ${row.controparte}?`
   );
-  if (!ok) return;
+  if (!ok) return false;
+
+  let successo = false;
 
   await runSafe(async () => {
     try {
-      // 1. crea MovimentoFinanziario
       const movRef = await addDoc(collection(db, "MovimentoFinanziario"), {
         anagraficaId: row.anagraficaId || row.id,
         data: selectedDate,
@@ -383,7 +398,6 @@ const handleConsuntiva = async (row) => {
 
       const movimentoId = movRef.id;
 
-      // 2. FATTURE → CARICHI
       if (row.tipo === "fattureCarichi") {
         await updateDoc(doc(db, "fattureCarichi", row.id), {
           movimentoFinanziarioId: movimentoId
@@ -391,7 +405,6 @@ const handleConsuntiva = async (row) => {
         await aggiornaFlagMovimenti("fattureCarichi", row.id, movimentoId);
       }
 
-      // 3. PROSPETTI → SCARICHI
       if (row.tipo === "prospettiFattura") {
         await updateDoc(doc(db, "prospettiFattura", row.id), {
           movimentoFinanziarioId: movimentoId
@@ -399,18 +412,22 @@ const handleConsuntiva = async (row) => {
         await aggiornaFlagMovimenti("prospettiFattura", row.id, movimentoId);
       }
 
-      // 4. PRIVATI (scarico singolo)
       if (row.tipo === "PRIVATI") {
         await updateDoc(doc(db, "scarichi", row.id), {
           movimentoFinanziarioId: movimentoId
         });
       }
+
+      successo = true;
     } catch (err) {
       console.error("❌ Errore consuntivazione:", err);
       alert("❌ Errore durante la consuntivazione");
     }
   });
+
+  return successo;
 };
+
 
 
 const handleDettaglioMovimento = async (row) => {
@@ -550,14 +567,14 @@ const handleDeleteFin = async (row) => {
   const ok = window.confirm(
     `Vuoi rimuovere la consuntivazione di ${row.controparte} di € ${Number(row.importo).toFixed(2)}?`
   );
-  if (!ok) return;
+  if (!ok) return false;
+
+  let successo = false;
 
   await runSafe(async () => {
     try {
-      // 1. elimina MovimentoFinanziario
       await deleteDoc(doc(db, "MovimentoFinanziario", row.id));
 
-      // 2. FATTURE → CARICHI
       if (row.tipo === "fattureCarichi") {
         const ref = doc(db, "fattureCarichi", row.anagraficaId);
         if ((await getDoc(ref)).exists()) {
@@ -566,7 +583,6 @@ const handleDeleteFin = async (row) => {
         await aggiornaFlagMovimenti("fattureCarichi", row.anagraficaId, null);
       }
 
-      // 3. PROSPETTI → SCARICHI
       if (row.tipo === "prospettiFattura") {
         const ref = doc(db, "prospettiFattura", row.anagraficaId);
         if ((await getDoc(ref)).exists()) {
@@ -575,19 +591,23 @@ const handleDeleteFin = async (row) => {
         await aggiornaFlagMovimenti("prospettiFattura", row.anagraficaId, null);
       }
 
-      // 4. PRIVATI (scarico singolo)
       if (row.tipo === "PRIVATI" && row.anagraficaId) {
         const ref = doc(db, "scarichi", row.anagraficaId);
         if ((await getDoc(ref)).exists()) {
           await updateDoc(ref, { movimentoFinanziarioId: null });
         }
       }
+
+      successo = true;
     } catch (err) {
       console.error("❌ Errore storno:", err);
       alert("❌ Errore durante lo storno");
     }
   });
+
+  return successo;
 };
+
 
 const entrateUsciteTop = rows.map(r => ({
   tipo: r.tipo,
@@ -700,631 +720,758 @@ const getOccorrenze = (item) => {
   // --------------------------
   // UI
   // --------------------------
- return (
-  
-  <div style={{ padding: 20 }}>
-    {globalLoading && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    background: "rgba(0,0,0,0.4)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 99999,
-    color: "white",
-    fontSize: 20
-  }}>
-    ⏳ Operazione in corso...
-  </div>
-)}
-    
-      {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={goDashboard}>🏠 Dashboard</button>
-<button onClick={handlePrintPDF}>  🖨️ Stampa PDF</button>
- <button  onClick={() =>  navigate("/MovimentiFinanziari", {  state: { date: selectedDate.toISOString() }})  }>  🔙 Calendario</button>        <button onClick={handleLogout}>          🚪 Logout ({currentUser.username || currentUser.email})        </button>
-      </div>      <h2>Movimento Giorno</h2>
-<div id="area-stampa">
-      <p>        📅 Giorno:{" "}        <strong>{new Date(selectedDate).toLocaleDateString("it-IT")}</strong>      </p>
-      {giornoAvviamento && (
-        <p>          ⚠️ Avvio impianto:{" "}          <strong>{giornoAvviamento.toLocaleDateString("it-IT")}</strong>        </p>
-      )}
-      <h3>Carichi / Scarichi</h3>
-      <div style={{ display: "flex", gap: 20 }}>
-        {/* PAGATI */}
-        <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
-          <h4>🟢 Consuntivati</h4>
- <table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>
-  <th>CONTROPARTE</th>
-  <th>DATA MOVIMENTO</th>
-  <th>IMPORTO</th>
-  <th>DETTAGLI🔍</th>
-</tr> </thead>
-  <tbody>
-    {rows.map((r, i) => {      const isEntrata =        r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
-      return (
-        <tr
-          key={i}
-          onDoubleClick={() => handleDeleteFin(r)}
-          title={`effettua doppio click per Stornare il movimento ${r.controparte} di ${r.importo.toLocaleString("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} €`}
+
+
+return (
+  <PageLayout
+    title="Dettaglio Movimenti"
+    logoBase64={configAzienda?.logoBase64}
+    maxWidth={1800}
+    headerActions={
+      <>
+        <ActionButton compact onClick={goDashboard}>
+          🏠 Dashboard
+        </ActionButton>
+
+        <ActionButton compact onClick={handlePrintPDF}>
+          🖨️ Stampa PDF
+        </ActionButton>
+
+        <ActionButton
+          compact
+          onClick={() =>
+            navigate("/MovimentiFinanziari", {
+              state: { date: selectedDate.toISOString() }
+            })
+          }
+        >
+          🔙 Calendario
+        </ActionButton>
+
+        <ActionButton variant="danger" compact onClick={handleLogout}>
+          🚪 Logout ({currentUser.username || currentUser.email || "Sconosciuto"})
+        </ActionButton>
+      </>
+    }
+  >
+    <div className="mf-day-page">
+      {globalLoading && (
+        <div
+          className="mf-day-loading"
           style={{
-            background: isEntrata ? "green" : "red",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
             color: "white",
-            cursor: "pointer"
+            fontSize: 20
           }}
         >
-          <td>{r.controparte}</td>          <td>            {toDate(r.dataMov)?.toLocaleDateString("it-IT") || ""}          </td>          <td>
-  {r.importo.toLocaleString("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} €
-</td>
-<td>
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      handleDettaglioMovimento(r);
-    }}
-    title="Visualizza documento originale"
-  >
-    🔍
-  </button>
-</td>
-        </tr>
-      );
-    })}  </tbody></table>
+          ⏳ Operazione in corso...
         </div>
-        <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
-<h4>🔴 Da Consuntivare</h4>
-<table style={{ width: "100%", borderCollapse: "collapse" }}>
-  <thead>    <tr>
-  <th>CONTROPARTE</th>
-  <th>DATA</th>
-  <th>IMPORTO</th>
-  <th>DETTAGLI🔍</th>
-</tr> </thead>
-  <tbody>
-    {daConsuntivare.map((r, i) => {
-      const isEntrata =
-        r.tipo === "fattureCarichi";
-      return (
-        <tr
-          key={i}
-          onClick={() => handleConsuntiva(r)}
-          title={`effettua un click per consuntivare il movimento ${r.controparte} di ${r.importo.toLocaleString("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} €`}
-          style={{
-            background: isEntrata ? "#d4edda" : "#f8d7da",
-            cursor: "pointer"
-          }}
-        >
-          <td>{r.controparte}</td>
-          <td>
-            {new Date(r.dataMov).toLocaleDateString("it-IT")}
-          </td>
-          <td>
-  {r.importo.toLocaleString("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} €
-</td><td>
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      handleDettaglioMovimento(r);
-    }}
-    title="Visualizza documento originale"
-  >
-    🔍
-  </button>
-</td>
-        </tr>
-      );
-    })}
-  </tbody>
-</table>
-        </div>
-      </div>
-<h3 style={{ marginTop: 40 }}>Altri Movimenti</h3>
-<div style={{ display: "flex", gap: 20 }}>
-<div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
-    <h4>🟢 Consuntivati</h4>
+      )}
 
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>      </thead>
-      <tbody>
-  {anagraficaMov.map(item => {
+      <div id="area-stampa">
+        <p>
+          📅 Giorno:{" "}
+          <strong>{new Date(selectedDate).toLocaleDateString("it-IT")}</strong>
+        </p>
 
- const movs = movFin.filter(m =>
-  m.anagraficaId === item.id &&
-  isSameDay(m.data, selectedDate)
-).map(m => ({
-  id: m.id,
- data: toDate(m.dataDocumento ?? m.data),
-  importo: m.importo,
-  tipo: m.tipo
-}));
-  if (movs.length === 0) return null;
-const totale = movs.reduce((s, m) => s + (Number(m.importo) || 0), 0);
+        {giornoAvviamento && (
+          <p>
+            ⚠️ Avvio impianto:{" "}
+            <strong>{giornoAvviamento.toLocaleDateString("it-IT")}</strong>
+          </p>
+        )}
 
-  return (
-    
-    <tr
-  key={item.id}
-  onDoubleClick={() => {
-    if (movs.length === 0) return;
-    setContItem(item);
-    setOccList(movs);
-    setShowContabilizza(true);
-  }}
-   title={`effettua doppio click per Stornare il movimento ${item.nomeBreve} di ${totale.toLocaleString("it-IT", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-})} €`}
-  style={{
-        background: item.tipo === "ENTRATA" ? "#d4edda" : "#f8d7da"
-      }}
-    >
-      <td>{item.nomeBreve}</td>      <td>{item.periodicita}</td>     <td>  {movs
-    .reduce((sum, m) => sum + (Number(m.importo) || 0), 0)
-    .toLocaleString("it-IT", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })} €</td>
-      <td>{movs.length}</td>
-    </tr>
-  );
-})}
-      </tbody>
-    </table>
-  </div>
-  <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
-    <h4>🔴 Da Consuntivare</h4>
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr>          <th>MOVIMENTO</th>          <th>FREQUENZA</th>          <th>€</th>          <th>CONT.</th>        </tr>
-      </thead>
-      <tbody>
-        {anagraficaMov.map(item => {
-          const occ = getOccorrenze(item);
-          if (occ.length === 0) return null;
-          return (
-            <tr
-              key={item.id}
-              onClick={() => {
-  setContItem(item);
-  setOccList(getOccorrenze(item));
-  setShowModal(true);
-}}
- title={`effettua un click per consuntivare il movimento ${item.nomeBreve} di ${item.importo}`}
-              style={{
-                background: item.tipo === "ENTRATA" ? "#d4edda" : "#f8d7da",
-                cursor: "pointer"
-              }}
-            >
-              <td>{item.nomeBreve}</td>
-              <td>{item.periodicita}</td>
-              <td>{item.importo} €</td>
-              <td>{occ.length}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
+        <h3>Carichi / Scarichi</h3>
 
-</div>
+        <div style={{ display: "flex", gap: 20 }}>
+          {/* CONSUNTIVATI */}
+          <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
+            <h4>🟢 Consuntivati</h4>
 
-   
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>CONTROPARTE</th>
+                  <th>DATA MOVIMENTO</th>
+                  <th>IMPORTO</th>
+                  <th>DETTAGLI🔍</th>
+                </tr>
+              </thead>
 
-      {/* FOOTER */}
-      <div style={{ marginTop: 40 }}>
-        <h4>📊 Riepilogo Giorno</h4>
-      <p>Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-<p>Guadagno: {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €</p>
-      </div>{dettaglioMovimento && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    background: "rgba(0,0,0,0.6)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10000
-  }}>
-    <div style={{
-      background: "#fff",
-      padding: 20,
-      width: "700px",
-      maxWidth: "90vw",
-      maxHeight: "85vh",
-      overflowY: "auto",
-      borderRadius: 8
-    }}>
-
-      <h3>
-        🔍 Dettaglio movimento
-      </h3>
-
-      <p>
-        <b>Controparte:</b>{" "}
-        {dettaglioMovimento.documento.cliente ||
-         dettaglioMovimento.documento.fornitore ||
-         dettaglioMovimento.row.controparte}
-      </p>
-
-    <p>
-  <b>Tipo documento:</b>{" "}
-  {dettaglioMovimento.row.tipo === "fattureCarichi"
-    ? dettaglioMovimento.row.anagraficaId
-      ? "FATTURA PAGATA"
-      : "FATTURA"
-    : dettaglioMovimento.row.tipo === "prospettiFattura"
-      ? dettaglioMovimento.row.anagraficaId
-        ? "PROSPETTO PAGATO"
-        : "PROSPETTO"
-      : dettaglioMovimento.documento.tipoDocumento}
-</p>
-      {dettaglioMovimento.movimenti.map((m, i) => {
-
-        const data = toDate(m.data);
-
-        const blocchi =
-          m.scarico ||
-          m.carico ||
-          [];
-
-        return (
-          <div
-            key={m.id || i}
-            style={{
-              border: "1px solid #ccc",
-              padding: 12,
-              marginTop: 15,
-              borderRadius: 5
-            }}
-          >
-
-            <h4>
-              {m.tipo} - {data?.toLocaleDateString("it-IT") || "-"}
-            </h4>
-
-            {blocchi.map((b, bi) => (
-
-              <div key={bi} style={{ marginBottom: 15 }}>
-
-                <p>
-                  <b>FIR / DDT:</b>{" "}
-                  {b.fir || m.fir || "-"}
-                </p>
-
-                <p>
-                  <b>CER:</b>{" "}
-                  {b.cer || b.codiceCER || "-"}
-                </p>
-
-                {(b.righe || []).map((r, ri) => {
-
-                  const netto = Number(r.netto) || 0;
-
-                  const prezzo =
-                    m.tipo === "SCARICO"
-                      ? Number(r.prezzoAcquisto) || Number(r.prezzo) || 0
-                      : Number(r.prezzoVendita) || Number(r.prezzo) || 0;
-
-                  const totale = netto * prezzo;
+              <tbody>
+                {rows.map((r, i) => {
+                  const isEntrata =
+                    r.tipo === "ENTRATA" || r.tipo === "fattureCarichi";
 
                   return (
-                    <div
-                      key={ri}
+                    <tr
+                      key={i}
+                      onDoubleClick={() => handleDeleteFin(r)}
+                      title={`effettua doppio click per Stornare il movimento ${r.controparte} di ${r.importo.toLocaleString("it-IT", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })} €`}
                       style={{
-                        borderTop: "1px solid #eee",
-                        padding: "8px 0"
+                        background: isEntrata ? "green" : "red",
+                        color: "white",
+                        cursor: "pointer"
                       }}
                     >
-                      <div>
-                        <b>Materiale:</b>{" "}
-                        {r.materiale || "-"}
-                      </div>
-
-                      <div>
-                        <b>Peso netto:</b>{" "}
-                        {netto.toLocaleString("it-IT")} kg
-                      </div>
-
-                      <div>
-                        <b>Prezzo:</b>{" "}
-                        {prezzo.toLocaleString("it-IT", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })} €/kg
-                      </div>
-
-                      <div>
-                        <b>Totale:</b>{" "}
-                        {totale.toLocaleString("it-IT", {
+                      <td>{r.controparte}</td>
+                      <td>{toDate(r.dataMov)?.toLocaleDateString("it-IT") || ""}</td>
+                      <td>
+                        {r.importo.toLocaleString("it-IT", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })} €
-                      </div>
-                    </div>
+                      </td>
+                      <td>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDettaglioMovimento({
+  ...r,
+  provenienzaConsuntivazione: "consuntivati"
+});
+                          }}
+                          title="Visualizza documento originale"
+                        >
+                          🔍
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
-
-              </div>
-            ))}
-
+              </tbody>
+            </table>
           </div>
-        );
-      })}
-<p
+
+          {/* DA CONSUNTIVARE */}
+          <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
+            <h4>🔴 Da Consuntivare</h4>
+
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>CONTROPARTE</th>
+                  <th>DATA</th>
+                  <th>IMPORTO</th>
+                  <th>DETTAGLI🔍</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {daConsuntivare.map((r, i) => {
+                  const isEntrata = r.tipo === "fattureCarichi";
+
+                  return (
+                    <tr
+                      key={i}
+                      onClick={() => handleConsuntiva(r)}
+                      title={`effettua un click per consuntivare il movimento ${r.controparte} di ${r.importo.toLocaleString("it-IT", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })} €`}
+                      style={{
+                        background: isEntrata ? "#d4edda" : "#f8d7da",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <td>{r.controparte}</td>
+                      <td>{new Date(r.dataMov).toLocaleDateString("it-IT")}</td>
+                      <td>
+                        {r.importo.toLocaleString("it-IT", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })} €
+                      </td>
+                      <td>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDettaglioMovimento({
+  ...r,
+  provenienzaConsuntivazione: "daConsuntivare"
+});
+                          }}
+                          title="Visualizza documento originale"
+                        >
+                          🔍
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 style={{ marginTop: 40 }}>Altri Movimenti</h3>
+
+        <div style={{ display: "flex", gap: 20 }}>
+          {/* ALTRI CONSUNTIVATI */}
+          <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
+            <h4>🟢 Consuntivati</h4>
+
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>MOVIMENTO</th>
+                  <th>FREQUENZA</th>
+                  <th>€</th>
+                  <th>CONT.</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {anagraficaMov.map(item => {
+                  const movs = movFin
+                    .filter(m =>
+                      m.anagraficaId === item.id &&
+                      isSameDay(m.data, selectedDate)
+                    )
+                    .map(m => ({
+                      id: m.id,
+                      data: toDate(m.dataDocumento ?? m.data),
+                      importo: m.importo,
+                      tipo: m.tipo
+                    }));
+
+                  if (movs.length === 0) return null;
+
+                  const totale = movs.reduce(
+                    (s, m) => s + (Number(m.importo) || 0),
+                    0
+                  );
+
+                  return (
+                    <tr
+                      key={item.id}
+                      onDoubleClick={() => {
+                        if (movs.length === 0) return;
+                        setContItem(item);
+                        setOccList(movs);
+                        setShowContabilizza(true);
+                      }}
+                      title={`effettua doppio click per Stornare il movimento ${item.nomeBreve} di ${totale.toLocaleString("it-IT", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })} €`}
+                      style={{
+                        background: item.tipo === "ENTRATA" ? "#d4edda" : "#f8d7da"
+                      }}
+                    >
+                      <td>{item.nomeBreve}</td>
+                      <td>{item.periodicita}</td>
+                      <td>
+                        {movs
+                          .reduce((sum, m) => sum + (Number(m.importo) || 0), 0)
+                          .toLocaleString("it-IT", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })} €
+                      </td>
+                      <td>{movs.length}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ALTRI DA CONSUNTIVARE */}
+          <div style={{ flex: 1, border: "1px solid #ccc", padding: 10 }}>
+            <h4>🔴 Da Consuntivare</h4>
+
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>MOVIMENTO</th>
+                  <th>FREQUENZA</th>
+                  <th>€</th>
+                  <th>CONT.</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {anagraficaMov.map(item => {
+                  const occ = getOccorrenze(item);
+                  if (occ.length === 0) return null;
+
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => {
+                        setContItem(item);
+                        setOccList(getOccorrenze(item));
+                        setShowModal(true);
+                      }}
+                      title={`effettua un click per consuntivare il movimento ${item.nomeBreve} di ${item.importo}`}
+                      style={{
+                        background: item.tipo === "ENTRATA" ? "#d4edda" : "#f8d7da",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <td>{item.nomeBreve}</td>
+                      <td>{item.periodicita}</td>
+                      <td>{item.importo} €</td>
+                      <td>{occ.length}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* RIEPILOGO */}
+        <div style={{ marginTop: 40 }}>
+          <h4>📊 Riepilogo Giorno</h4>
+          <p>
+            Introiti: {introitiTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+          </p>
+          <p>
+            Spese: {speseTot.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+          </p>
+          <p>
+            Guadagno: {guadagno.toLocaleString("it-IT", { minimumFractionDigits: 2 })} €
+          </p>
+        </div>
+
+        {/* MODALE DETTAGLIO MOVIMENTO */}
+        {dettaglioMovimento && (
+          <div
+            className="mf-day-modal"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 10000
+            }}
+          >
+            <div
+              className="mf-day-modal-content"
+              style={{
+                background: "#fff",
+                padding: 20,
+                width: "700px",
+                maxWidth: "90vw",
+                maxHeight: "85vh",
+                overflowY: "auto",
+                borderRadius: 8
+              }}
+            >
+              <h3>🔍 Dettaglio movimento</h3>
+
+              <p>
+                <b>Controparte:</b>{" "}
+                {dettaglioMovimento.documento.cliente ||
+                  dettaglioMovimento.documento.fornitore ||
+                  dettaglioMovimento.row.controparte}
+              </p>
+
+              <p>
+                <b>Tipo documento:</b>{" "}
+                {dettaglioMovimento.row.tipo === "fattureCarichi"
+                  ? dettaglioMovimento.row.anagraficaId
+                    ? "FATTURA PAGATA"
+                    : "FATTURA"
+                  : dettaglioMovimento.row.tipo === "prospettiFattura"
+                    ? dettaglioMovimento.row.anagraficaId
+                      ? "PROSPETTO PAGATO"
+                      : "PROSPETTO"
+                    : dettaglioMovimento.documento.tipoDocumento}
+              </p>
+
+              {dettaglioMovimento.movimenti.map((m, i) => {
+                const data = toDate(m.data);
+                const blocchi = m.scarico || m.carico || [];
+
+                return (
+                  <div
+                    key={m.id || i}
+                    className="mf-day-detail-block"
+                    style={{
+                      border: "1px solid #ccc",
+                      padding: 12,
+                      marginTop: 15,
+                      borderRadius: 5
+                    }}
+                  >
+                    <h4>
+                      {m.tipo} - {data?.toLocaleDateString("it-IT") || "-"}
+                    </h4>
+
+                    {blocchi.map((b, bi) => (
+                      <div key={bi} style={{ marginBottom: 15 }}>
+                        <p>
+                          <b>FIR / DDT:</b> {b.fir || m.fir || "-"}
+                        </p>
+
+                        <p>
+                          <b>CER:</b> {b.cer || b.codiceCER || "-"}
+                        </p>
+
+                        {(b.righe || []).map((r, ri) => {
+                          const netto = Number(r.netto) || 0;
+                          const prezzo =
+                            m.tipo === "SCARICO"
+                              ? Number(r.prezzoAcquisto) || Number(r.prezzo) || 0
+                              : Number(r.prezzoVendita) || Number(r.prezzo) || 0;
+                          const totale = netto * prezzo;
+
+                          return (
+                            <div
+                              key={ri}
+                              className="mf-day-detail-row"
+                              style={{
+                                borderTop: "1px solid #eee",
+                                padding: "8px 0"
+                              }}
+                            >
+                              <div><b>Materiale:</b> {r.materiale || "-"}</div>
+                              <div><b>Peso netto:</b> {netto.toLocaleString("it-IT")} kg</div>
+                              <div>
+                                <b>Prezzo:</b>{" "}
+                                {prezzo.toLocaleString("it-IT", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })} €/kg
+                              </div>
+                              <div>
+                                <b>Totale:</b>{" "}
+                                {totale.toLocaleString("it-IT", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })} €
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              <p
+                className="mf-day-modal-total"
+                style={{
+                  marginTop: "20px",
+                  paddingTop: "10px",
+                  borderTop: "2px solid #333",
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  textAlign: "right"
+                }}
+              >
+                Totale documento:{" "}
+                {Number(dettaglioMovimento.documento.totale || 0).toLocaleString(
+                  "it-IT",
+                  {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  }
+                )} €
+              </p>
+
+
+<div
   style={{
-    marginTop: "20px",
-    paddingTop: "10px",
-    borderTop: "2px solid #333",
-    fontSize: "18px",
-    fontWeight: "bold",
-    textAlign: "right"
+    display: "flex",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 20
   }}
 >
-  Totale documento:{" "}
-  {Number(dettaglioMovimento.documento.totale || 0).toLocaleString(
-    "it-IT",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }
-  )} €
-</p>
-      <div style={{
-        marginTop: 20,
-        textAlign: "right"
-      }}>
-        <button
-          onClick={() => setDettaglioMovimento(null)}
-        >
-          Chiudi
-        </button>
-      </div>
+  {dettaglioMovimento.row.provenienzaConsuntivazione === "daConsuntivare" ? (
+    <ActionButton
+      disabled={globalLoading}
+      onClick={async () => {
+        const successo = await handleConsuntiva(dettaglioMovimento.row);
+        if (successo) setDettaglioMovimento(null);
+      }}
+    >
+      Consuntiva
+    </ActionButton>
+  ) : (
+    <ActionButton
+      variant="danger"
+      disabled={globalLoading}
+      onClick={async () => {
+        const successo = await handleDeleteFin(dettaglioMovimento.row);
+        if (successo) setDettaglioMovimento(null);
+      }}
+    >
+      Deconsuntiva
+    </ActionButton>
+  )}
 
-    </div>
-  </div>
-)}
-      {showModal && contItem && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999
-  }}>
-    <div style={{
-      background: "#fff",
-      padding: 20,
-      minWidth: 450,
-      maxHeight: "80vh",
-      overflowY: "auto"
-    }}>
+  <ActionButton
+    variant="admin"
+    disabled={globalLoading}
+    onClick={() => setDettaglioMovimento(null)}
+  >
+    Chiudi
+  </ActionButton>
+</div>
 
-      <h3>{contItem.nomeBreve}</h3>
+            </div>
+          </div>
+        )}
 
-      <div style={{ marginBottom: 10 }}>
-        Occorrenze: <b>{occList.length}</b>
-      </div>
+        {/* MODALE CONSUNTIVAZIONE RICORRENTI */}
+        {showModal && contItem && (
+          <div
+            className="mf-day-modal"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 9999
+            }}
+          >
+            <div
+              className="mf-day-modal-content"
+              style={{
+                background: "#fff",
+                padding: 20,
+                minWidth: 450,
+                maxHeight: "80vh",
+                overflowY: "auto"
+              }}
+            >
+              <h3>{contItem.nomeBreve}</h3>
 
-      <button onClick={() => {
-        setShowModal(false);
-        setContItem(null);
-        setOccList([]);
-      }}>
-        Chiudi
-      </button>
+              <div style={{ marginBottom: 10 }}>
+                Occorrenze: <b>{occList.length}</b>
+              </div>
 
-      {/* BULK */}
-      <button
-        style={{
-          marginLeft: 10,
-          background: contItem.tipo === "ENTRATA" ? "#27ae60" : "#c0392b",
-          color: "white"
-        }}
-        disabled={loadingBulk}
-onClick={async () => {
-  const ok = window.confirm("Confermi consuntivazione totale?");
-  if (!ok) return;
+              <button onClick={() => {
+                setShowModal(false);
+                setContItem(null);
+                setOccList([]);
+              }}>
+                Chiudi
+              </button>
 
-  await runSafe(async () => {
-    for (const o of occList) {
-      await addDoc(collection(db, "MovimentoFinanziario"), {
-        anagraficaId: contItem.id,
-        data: selectedDate,
-        dataDocumento: o.data,
-        importo: contItem.importo,
-        tipo: contItem.tipo
-      });
-    }
-  });
+              <button
+                style={{
+                  marginLeft: 10,
+                  background: contItem.tipo === "ENTRATA" ? "#27ae60" : "#c0392b",
+                  color: "white"
+                }}
+                disabled={loadingBulk}
+                onClick={async () => {
+                  const ok = window.confirm("Confermi consuntivazione totale?");
+                  if (!ok) return;
 
-  setShowModal(false);
-  setContItem(null);
-  setOccList([]);
-}}
-      >
-        CONSUNTIVA TUTTO
-      </button>
+                  await runSafe(async () => {
+                    for (const o of occList) {
+                      await addDoc(collection(db, "MovimentoFinanziario"), {
+                        anagraficaId: contItem.id,
+                        data: selectedDate,
+                        dataDocumento: o.data,
+                        importo: contItem.importo,
+                        tipo: contItem.tipo
+                      });
+                    }
+                  });
 
-      {/* LISTA */}
-      {occList.map((o, i) => (
-        <div key={i} style={{
-          display: "flex",
-          justifyContent: "space-between",
-          padding: 6,
-          borderBottom: "1px solid #eee"
-        }}>
-          <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
-          <span>{o.importo} €</span>
-
-          <button
-            onClick={async () => {
-              const ok = window.confirm("Confermi consuntivazione?");
-              if (!ok) return;
-
-              await addDoc(collection(db, "MovimentoFinanziario"), {
-                anagraficaId: contItem.id,
-                data: selectedDate,
-                dataDocumento: o.data,
-                importo: contItem.importo,
-                tipo: contItem.tipo
-              });
-
-              setOccList(prev => {
-                const next = prev.filter(x =>
-                  x.data.toDateString() !== o.data.toDateString()
-                );
-
-                if (next.length === 0) {
                   setShowModal(false);
                   setContItem(null);
-                }
+                  setOccList([]);
+                }}
+              >
+                CONSUNTIVA TUTTO
+              </button>
 
-                return next;
-              });
+              {occList.map((o, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: 6,
+                    borderBottom: "1px solid #eee"
+                  }}
+                >
+                  <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
+                  <span>{o.importo} €</span>
 
-              await refreshAll();
+                  <button
+                    onClick={async () => {
+                      const ok = window.confirm("Confermi consuntivazione?");
+                      if (!ok) return;
+
+                      await addDoc(collection(db, "MovimentoFinanziario"), {
+                        anagraficaId: contItem.id,
+                        data: selectedDate,
+                        dataDocumento: o.data,
+                        importo: contItem.importo,
+                        tipo: contItem.tipo
+                      });
+
+                      setOccList(prev => {
+                        const next = prev.filter(x =>
+                          x.data.toDateString() !== o.data.toDateString()
+                        );
+
+                        if (next.length === 0) {
+                          setShowModal(false);
+                          setContItem(null);
+                        }
+
+                        return next;
+                      });
+
+                      await refreshAll();
+                    }}
+                  >
+                    Consuntiva
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* MODALE STORNO MOVIMENTI RICORRENTI */}
+        {showContabilizza && contItem && (
+          <div
+            className="mf-day-modal"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 9999
             }}
           >
-            Consuntiva
-          </button>
+            <div
+              className="mf-day-modal-content"
+              style={{
+                background: "#fff",
+                padding: 20,
+                minWidth: 450,
+                maxHeight: "80vh",
+                overflowY: "auto"
+              }}
+            >
+              <h3>{contItem.nomeBreve}</h3>
 
-        </div>
-      ))}
+              <div style={{ marginBottom: 10 }}>
+                🔄 STORNO MOVIMENTI — Elementi: <b>{occList.length}</b>
+              </div>
 
-    </div>
-  </div>
-)}
-{showContabilizza && contItem && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999
-  }}>
-    <div style={{
-      background: "#fff",
-      padding: 20,
-      minWidth: 450,
-      maxHeight: "80vh",
-      overflowY: "auto"
-    }}>
+              <button onClick={() => {
+                setShowContabilizza(false);
+                setContItem(null);
+                setOccList([]);
+              }}>
+                Chiudi
+              </button>
 
-      <h3>{contItem.nomeBreve}</h3>
+              <button
+                style={{
+                  marginLeft: 10,
+                  background: "#f39c12",
+                  color: "white"
+                }}
+                disabled={loadingBulk}
+                onClick={async () => {
+                  const ok = window.confirm("Confermi STORNO TOTALE?");
+                  if (!ok) return;
 
-      <div style={{ marginBottom: 10 }}>
-        🔄 STORNO MOVIMENTI — Elementi: <b>{occList.length}</b>
-      </div>
+                  await runSafe(async () => {
+                    for (const o of occList) {
+                      await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
+                    }
+                  });
 
-      <button onClick={() => {
-        setShowContabilizza(false);
-        setContItem(null);
-        setOccList([]);
-      }}>
-        Chiudi
-      </button>
-
-      {/* BULK STORNO */}
-      <button
-        style={{
-          marginLeft: 10,
-          background: "#f39c12",
-          color: "white"
-        }}
-        disabled={loadingBulk}
-onClick={async () => {
-  const ok = window.confirm("Confermi STORNO TOTALE?");
-  if (!ok) return;
-
-  await runSafe(async () => {
-    for (const o of occList) {
-      await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
-    }
-  });
-
-  setShowContabilizza(false);
-  setContItem(null);
-  setOccList([]);
-}}
-      >
-        🔄 STORNA TUTTO
-      </button>
-
-      {/* LISTA */}
-      {occList.map((o, i) => (
-        <div key={i} style={{
-          display: "flex",
-          justifyContent: "space-between",
-          padding: 6,
-          borderBottom: "1px solid #eee"
-        }}>
-          <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
-          <span>{Number(o.importo).toFixed(2)} €</span>
-
-          <button
-            onClick={async () => {
-              const ok = window.confirm("Confermi STORNO?");
-              if (!ok) return;
-
-              await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
-
-              setOccList(prev => {
-                const next = prev.filter(x => x.id !== o.id);
-
-                if (next.length === 0) {
                   setShowContabilizza(false);
                   setContItem(null);
-                }
+                  setOccList([]);
+                }}
+              >
+                🔄 STORNA TUTTO
+              </button>
 
-                return next;
-              });
+              {occList.map((o, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: 6,
+                    borderBottom: "1px solid #eee"
+                  }}
+                >
+                  <span>{toDate(o.data)?.toLocaleDateString("it-IT") || ""}</span>
+                  <span>{Number(o.importo).toFixed(2)} €</span>
 
-              await refreshAll();
-            }}
-          >
-            STORNA
-          </button>
+                  <button
+                    onClick={async () => {
+                      const ok = window.confirm("Confermi STORNO?");
+                      if (!ok) return;
 
-        </div>
-      ))}
+                      await deleteDoc(doc(db, "MovimentoFinanziario", o.id));
 
+                      setOccList(prev => {
+                        const next = prev.filter(x => x.id !== o.id);
+
+                        if (next.length === 0) {
+                          setShowContabilizza(false);
+                          setContItem(null);
+                        }
+
+                        return next;
+                      });
+
+                      await refreshAll();
+                    }}
+                  >
+                    STORNA
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-)}
-   </div> {/* FINE area-stampa */}
-  </div>
-  );
+  </PageLayout>
+);
+
+
 };
 
 

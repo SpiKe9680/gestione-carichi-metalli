@@ -1,0 +1,585 @@
+
+/* ==================================================
+   METALFLOW - ANAGRAFICA MOVIMENTI FINANZIARI
+   Solo presentazione: nessuna modifica alla logica.
+   ================================================== */
+
+.mf-anagrafica {
+  width: calc(100% - 32px);
+  max-width: var(--mf-page-max-width, 1600px);
+  margin: 0 auto;
+  padding: 20px 0;
+  color: var(--mf-text, #222);
+  font-family: var(--mf-font, inherit);
+  box-sizing: border-box;
+}
+
+.mf-anagrafica *,
+.mf-anagrafica *::before,
+.mf-anagrafica *::after {
+  box-sizing: border-box;
+}
+
+.mf-anagrafica-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.mf-anagrafica h2 {
+  margin: 0 0 22px;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.mf-anagrafica button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--mf-border, #d0d5dd);
+  border-radius: var(--mf-radius-sm, 6px);
+  background: var(--mf-surface, #fff);
+  color: var(--mf-text, #222);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mf-anagrafica button:hover:not(:disabled) {
+  filter: brightness(0.95);
+  box-shadow: var(--mf-shadow, 0 2px 6px rgba(0, 0, 0, 0.08));
+}
+
+.mf-anagrafica button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mf-anagrafica input:not([type="checkbox"]),
+.mf-anagrafica select {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--mf-border, #d0d5dd);
+  border-radius: var(--mf-radius-sm, 6px);
+  background: var(--mf-surface, #fff);
+  color: var(--mf-text, #222);
+  font: inherit;
+}
+
+.mf-anagrafica input:focus,
+.mf-anagrafica select:focus {
+  outline: 2px solid var(--mf-primary, #2563eb);
+  outline-offset: 1px;
+}
+
+.mf-anagrafica input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--mf-primary, #2563eb);
+}
+
+.mf-anagrafica-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mf-anagrafica-toolbar > button {
+  flex-shrink: 0;
+}
+
+.mf-anagrafica-filtri {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr)) auto auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.mf-anagrafica .mf-anagrafica-reset {
+  background: var(--mf-danger, #dc2626);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-stampa {
+  background: var(--mf-primary, #2563eb);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  padding: 20px;
+  margin: 12px 0 22px;
+  border: 1px solid var(--mf-border, #d0d5dd);
+  border-radius: var(--mf-radius, 10px);
+  background: var(--mf-surface, #fff);
+  box-shadow: var(--mf-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
+}
+
+.mf-anagrafica-form label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.mf-anagrafica-form .mf-anagrafica-data {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mf-anagrafica-form .react-datepicker-wrapper {
+  width: 100%;
+}
+
+.mf-anagrafica-form .mf-anagrafica-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mf-anagrafica .mf-anagrafica-salva {
+  background: var(--mf-primary, #2563eb);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica-tabella-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mf-border, #d0d5dd);
+  border-radius: var(--mf-radius, 10px);
+  background: var(--mf-surface, #fff);
+  box-shadow: var(--mf-shadow, 0 2px 8px rgba(0, 0, 0, 0.05));
+}
+
+.mf-anagrafica .mf-anagrafica-tabella {
+  width: 100%;
+  min-width: 1050px;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.mf-anagrafica .mf-anagrafica-tabella th {
+  padding: 12px 10px;
+  background: var(--mf-surface-alt, #f3f4f6);
+  color: var(--mf-text, #222);
+  border-bottom: 2px solid var(--mf-border, #d0d5dd);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.mf-anagrafica .mf-anagrafica-tabella th[style*="pointer"] {
+  cursor: pointer;
+}
+
+.mf-anagrafica .mf-anagrafica-tabella th[style*="pointer"]:hover {
+  background: var(--mf-border, #e5e7eb);
+}
+
+.mf-anagrafica .mf-anagrafica-tabella td {
+  padding: 10px;
+  border-bottom: 1px solid var(--mf-border, #e5e7eb);
+  vertical-align: middle;
+}
+
+.mf-anagrafica .mf-anagrafica-tabella tbody tr:hover {
+  filter: brightness(0.97);
+}
+
+.mf-anagrafica .mf-anagrafica-tabella tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mf-anagrafica-azioni {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 420px;
+}
+
+.mf-anagrafica-azioni button {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.mf-anagrafica .mf-anagrafica-btn-disabilita {
+  background: #6b7280;
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-btn-modifica {
+  background: var(--mf-primary, #2563eb);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-btn-contabilizza {
+  background: var(--mf-success, #15803d);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-btn-storno {
+  background: #f39c12;
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-btn-elimina {
+  color: white !important;
+  background: var(--mf-danger, #dc2626);
+  border-color: transparent;
+}
+
+.mf-anagrafica .mf-anagrafica-stato-attivo {
+  color: #08752c;
+  font-weight: 700;
+}
+
+.mf-anagrafica .mf-anagrafica-stato-disabilitato {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.mf-anagrafica-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+}
+
+.mf-anagrafica-modale {
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--mf-border, #d0d5dd);
+  border-radius: var(--mf-radius, 10px);
+  background: var(--mf-surface, #fff);
+  color: var(--mf-text, #222);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.mf-anagrafica-modale h3 {
+  margin: 0 0 18px;
+}
+
+.mf-anagrafica-modale-azioni {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mf-anagrafica-occorrenza {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mf-border, #e5e7eb);
+}
+
+.mf-anagrafica .mf-anagrafica-btn-conferma {
+  background: var(--mf-primary, #2563eb);
+  color: white;
+  border-color: transparent;
+}
+
+.mf-anagrafica-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 100000;
+  color: white;
+  font-size: 18px;
+  text-align: center;
+}
+
+.mf-anagrafica-loading-icon {
+  font-size: 40px;
+}
+
+@media (max-width: 900px) {
+  .mf-anagrafica-filtri {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mf-anagrafica-filtri input {
+    grid-column: 1 / -1;
+  }
+
+  .mf-anagrafica-form {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .mf-anagrafica {
+    width: calc(100% - 20px);
+    padding-top: 12px;
+  }
+
+  .mf-anagrafica-header {
+    justify-content: flex-start;
+  }
+
+  .mf-anagrafica h2 {
+    font-size: 1.3rem;
+  }
+
+  .mf-anagrafica-filtri {
+    grid-template-columns: 1fr;
+  }
+
+  .mf-anagrafica-filtri input {
+    grid-column: auto;
+  }
+
+  .mf-anagrafica-form,
+  .mf-anagrafica-modale {
+    padding: 16px;
+  }
+
+  .mf-anagrafica-modale {
+    max-height: 90vh;
+  }
+}
+
+@media print {
+  .mf-anagrafica-header,
+  .mf-anagrafica-toolbar,
+  .mf-anagrafica-filtri,
+  .mf-anagrafica-form,
+  .mf-anagrafica-azioni,
+  .mf-anagrafica-overlay,
+  .mf-anagrafica-loading {
+    display: none !important;
+  }
+
+  .mf-anagrafica {
+    width: 100%;
+    max-width: none;
+  }
+
+  .mf-anagrafica-tabella-wrapper {
+    overflow: visible;
+    border: none;
+    box-shadow: none;
+  }
+
+  .mf-anagrafica .mf-anagrafica-tabella {
+    min-width: 0;
+    font-size: 9pt;
+  }
+}
+
+/* ==================================================
+   INTEGRAZIONE STILI ANAGRAFICA MOVIMENTI FINANZIARI
+   Da aggiungere in fondo al CSS esistente.
+   Solo presentazione, nessuna modifica alla logica.
+   ================================================== */
+
+/* Pulsanti principali */
+.mf-anagrafica-azioni-principali {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mf-anagrafica .mf-anagrafica-azioni-principali button {
+  min-height: 38px;
+}
+
+/* Date nel form */
+.mf-anagrafica-date-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mf-anagrafica-date-picker {
+  width: 100%;
+}
+
+.mf-anagrafica-date-picker .react-datepicker-wrapper,
+.mf-anagrafica-date-picker .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+.mf-anagrafica-date-picker input {
+  width: 100%;
+}
+
+.mf-anagrafica-date-disabilitazione {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mf-anagrafica .mf-anagrafica-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mf-anagrafica-checkbox label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+/* Evidenzia le righe disabilitate senza alterare il contenuto */
+.mf-anagrafica .mf-anagrafica-riga-disabilitata {
+  background: #f1f2f4;
+  color: #626873;
+}
+
+.mf-anagrafica .mf-anagrafica-riga-disabilitata:hover {
+  filter: none;
+}
+
+/* Tipologia di movimento */
+.mf-anagrafica-tipo-entrata {
+  color: #08752c;
+  font-weight: 700;
+}
+
+.mf-anagrafica-tipo-uscita {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* Contatori */
+.mf-anagrafica-numero {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* Modale di contabilizzazione e storno */
+.mf-anagrafica-overlay-top {
+  z-index: 9999;
+}
+
+.mf-anagrafica-modale-contabilizza {
+  width: 100%;
+  max-width: 650px;
+  min-width: 0;
+}
+
+.mf-anagrafica-modale-intestazione {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.mf-anagrafica-contabilizzati {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--mf-radius-sm, 6px);
+  background: var(--mf-surface-alt, #f3f4f6);
+}
+
+.mf-anagrafica-nessun-movimento {
+  padding: 18px 12px;
+  color: var(--mf-muted, #6b7280);
+  text-align: center;
+}
+
+.mf-anagrafica-importo {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Migliora la leggibilità della lista delle occorrenze */
+.mf-anagrafica-occorrenza {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(90px, auto) auto;
+  gap: 12px;
+}
+
+.mf-anagrafica-occorrenza button {
+  justify-self: end;
+}
+
+/* Pulsanti disabilitati: mantieni un'indicazione visiva chiara */
+.mf-anagrafica button:disabled {
+  filter: grayscale(0.2);
+}
+
+/* Adattamento della modale su smartphone */
+@media (max-width: 600px) {
+  .mf-anagrafica-modale-contabilizza {
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .mf-anagrafica-occorrenza {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+
+  .mf-anagrafica-occorrenza button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .mf-anagrafica-modale-azioni {
+    align-items: stretch;
+  }
+
+  .mf-anagrafica-modale-azioni button {
+    flex: 1 1 auto;
+  }
+}
+
+.mf-anagrafica-modale .mf-anagrafica-form {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}

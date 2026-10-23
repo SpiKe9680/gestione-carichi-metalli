@@ -1,0 +1,245 @@
+
+
+/* ==================================================
+   METALFLOW - CONFIGURAZIONI GENERALI
+   Stili dedicati alla pagina delle configurazioni.
+   ================================================== */
+
+.mf-config {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.mf-config-section {
+  min-width: 0;
+  padding: 20px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius);
+}
+
+.mf-config-section h3 {
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  color: var(--mf-text);
+  border-bottom: 1px solid var(--mf-border);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.mf-config-section p {
+  color: var(--mf-muted, #5f6f7a);
+}
+
+.mf-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.mf-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.mf-config-field--full {
+  grid-column: 1 / -1;
+}
+
+.mf-config-field > label,
+.mf-config-label {
+  color: var(--mf-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mf-config input:not([type="checkbox"]):not([type="file"]),
+.mf-config select,
+.mf-config textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 12px;
+  color: var(--mf-text);
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  font: inherit;
+}
+
+.mf-config input:focus,
+.mf-config select:focus,
+.mf-config textarea:focus {
+  border-color: var(--mf-primary);
+  outline: 2px solid rgba(30, 90, 128, 0.12);
+}
+
+.mf-config input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  font: inherit;
+}
+
+.mf-config input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--mf-primary);
+}
+
+.mf-config-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  color: var(--mf-text);
+  font-size: 14px;
+}
+
+.mf-config-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.mf-config-logo img {
+  display: block;
+  max-width: 180px;
+  max-height: 100px;
+  object-fit: contain;
+  padding: 8px;
+  background: var(--mf-surface);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-config .mf-config-select {
+  width: 100%;
+}
+
+.mf-config .mf-config-select .react-select__control {
+  min-height: 42px;
+}
+
+.mf-config-banca-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.mf-config .mf-btn {
+  width: auto;
+}
+
+.mf-config .mf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mf-config-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+}
+
+.mf-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.mf-config-table th,
+.mf-config-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--mf-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.mf-config-table th {
+  background: var(--mf-surface-alt);
+  color: var(--mf-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mf-config-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mf-config-table tbody tr:hover {
+  background: var(--mf-surface-alt);
+}
+
+.mf-config-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mf-config-message {
+  padding: 12px 14px;
+  color: var(--mf-text);
+  background: var(--mf-surface-alt);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  font-size: 14px;
+}
+
+.mf-config-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.mf-config-date .react-datepicker-wrapper {
+  width: 100%;
+}
+
+.mf-config-date .react-datepicker__input-container {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .mf-config {
+    gap: 16px;
+  }
+
+  .mf-config-section {
+    padding: 15px;
+  }
+
+  .mf-config-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .mf-config-field--full {
+    grid-column: auto;
+  }
+
+  .mf-config-banca-actions {
+    flex-direction: column;
+  }
+
+  .mf-config-banca-actions .mf-btn,
+  .mf-config-footer .mf-btn {
+    width: 100%;
+  }
+
+  .mf-config-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mf-config-table {
+    min-width: 680px;
+  }
+}
